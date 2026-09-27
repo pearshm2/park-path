@@ -1,1 +1,19 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.egg-info/
 
+# Node / Expo
+node_modules/
+.expo/
+dist/
+
+# Environment variables
+.env
+.env.local
+
+# OS
+.DS_Store
+EOF
