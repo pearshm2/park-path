@@ -1,0 +1,36 @@
+services:
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: parkpath
+      POSTGRES_PASSWORD: parkpath
+      POSTGRES_DB: parkpath
+    ports:
+      - "5432:5432"
+    volumes:
+      - parkpath_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U parkpath"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build: .
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://parkpath:parkpath@db:5432/parkpath
+      ENVIRONMENT: development
+      CORS_ORIGINS: "*"
+      PORT: 8000
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - .:/app  # live-reload friendly for local dev
+
+volumes:
+  parkpath_pgdata:

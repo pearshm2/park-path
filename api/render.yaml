@@ -1,0 +1,27 @@
+# Render "Blueprint" — commit this and click "New > Blueprint" on Render,
+# pointing at this repo. It provisions both services below together.
+# Render terminates TLS for you automatically; the app itself just needs
+# to listen on $PORT (handled in Dockerfile's CMD).
+
+databases:
+  - name: parkpath-db
+    plan: free
+    databaseName: parkpath
+    user: parkpath
+
+services:
+  - type: web
+    name: parkpath-api
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: parkpath-db
+          property: connectionString
+      - key: ENVIRONMENT
+        value: production
+      - key: CORS_ORIGINS
+        value: "*" # tighten once the app's real origin/scheme is known
+    healthCheckPath: /health
