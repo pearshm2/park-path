@@ -23,6 +23,15 @@ class Settings(BaseSettings):
     # e.g. "http://localhost:19006,https://parkpath.app"
     cors_origins: str = "*"
 
+    # --- Auth / JWT ---
+    # DEV DEFAULT ONLY — every real environment (CI, Render, teammates'
+    # machines) must set its own SECRET_KEY via env var. Never commit a
+    # real secret; this fallback exists purely so the app doesn't crash
+    # with no .env present.
+    secret_key: str = "dev-only-insecure-secret-change-me"
+    jwt_algorithm: str = "HS256"
+    access_token_expire_minutes: int = 60 * 24  # 24h — fine for a skeleton; tighten later
+
     @property
     def cors_origin_list(self) -> list[str]:
         if self.cors_origins == "*":

@@ -29,4 +29,6 @@ services:
         value: production
       - key: CORS_ORIGINS
         value: "*" # tighten once the app's real origin/scheme is known
+      - key: SECRET_KEY
+        generateValue: true # Render generates and stores a real random secret
     healthCheckPath: /health

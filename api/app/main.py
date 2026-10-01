@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.database import get_db
+from app.routers import auth
 
 app = FastAPI(
     title="ParkPath API",
@@ -50,7 +51,8 @@ def health_db(db: Session = Depends(get_db)):
     return {"status": "ok", "database": "reachable"}
 
 
-# Future routers (Week 2+), left commented so the pattern is obvious:
-# from app.routers import auth, parks, trips
-# app.include_router(auth.router, prefix="/auth", tags=["auth"])
+app.include_router(auth.router, prefix="/auth", tags=["auth"])
+
+# Future routers (parks, trips, quiz, etc.) follow the same pattern:
+# from app.routers import parks
 # app.include_router(parks.router, prefix="/parks", tags=["parks"])

@@ -24,6 +24,7 @@ services:
       ENVIRONMENT: development
       CORS_ORIGINS: "*"
       PORT: 8000
+      SECRET_KEY: dev-only-insecure-secret-change-me
     ports:
       - "8000:8000"
     depends_on:
