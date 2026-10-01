@@ -5,3 +5,10 @@ exclude = ["alembic/versions"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP"]
+
+[tool.pytest.ini_options]
+# Without this, the bare `pytest` console script doesn't add the repo
+# root to sys.path, so `from app.main import app` in tests fails with
+# ModuleNotFoundError. `python -m pytest` works around it by adding CWD
+# automatically, but plain `pytest` doesn't — this makes both work.
+pythonpath = ["."]
