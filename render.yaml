@@ -1,0 +1,34 @@
+# Render "Blueprint" — this file MUST live at the repo root (not inside
+# api/), that's the only place Render looks for it. Since the actual
+# FastAPI project lives in the api/ subfolder, rootDir + dockerfilePath
+# below point Render at it explicitly.
+# Commit this at repo root and click "New > Blueprint" on Render. It
+# provisions both services together. Render terminates TLS for you
+# automatically; the app itself just needs to listen on $PORT (handled
+# in api/Dockerfile's CMD).
+
+databases:
+  - name: parkpath-db
+    plan: free
+    databaseName: parkpath
+    user: parkpath
+
+services:
+  - type: web
+    name: parkpath-api
+    runtime: docker
+    plan: free
+    rootDir: api
+    dockerfilePath: ./api/Dockerfile
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: parkpath-db
+          property: connectionString
+      - key: ENVIRONMENT
+        value: production
+      - key: CORS_ORIGINS
+        value: "*" # tighten once the app's real origin/scheme is known
+      - key: SECRET_KEY
+        generateValue: true # Render generates and stores a real random secret
+    healthCheckPath: /health

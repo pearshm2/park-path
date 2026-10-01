@@ -6,6 +6,11 @@ psycopg2-binary==2.9.9
 pydantic-settings==2.5.2
 python-dotenv==1.0.1
 
+# auth
+pyjwt==2.9.0
+bcrypt==4.0.1
+pydantic[email]==2.9.2  # adds EmailStr validation used in app/schemas.py
+
 # dev / test / lint
 pytest==8.3.3
 httpx==0.27.2
