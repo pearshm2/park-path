@@ -1,5 +1,6 @@
 name: CI
 
+# Run on every pull request into main, and on every push to main.
 on:
   pull_request:
     branches: [main]
@@ -7,14 +8,75 @@ on:
     branches: [main]
 
 jobs:
+  # ---------------------------------------------------------------
+  # Job 1: Lint the Python code with Ruff (style + common bugs).
+  # ---------------------------------------------------------------
   lint:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: "3.11"
+      # Pinned to the same version as api/requirements.txt so CI and
+      # everyone's laptop agree on what counts as a lint error.
       - name: Install Ruff
-        run: pip install ruff
+        run: pip install ruff==0.6.9
       - name: Run Ruff
         run: ruff check api/
+
+  # ---------------------------------------------------------------
+  # Job 2: Run the API test suite against a real Postgres database.
+  # ---------------------------------------------------------------
+  test-api:
+    runs-on: ubuntu-latest
+
+    # A "service container" is a throwaway Postgres that GitHub starts
+    # next to this job and deletes when the job ends.
+    services:
+      postgres:
+        image: postgres:16 # same version as api/docker-compose.yml
+        env:
+          POSTGRES_USER: parkpath
+          POSTGRES_PASSWORD: parkpath
+          POSTGRES_DB: parkpath
+        ports:
+          - 5432:5432
+        # Don't start the steps until Postgres is actually accepting connections.
+        options: >-
+          --health-cmd "pg_isready -U parkpath"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    # Environment variables visible to every step below. app/config.py
+    # reads these, exactly like Render does in production.
+    env:
+      DATABASE_URL: postgresql://parkpath:parkpath@localhost:5432/parkpath
+      SECRET_KEY: ci-only-not-a-real-secret
+      ENVIRONMENT: test
+
+    # Run every `run:` command from inside the api/ folder.
+    defaults:
+      run:
+        working-directory: api
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11" # matches api/Dockerfile (python:3.11-slim)
+          cache: pip
+          cache-dependency-path: api/requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      # Builds the tables. This also catches a broken migration before
+      # it reaches Render, where it would stop the API from starting.
+      - name: Run database migrations
+        run: alembic upgrade head
+
+      - name: Run pytest
+        run: pytest -v
