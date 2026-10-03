@@ -1,17 +1,18 @@
-import { Text, View, StyleSheet } from "react-native";
+/**
+ * Entry route. Sends the user to whichever group they belong in; the
+ * root layout has already waited for the session and quiz state to
+ * settle, so this never has to render a loading state of its own.
+ */
+
+import { Redirect } from 'expo-router';
+
+import { useAuth } from '../auth/AuthContext';
+import { useQuiz } from '../quiz/QuizContext';
 
 export default function Index() {
-  return (
-    <View style={styles.container}>
-      <Text>Edit src/app/index.tsx to edit this screen.</Text>
-    </View>
-  );
-}
+  const { status } = useAuth();
+  const { completed } = useQuiz();
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-});
+  if (status !== 'signedIn') return <Redirect href="/sign-in" />;
+  return <Redirect href={completed ? '/explore' : '/quiz'} />;
+}
