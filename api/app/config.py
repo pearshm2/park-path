@@ -32,6 +32,12 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     access_token_expire_minutes: int = 60 * 24  # 24h — fine for a skeleton; tighten later
 
+    # --- NPS sync job ---
+    # Free key from https://www.nps.gov/subjects/developer/get-started.htm
+    # Put it in api/.env as NPS_API_KEY=... (never commit it). Empty by
+    # default so the API and tests run fine without one.
+    nps_api_key: str = ""
+
     @property
     def cors_origin_list(self) -> list[str]:
         if self.cors_origins == "*":
