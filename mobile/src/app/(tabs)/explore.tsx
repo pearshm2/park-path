@@ -11,7 +11,9 @@ import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { listSites, recommendSites, type SiteScope } from '../../api/parks';
+import { listSites, type SiteScope } from '../../api/parks';
+// Placeholder ranking, not Dylan's engine - see the banner in this file.
+import { provisionalMatches } from '../../api/provisionalMatches';
 import { BodyText, Button, Heading, ParkMap, Tag } from '../../components';
 import type { Site } from '../../data/parks';
 import { useQuiz } from '../../quiz/QuizContext';
@@ -32,12 +34,12 @@ export default function ExploreScreen() {
     queryFn: () => listSites(scope),
   });
 
-  const { data: recommendations = [] } = useQuery({
-    queryKey: ['recommendations', answers, scope],
-    queryFn: () => recommendSites(answers, scope),
+  const { data: matches = [] } = useQuery({
+    queryKey: ['provisionalMatches', answers, scope],
+    queryFn: () => provisionalMatches(answers, scope),
   });
 
-  const topMatches = useMemo(() => recommendations.slice(0, 12), [recommendations]);
+  const topMatches = useMemo(() => matches.slice(0, 12), [matches]);
 
   return (
     <View style={[styles.screen, { paddingTop: insets.top + space[6] }]}>
@@ -47,7 +49,7 @@ export default function ExploreScreen() {
           <BodyText size={12} color={colors.neutral[600]} style={styles.headerMeta}>
             {tab === 'map'
               ? `${sites.length} sites · tap a dot to expand`
-              : `${recommendations.length} matches from your answers`}
+              : `${matches.length} matches from your answers`}
           </BodyText>
         </View>
       </View>
