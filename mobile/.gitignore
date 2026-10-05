@@ -42,3 +42,6 @@ example
 /ios
 /android
 .env
+
+# Local AI tooling config
+.claude/
