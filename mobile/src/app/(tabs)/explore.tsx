@@ -14,12 +14,37 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { listSites, type SiteScope } from '../../api/parks';
 // Placeholder ranking, not Dylan's engine - see the banner in this file.
 import { provisionalMatches } from '../../api/provisionalMatches';
-import { BodyText, Button, Heading, ParkMap, Tag } from '../../components';
+import {
+  activeFilterCount,
+  BodyText,
+  Button,
+  CROWD_CEILING,
+  FilterButton,
+  FilterSheet,
+  Heading,
+  NO_FILTERS,
+  ParkCard,
+  ParkMap,
+  Tag,
+  type FeedFilters,
+} from '../../components';
 import type { Site } from '../../data/parks';
 import { useQuiz } from '../../quiz/QuizContext';
 import { colors, radius, shadow, space } from '../../theme';
 
 type ExploreTab = 'map' | 'foryou';
+
+/** Applies the sheet's dials to a ranked list, keeping its order. */
+function applyFilters<T extends { site: Site }>(rows: T[], filters: FeedFilters): T[] {
+  const ceiling = filters.crowd ? CROWD_CEILING[filters.crowd] : null;
+
+  return rows.filter(({ site }) => {
+    if (filters.terrains.length > 0 && !filters.terrains.includes(site.group)) return false;
+    if (filters.maxEffort !== null && site.effort > filters.maxEffort) return false;
+    if (ceiling !== null && site.vis > ceiling) return false;
+    return true;
+  });
+}
 
 export default function ExploreScreen() {
   const insets = useSafeAreaInsets();
@@ -28,6 +53,8 @@ export default function ExploreScreen() {
   const [tab, setTab] = useState<ExploreTab>('map');
   const [scope, setScope] = useState<SiteScope>('parks');
   const [peek, setPeek] = useState<Site | null>(null);
+  const [filters, setFilters] = useState<FeedFilters>(NO_FILTERS);
+  const [filterOpen, setFilterOpen] = useState(false);
 
   const { data: sites = [] } = useQuery({
     queryKey: ['sites', scope],
@@ -39,7 +66,9 @@ export default function ExploreScreen() {
     queryFn: () => provisionalMatches(answers, scope),
   });
 
-  const topMatches = useMemo(() => matches.slice(0, 12), [matches]);
+  const filtered = useMemo(() => applyFilters(matches, filters), [matches, filters]);
+  const topMatches = useMemo(() => filtered.slice(0, 12), [filtered]);
+  const filterCount = activeFilterCount(filters);
 
   return (
     <View style={[styles.screen, { paddingTop: insets.top + space[6] }]}>
@@ -90,55 +119,67 @@ export default function ExploreScreen() {
           {peek ? <PeekCard site={peek} onDismiss={() => setPeek(null)} /> : null}
         </View>
       ) : (
-        <ScrollView
-          style={styles.feed}
-          contentContainerStyle={[styles.feedContent, { paddingBottom: space[8] }]}
-          showsVerticalScrollIndicator={false}
-        >
-          {topMatches.map(({ site, score, reason }) => (
-            <View key={site.id} style={styles.card}>
-              <Heading size={20}>{site.name}</Heading>
-              <BodyText size={12} color={colors.neutral[600]}>
-                {`${site.kind} · ${site.state}`}
-              </BodyText>
-              <BodyText
-                size={12.5}
-                weight="medium"
-                lineHeightRatio={1.45}
-                color={colors.accentRamp[800]}
-                style={styles.cardReason}
-              >
-                {reason}
-              </BodyText>
+        <>
+          <View style={styles.feedBar}>
+            <BodyText size={12} color={colors.neutral[600]} style={styles.feedBarText}>
+              {filterCount > 0
+                ? `${filtered.length} of ${matches.length} match your filters`
+                : 'Ranked by how well each park fits your answers'}
+            </BodyText>
+            <FilterButton count={filterCount} onPress={() => setFilterOpen(true)} />
+          </View>
 
-              <View style={styles.cardTags}>
-                <Tag tone="accent2" label={`${site.vis.toFixed(1)}M visits`} />
-                <Tag tone="outline" label={site.feature} />
-                <Tag tone="neutral" label={`${site.days} ${site.days === 1 ? 'day' : 'days'}`} />
-              </View>
+          <ScrollView
+            style={styles.feed}
+            contentContainerStyle={[styles.feedContent, { paddingBottom: space[8] }]}
+            showsVerticalScrollIndicator={false}
+          >
+            {topMatches.map(({ site, score, reason }, index) => (
+              <ParkCard
+                key={site.id}
+                site={site}
+                score={score}
+                reason={reason}
+                rank={index + 1}
+              />
+            ))}
 
-              <View style={styles.scoreRow}>
-                <BodyText size={11} weight="medium" color={colors.neutral[700]} style={styles.scoreLabel}>
-                  Match
+            {topMatches.length === 0 ? (
+              <View style={styles.empty}>
+                <Heading size={19}>No parks match</Heading>
+                <BodyText
+                  size={13}
+                  lineHeightRatio={1.5}
+                  color={colors.neutral[700]}
+                  style={styles.emptyBody}
+                >
+                  {filterCount > 0
+                    ? 'Your filters are narrower than the results. Clear a few and try again.'
+                    : 'Nothing matched those answers. Widen your terrain or season by retaking the quiz in Settings.'}
                 </BodyText>
-                <View style={styles.scoreTrack}>
-                  <View style={[styles.scoreFill, { width: `${Math.round(score * 100)}%` }]} />
-                </View>
-                <BodyText size={10.5} weight="semibold" color={colors.neutral[600]}>
-                  {`${Math.round(score * 100)}%`}
-                </BodyText>
+                {filterCount > 0 ? (
+                  <Button
+                    label="Clear filters"
+                    variant="secondary"
+                    onPress={() => setFilters(NO_FILTERS)}
+                    style={styles.emptyAction}
+                  />
+                ) : null}
               </View>
-            </View>
-          ))}
+            ) : null}
+          </ScrollView>
 
-          {topMatches.length === 0 ? (
-            <View style={styles.empty}>
-              <BodyText size={13} color={colors.neutral[700]}>
-                Nothing matched those answers. Widen your terrain or season in Settings.
-              </BodyText>
-            </View>
-          ) : null}
-        </ScrollView>
+          <FilterSheet
+            visible={filterOpen}
+            value={filters}
+            countFor={(draft) => applyFilters(matches, draft).length}
+            onApply={(next) => {
+              setFilters(next);
+              setFilterOpen(false);
+            }}
+            onClose={() => setFilterOpen(false)}
+          />
+        </>
       )}
     </View>
   );
@@ -294,21 +335,11 @@ const styles = StyleSheet.create({
   },
   feed: {
     flex: 1,
-    marginTop: space[3],
+    marginTop: space[2],
   },
   feedContent: {
     paddingHorizontal: space[4],
     gap: space[4],
-  },
-  card: {
-    padding: space[4],
-    borderRadius: radius.card,
-    backgroundColor: colors.neutral[100],
-    gap: space[1],
-    ...shadow.md,
-  },
-  cardReason: {
-    marginTop: space[2],
   },
   cardTags: {
     flexDirection: 'row',
@@ -316,30 +347,27 @@ const styles = StyleSheet.create({
     gap: 6,
     marginTop: space[3],
   },
-  scoreRow: {
+  feedBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 9,
-    marginTop: space[4],
+    gap: space[3],
+    paddingHorizontal: space[4],
+    marginTop: space[3],
   },
-  scoreLabel: {
-    width: 44,
-  },
-  scoreTrack: {
+  feedBarText: {
     flex: 1,
-    height: 6,
-    borderRadius: radius.pill,
-    backgroundColor: colors.neutral[300],
-    overflow: 'hidden',
-  },
-  scoreFill: {
-    height: '100%',
-    borderRadius: radius.pill,
-    backgroundColor: colors.accent2Ramp[500],
   },
   empty: {
     padding: space[4],
-    borderRadius: radius.md,
+    borderRadius: radius.card,
     backgroundColor: colors.neutral[100],
+    ...shadow.sm,
+  },
+  emptyBody: {
+    marginTop: space[2],
+  },
+  emptyAction: {
+    alignSelf: 'flex-start',
+    marginTop: space[3],
   },
 });
