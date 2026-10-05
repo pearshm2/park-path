@@ -25,8 +25,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ApiError, NetworkError } from '../api/client';
 import { Button, BodyText, Heading, Kicker, TextField } from '../components';
+import { GoogleButton, OrDivider } from '../components/GoogleButton';
 import { colors, radius, shadow, space } from '../theme';
 import { useAuth } from './AuthContext';
+import { GoogleSignInUnavailableError, signInWithGoogle } from './googleSignIn';
 
 export type AuthMode = 'sign-in' | 'sign-up';
 
@@ -122,6 +124,28 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
     }
   }
 
+  /**
+   * Google is not wired up yet — see src/auth/googleSignIn.ts for the two
+   * pieces that are missing. The handler is written as if it were, so
+   * finishing it means changing that file and nothing here.
+   */
+  async function onGooglePress() {
+    if (submitting) return;
+    setFormError(null);
+    setSubmitting(true);
+    try {
+      await signInWithGoogle();
+    } catch (error) {
+      setFormError(
+        error instanceof GoogleSignInUnavailableError
+          ? error.message
+          : 'Could not continue with Google. Try your email and password.',
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
   return (
     <KeyboardAvoidingView
       style={styles.flex}
@@ -148,6 +172,17 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
           <BodyText size={14} color={colors.neutral[700]} style={styles.sub}>
             {copy.sub}
           </BodyText>
+        </View>
+
+        {/* Social sign-in sits above the email form: it is the shorter
+            path, and burying it under the fields reads as an afterthought. */}
+        <View style={styles.social}>
+          <GoogleButton
+            label={isSignUp ? 'Sign up with Google' : 'Continue with Google'}
+            onPress={onGooglePress}
+            disabled={submitting}
+          />
+          <OrDivider />
         </View>
 
         <View style={styles.form}>
@@ -186,6 +221,18 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
             onSubmitEditing={() => (isSignUp ? confirmRef.current?.focus() : onSubmit())}
             editable={!submitting}
           />
+
+          {/* Sign-in only: there is nothing to recover while creating an
+              account, and offering it there invites a wrong turn. */}
+          {!isSignUp ? (
+            <View style={styles.forgotRow}>
+              <Button
+                label="Forgot password?"
+                variant="ghost"
+                onPress={() => router.push('/forgot-password')}
+              />
+            </View>
+          ) : null}
 
           {isSignUp ? (
             <TextField
@@ -309,8 +356,17 @@ const styles = StyleSheet.create({
     marginTop: space[2],
     maxWidth: 360,
   },
+  social: {
+    gap: space[4],
+  },
   form: {
     gap: space[4],
+  },
+  // Right-aligned under the password field, where the eye looks after
+  // failing to remember it.
+  forgotRow: {
+    alignItems: 'flex-end',
+    marginTop: -space[2],
   },
   formError: {
     padding: space[3],
