@@ -1,5 +1,5 @@
 /**
- * Park site fixtures, ported from the Claude Design prototype's
+ * Park site fixtures, ported from the design prototype's
  * parkpath-data.js. 120 sites: all 63 named national parks plus
  * other NPS units, with real coordinates and visitation.
  *

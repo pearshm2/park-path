@@ -1,6 +1,6 @@
 /**
- * "Organic" design tokens, ported from the Claude Design handoff bundle
- * at parkpath-recommendation-engine/project/_ds/organic-<id>, file
+ * "Organic" design tokens, ported from the design handoff bundle at
+ * parkpath-recommendation-engine/project/_ds/organic-<id>, file
  * styles.css.
  *
  * That stylesheet is the source of truth for the look. Two things could
