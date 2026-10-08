@@ -1,5 +1,5 @@
 /**
- * Opens the For You filter sheet.
+ * Opens the Explore filter sheet.
  *
  * Carries a count when filters are on, so the feed never looks mystifying
  * short without an obvious reason — the prototype solves the same problem

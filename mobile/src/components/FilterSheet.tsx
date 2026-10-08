@@ -1,5 +1,5 @@
 /**
- * The For You filter sheet.
+ * The Explore filter sheet.
  *
  * Follows the prototype's "Filter sites" sheet — a grabber, terrain
  * chips, a couple of coarse dials, then Clear and Apply — but uses

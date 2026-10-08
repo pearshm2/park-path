@@ -1,5 +1,5 @@
 /**
- * A park in the For You feed.
+ * A recommended park in the Explore list, under the map.
  *
  * Follows the prototype's card: a visual band across the top, the park
  * name in the display face, the reason it surfaced in the deep accent
@@ -34,37 +34,48 @@ export function ParkCard({
   score,
   reason,
   rank,
+  highlighted = false,
   onPress,
 }: {
   site: Site;
-  /** 0–1 from the provisional ranking. */
-  score: number;
-  reason: string;
-  /** 1-based position in the feed, shown as a badge on the band. */
-  rank: number;
+  /** 0–1 from the provisional ranking. Omitted for parks it did not score. */
+  score?: number;
+  reason?: string;
+  /** 1-based position among the picks, shown as a badge on the band. */
+  rank?: number;
+  /** Outlines the card while its pin is selected on the map. */
+  highlighted?: boolean;
   onPress?: () => void;
 }) {
   const tone = terrainTone(site.group);
-  const percent = Math.round(score * 100);
+  const percent = score === undefined ? null : Math.round(score * 100);
 
   return (
     <Pressable
       onPress={onPress}
       disabled={!onPress}
       accessibilityRole={onPress ? 'button' : undefined}
-      accessibilityLabel={`${site.name}, ${percent}% match. ${reason}`}
-      style={({ pressed }) => [styles.card, pressed && onPress && styles.pressed]}
+      accessibilityLabel={[site.name, percent !== null && `${percent}% match`, reason]
+        .filter(Boolean)
+        .join('. ')}
+      style={({ pressed }) => [
+        styles.card,
+        highlighted && styles.highlighted,
+        pressed && onPress && styles.pressed,
+      ]}
     >
       {/* Terrain band — the card's visual anchor, and what makes the
           feed scannable without reading every name. */}
       <View style={[styles.band, { backgroundColor: tone.band }]}>
         <TerrainIcon group={site.group} size={34} />
         <View style={styles.bandRight}>
-          <View style={styles.rankBadge}>
-            <BodyText size={11} weight="bold" color={colors.bg}>
-              {`#${rank}`}
-            </BodyText>
-          </View>
+          {rank !== undefined ? (
+            <View style={styles.rankBadge}>
+              <BodyText size={11} weight="bold" color={colors.bg}>
+                {`#${rank}`}
+              </BodyText>
+            </View>
+          ) : null}
           <BodyText size={10} weight="semibold" color={tone.ink} style={styles.bandLabel}>
             {TERRAIN_LABEL[site.group]?.toUpperCase() ?? site.group.toUpperCase()}
           </BodyText>
@@ -77,15 +88,17 @@ export function ParkCard({
           {`${site.kind} · ${site.state}`}
         </BodyText>
 
-        <BodyText
-          size={12.5}
-          weight="medium"
-          lineHeightRatio={1.45}
-          color={colors.accentRamp[800]}
-          style={styles.reason}
-        >
-          {reason}
-        </BodyText>
+        {reason ? (
+          <BodyText
+            size={12.5}
+            weight="medium"
+            lineHeightRatio={1.45}
+            color={colors.accentRamp[800]}
+            style={styles.reason}
+          >
+            {reason}
+          </BodyText>
+        ) : null}
 
         <View style={styles.tags}>
           <Tag tone="accent2" label={crowdLabel(site.vis)} />
@@ -97,19 +110,21 @@ export function ParkCard({
 
         {/* Match strength, given its own row and a readable number — the
             whole point of the feed is why this park and not another. */}
-        <View style={styles.matchRow}>
-          <View style={styles.matchHeader}>
-            <BodyText size={10} weight="semibold" color={colors.neutral[600]} style={styles.matchLabel}>
-              MATCH
-            </BodyText>
-            <BodyText size={15} weight="bold" color={colors.accentRamp[700]}>
-              {`${percent}%`}
-            </BodyText>
+        {percent !== null ? (
+          <View style={styles.matchRow}>
+            <View style={styles.matchHeader}>
+              <BodyText size={10} weight="semibold" color={colors.neutral[600]} style={styles.matchLabel}>
+                MATCH
+              </BodyText>
+              <BodyText size={15} weight="bold" color={colors.accentRamp[700]}>
+                {`${percent}%`}
+              </BodyText>
+            </View>
+            <View style={styles.matchTrack}>
+              <View style={[styles.matchFill, { width: `${Math.max(percent, 3)}%` }]} />
+            </View>
           </View>
-          <View style={styles.matchTrack}>
-            <View style={[styles.matchFill, { width: `${Math.max(percent, 3)}%` }]} />
-          </View>
-        </View>
+        ) : null}
       </View>
     </Pressable>
   );
@@ -120,7 +135,13 @@ const styles = StyleSheet.create({
     borderRadius: radius.card,
     backgroundColor: colors.neutral[100],
     overflow: 'hidden',
+    // Always present so highlighting does not nudge the layout.
+    borderWidth: 2,
+    borderColor: 'transparent',
     ...shadow.md,
+  },
+  highlighted: {
+    borderColor: colors.accent,
   },
   pressed: {
     opacity: 0.92,

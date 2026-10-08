@@ -12,7 +12,7 @@ export {
 } from './FilterSheet';
 export { GoogleButton, OrDivider } from './GoogleButton';
 export { ParkCard } from './ParkCard';
-export { ParkMap } from './ParkMap';
+export { ParkMap, PICK_FILL, STATUS_DOT } from './ParkMap';
 export { ProgressBar } from './ProgressBar';
 export { Tag } from './Tag';
 export { TERRAIN_LABEL, TerrainIcon, terrainTone } from './TerrainIcon';
