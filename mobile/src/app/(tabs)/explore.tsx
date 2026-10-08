@@ -455,6 +455,7 @@ export default function ExploreScreen() {
             // Only a search, a pin tap or a card tap zooms in; scrolling
             // the cards leaves the whole map in view.
             focusRegion={focusRegion?.id ?? null}
+            featureIcons={scope === 'parks'}
             onSelectSite={(site) => {
               if (anchor && site.id === highlightId) {
                 // Tapping the top card's pin again zooms back out.

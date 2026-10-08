@@ -14,6 +14,12 @@
  * never a number. Every other park is a small dot styled by its visit
  * status, and fades back so the picks and matches read first.
  *
+ * With `featureIcons` on (the 62-park view), zooming in past ICON_ZOOM
+ * swaps each park's dot for a badge with its signature feature (see
+ * FeatureGlyph). The badge's ring keeps the dot's meaning: status, match,
+ * or pick, and picks keep their number in a corner bubble. At full-country
+ * size there is no room for them, so the dots stay.
+ *
  * Passing `focusRegion` zooms the map onto that region and hides every
  * other region and its pins. Pinching zooms around the fingers, and once
  * zoomed in a one-finger drag pans; at full-country size a drag is left to
@@ -43,6 +49,8 @@ import type { Site, SiteStatus } from '../data/parks';
 import { REGIONS, regionForState, STATE_REGION, type RegionId } from '../data/regions';
 import { US_STATES } from '../data/usStates';
 import { colors, fonts, radius, shadow } from '../theme';
+import { featureForPark, FeatureGlyph, type Feature } from './FeatureGlyph';
+import { terrainTone } from './TerrainIcon';
 import { BodyText } from './Typography';
 
 /** d3-geo wants a FeatureCollection to fit the projection against. */
@@ -67,6 +75,12 @@ export const MATCH_DOT = { fill: colors.accent2Ramp[600], stroke: colors.neutral
 /** Small dots are hard to hit with a finger, so each gets a wider invisible target. */
 const HIT_RADIUS = 11;
 
+/** How far in the map must be zoomed before feature badges replace dots. */
+const ICON_ZOOM = 1.6;
+/** A feature badge's radius, and its glyph's width. */
+const BADGE_R = 12;
+const GLYPH_SIZE = 15;
+
 /** Room left around a zoomed region, and the most it may be magnified. */
 const ZOOM_PADDING = 22;
 const MAX_ZOOM = 4;
@@ -89,6 +103,8 @@ type ParkMapProps = {
   selectedId?: string | null;
   /** Zooms onto this region; omit for the whole country. */
   focusRegion?: RegionId | null;
+  /** Show feature badges once zoomed in. Meant for the national parks view. */
+  featureIcons?: boolean;
   onSelectSite?: (site: Site) => void;
   style?: StyleProp<ViewStyle>;
 };
@@ -99,6 +115,7 @@ export function ParkMap({
   matchIds,
   selectedId,
   focusRegion,
+  featureIcons = false,
   onSelectSite,
   style,
 }: ParkMapProps) {
@@ -221,6 +238,17 @@ export function ParkMap({
   const matched = unranked.filter((dot) => matchIds?.has(dot.site.id));
   const others = unranked.filter((dot) => !matchIds?.has(dot.site.id));
   const filtering = (matchIds?.size ?? 0) > 0;
+  const showIcons = featureIcons && view.k >= ICON_ZOOM;
+  /** The park's feature, when badges are showing and it has one. */
+  const badgeFor = (site: Site) => (showIcons ? featureForPark(site.id) : undefined);
+  /** Where each badge is drawn, nudged apart where parks sit close together. */
+  const badgeSpots = showIcons
+    ? spreadBadges(
+        visible.flatMap((dot) =>
+          featureForPark(dot.site.id) ? [{ id: dot.site.id, ...place(dot) }] : [],
+        ),
+      )
+    : new Map<string, Point>();
   // Draw #1 last so it sits on top where pins overlap.
   picks.sort((a, b) => rankById!.get(b.site.id)! - rankById!.get(a.site.id)!);
 
@@ -231,12 +259,30 @@ export function ParkMap({
           <G transform={`translate(${view.tx} ${view.ty}) scale(${view.k})`}>{stateShapes}</G>
 
           {/* Unmatched parks recede further while a filter is on. */}
-          <G opacity={filtering ? 0.35 : hasPicks ? 0.6 : 1}>
+          {/* Badges stay at full strength: the picks' numbers already stand out. */}
+          <G opacity={filtering ? 0.35 : hasPicks && !showIcons ? 0.6 : 1}>
             {others.map((dot) => {
               const { site } = dot;
               const { x, y } = place(dot);
               const selected = site.id === selectedId;
               const look = STATUS_DOT[site.status];
+              const feature = badgeFor(site);
+              if (feature) {
+                const ring = site.status === 'new' ? look.stroke : STATUS_RING[site.status];
+                return (
+                  <G key={site.id} onPress={onSelectSite ? () => onSelectSite(site) : undefined}>
+                    <FeatureBadge
+                      site={site}
+                      x={x}
+                      y={y}
+                      at={badgeSpots.get(site.id)}
+                      feature={feature}
+                      ring={ring}
+                      selected={selected}
+                    />
+                  </G>
+                );
+              }
               return (
                 <G key={site.id} onPress={onSelectSite ? () => onSelectSite(site) : undefined}>
                   <Circle cx={x} cy={y} r={HIT_RADIUS} fill="transparent" />
@@ -258,6 +304,22 @@ export function ParkMap({
               const { site } = dot;
               const { x, y } = place(dot);
               const selected = site.id === selectedId;
+              const feature = badgeFor(site);
+              if (feature) {
+                return (
+                  <G key={site.id} onPress={onSelectSite ? () => onSelectSite(site) : undefined}>
+                    <FeatureBadge
+                      site={site}
+                      x={x}
+                      y={y}
+                      at={badgeSpots.get(site.id)}
+                      feature={feature}
+                      ring={MATCH_DOT.fill}
+                      selected={selected}
+                    />
+                  </G>
+                );
+              }
               return (
                 <G key={site.id} onPress={onSelectSite ? () => onSelectSite(site) : undefined}>
                   <Circle cx={x} cy={y} r={HIT_RADIUS} fill="transparent" />
@@ -279,6 +341,47 @@ export function ParkMap({
               const { site } = dot;
               const { x, y } = place(dot);
               const selected = site.id === selectedId;
+              const rank = rankById!.get(site.id)!;
+              const feature = badgeFor(site);
+              if (feature) {
+                const r = selected ? BADGE_R + 2 : BADGE_R;
+                const spot = badgeSpots.get(site.id) ?? { x, y };
+                // The number rides on the badge's upper-right edge.
+                const nx = spot.x + r * 0.75;
+                const ny = spot.y - r * 0.75;
+                return (
+                  <G key={site.id} onPress={onSelectSite ? () => onSelectSite(site) : undefined}>
+                    <FeatureBadge
+                      site={site}
+                      x={x}
+                      y={y}
+                      at={badgeSpots.get(site.id)}
+                      feature={feature}
+                      ring={PICK_FILL}
+                      selected={selected}
+                    />
+                    <Circle
+                      cx={nx}
+                      cy={ny}
+                      r={7.5}
+                      fill={PICK_FILL}
+                      stroke={colors.neutral[100]}
+                      strokeWidth={1.5}
+                    />
+                    <SvgText
+                      x={nx}
+                      y={ny + 3.2}
+                      textAnchor="middle"
+                      fontSize={9.5}
+                      fontFamily={fonts.bodyBold}
+                      fontWeight="bold"
+                      fill={colors.neutral[100]}
+                    >
+                      {String(rank)}
+                    </SvgText>
+                  </G>
+                );
+              }
               return (
                 <G key={site.id} onPress={onSelectSite ? () => onSelectSite(site) : undefined}>
                   <Circle
@@ -299,7 +402,7 @@ export function ParkMap({
                     fontWeight="bold"
                     fill={colors.neutral[100]}
                   >
-                    {String(rankById!.get(site.id))}
+                    {String(rank)}
                   </SvgText>
                 </G>
               );
@@ -322,6 +425,100 @@ export function ParkMap({
         </Pressable>
       ) : null}
     </View>
+  );
+}
+
+/** The badge ring for parks you've been to or saved; a plain white edge otherwise. */
+const STATUS_RING: Record<Exclude<SiteStatus, 'new'>, string> = {
+  visited: colors.accentRamp[700],
+  wishlist: colors.accent2Ramp[700],
+};
+
+type Point = { x: number; y: number };
+
+/**
+ * Pushes overlapping badges apart so each one can be read and tapped.
+ * Utah's five parks overlap even at region zoom without this. A few
+ * rounds of pairwise nudging is plenty for the dozen or so badges a
+ * region shows, and cheap enough to rerun on every frame of a zoom.
+ */
+function spreadBadges(points: (Point & { id: string })[]): Map<string, Point> {
+  const spots = points.map(({ x, y }) => ({ x, y }));
+  const gap = BADGE_R * 2 + 2;
+  for (let round = 0; round < 12; round++) {
+    let moved = false;
+    for (let i = 0; i < spots.length; i++) {
+      for (let j = i + 1; j < spots.length; j++) {
+        const a = spots[i];
+        const b = spots[j];
+        let dx = b.x - a.x;
+        let dy = b.y - a.y;
+        let d = Math.hypot(dx, dy);
+        if (d >= gap) continue;
+        if (d < 0.01) {
+          // Same spot: split them along a fixed angle so it's stable.
+          dx = Math.cos(j);
+          dy = Math.sin(j);
+          d = 1;
+        }
+        const push = (gap - d) / 2;
+        a.x -= (dx / d) * push;
+        a.y -= (dy / d) * push;
+        b.x += (dx / d) * push;
+        b.y += (dy / d) * push;
+        moved = true;
+      }
+    }
+    if (!moved) break;
+  }
+  return new Map(points.map(({ id }, i) => [id, spots[i]]));
+}
+
+/**
+ * A park's feature glyph on its terrain colour, ringed to show its status.
+ * When the badge has been nudged off its park (`at`), a thin line and a
+ * dot mark where the park really is.
+ */
+function FeatureBadge({
+  site,
+  x,
+  y,
+  at,
+  feature,
+  ring,
+  selected,
+}: {
+  site: Site;
+  x: number;
+  y: number;
+  at?: Point;
+  feature: Feature;
+  ring: string;
+  selected: boolean;
+}) {
+  const tone = terrainTone(site.group);
+  const r = selected ? BADGE_R + 2 : BADGE_R;
+  const bx = at?.x ?? x;
+  const by = at?.y ?? y;
+  const nudged = Math.hypot(bx - x, by - y) > 3;
+  return (
+    <>
+      {nudged ? (
+        <>
+          <Path d={`M${x} ${y}L${bx} ${by}`} stroke={tone.ink} strokeWidth={1.25} opacity={0.6} />
+          <Circle cx={x} cy={y} r={2.25} fill={tone.ink} />
+        </>
+      ) : null}
+      <Circle
+        cx={bx}
+        cy={by}
+        r={r}
+        fill={tone.band}
+        stroke={selected ? colors.text : ring}
+        strokeWidth={selected ? 3 : 2.5}
+      />
+      <FeatureGlyph feature={feature} cx={bx} cy={by} size={GLYPH_SIZE} color={tone.ink} />
+    </>
   );
 }
 
