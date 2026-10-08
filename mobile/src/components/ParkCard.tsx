@@ -13,6 +13,7 @@
  */
 
 import { Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
+import Svg, { Path } from 'react-native-svg';
 
 import type { Site } from '../data/parks';
 import { regionForState } from '../data/regions';
@@ -23,12 +24,15 @@ import { TERRAIN_LABEL, TerrainIcon, terrainTone } from './TerrainIcon';
 import { BodyText, Heading } from './Typography';
 
 /** Visitation is the closest thing the data has to a crowd signal. */
-function crowdLabel(visitsMillions: number): string {
+export function crowdLabel(visitsMillions: number): string {
   if (visitsMillions >= 4) return 'Very busy';
   if (visitsMillions >= 1.5) return 'Busy';
   if (visitsMillions >= 0.5) return 'Some company';
   return 'Quiet';
 }
+
+/** Two arrows pointing out to opposite corners: "see more of this". */
+const EXPAND_PATHS = ['M14 4h6v6', 'M10 20H4v-6', 'M20 4l-6.5 6.5', 'M4 20l6.5-6.5'];
 
 const EFFORT_LABEL: Record<number, string> = {
   1: 'Easy walks',
@@ -43,6 +47,7 @@ export function ParkCard({
   rank,
   markWishlist = false,
   onPress,
+  onExpand,
   style,
 }: {
   site: Site;
@@ -54,6 +59,8 @@ export function ParkCard({
   /** Flags a wishlist park on the band, for decks that mix them with others. */
   markWishlist?: boolean;
   onPress?: () => void;
+  /** Shows the expand button, which opens the site's detail sheet. */
+  onExpand?: () => void;
   style?: StyleProp<ViewStyle>;
 }) {
   const tone = terrainTone(site.group);
@@ -98,9 +105,34 @@ export function ParkCard({
       </View>
 
       <View style={styles.body}>
-        <Heading size={18} numberOfLines={1}>
-          {site.name}
-        </Heading>
+        <View style={styles.nameRow}>
+          <Heading size={18} numberOfLines={1} style={styles.name}>
+            {site.name}
+          </Heading>
+          {onExpand ? (
+            // Its own target, so the card's tap (zoom to region) is untouched.
+            <Pressable
+              onPress={onExpand}
+              hitSlop={10}
+              accessibilityRole="button"
+              accessibilityLabel={`Details for ${site.name}`}
+              style={({ pressed }) => [styles.expand, pressed && styles.expandPressed]}
+            >
+              <Svg width={14} height={14} viewBox="0 0 24 24" fill="none">
+                {EXPAND_PATHS.map((d) => (
+                  <Path
+                    key={d}
+                    d={d}
+                    stroke={colors.neutral[800]}
+                    strokeWidth={2.75}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                ))}
+              </Svg>
+            </Pressable>
+          ) : null}
+        </View>
         <View style={styles.meta}>
           {region ? <View style={[styles.regionSwatch, { backgroundColor: region.fill }]} /> : null}
           <BodyText size={12} color={colors.neutral[600]} numberOfLines={1} style={styles.metaText}>
@@ -210,6 +242,25 @@ const styles = StyleSheet.create({
     paddingHorizontal: space[4],
     paddingTop: space[3],
     paddingBottom: space[3],
+  },
+  nameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space[2],
+  },
+  name: {
+    flex: 1,
+  },
+  expand: {
+    width: 28,
+    height: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: radius.pill,
+    backgroundColor: colors.neutral[200],
+  },
+  expandPressed: {
+    backgroundColor: colors.neutral[300],
   },
   meta: {
     flexDirection: 'row',

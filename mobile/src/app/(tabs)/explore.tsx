@@ -28,6 +28,7 @@
  */
 
 import { useQuery } from '@tanstack/react-query';
+import { useRouter } from 'expo-router';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   Keyboard,
@@ -63,6 +64,7 @@ import {
   NO_FILTERS,
   ParkCard,
   ParkMap,
+  SitePeek,
   MATCH_DOT,
   PICK_FILL,
   STATUS_DOT,
@@ -174,6 +176,9 @@ export default function ExploreScreen() {
   const [searchMiss, setSearchMiss] = useState<string | null>(null);
   const [filters, setFilters] = useState<FeedFilters>(NO_FILTERS);
   const [filterOpen, setFilterOpen] = useState(false);
+  /** The site whose detail sheet is open, from a card's expand button. */
+  const [peekSite, setPeekSite] = useState<Site | null>(null);
+  const router = useRouter();
 
   const { data: parks = [] } = useQuery({
     queryKey: ['sites', 'parks'],
@@ -495,6 +500,7 @@ export default function ExploreScreen() {
                   rank={item.rank}
                   // The full decks mix saved parks in with everything else.
                   markWishlist={scope === 'parks' || scope === 'all'}
+                  onExpand={() => setPeekSite(item.site)}
                   onPress={() => {
                     if (index !== deckIndex) {
                       // A neighbour peeking in at the edge: bring it to the centre.
@@ -533,6 +539,17 @@ export default function ExploreScreen() {
           )}
         </CardSheet>
       </View>
+
+      <SitePeek
+        site={peekSite}
+        // Great Smoky Mountains, the busiest park, is the crowding yardstick.
+        referenceVisits={allSites.find((site) => site.id === 'grsm')?.vis ?? undefined}
+        onDismiss={() => setPeekSite(null)}
+        onOpen={(site) => {
+          setPeekSite(null);
+          router.push(`/site/${site.id}`);
+        }}
+      />
 
       <FilterSheet
         visible={filterOpen}
