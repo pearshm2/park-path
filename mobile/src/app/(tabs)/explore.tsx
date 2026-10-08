@@ -1,32 +1,48 @@
 /**
- * Explore: where the quiz lands. One scrolling page — search, the map
- * key, the map, then the quiz's top 10 (or the wishlist) as cards —
- * instead of the old Map / For You pair, so the recommendations are the
- * first thing on the map.
+ * Explore: where the quiz lands. The map fills the screen under search
+ * and the key, and the parks come as a deck of cards in a sheet along the
+ * bottom. Closed, the sheet is a single bar; dragging the bar up slides
+ * the deck into view, folds the key away and moves the map up so both
+ * fit, and dragging it down tucks the cards away again.
  *
- * The scope menu under Filter picks what else the map shows around the
- * picks: nothing, the 63 national parks, or every site. The top 10 are
- * always drawn as numbered pins that match the card numbers below, and
- * are always ranked from the 63 parks so they do not shift with scope.
+ * The scope menu under Filter picks what the map shows: just the picks,
+ * just the wishlist, the 63 national parks, or every site. The deck holds
+ * the same parks as the map: the top 10, the wishlist, or every park or
+ * site with the top 10 dealt first and the rest grouped by region. The
+ * top 10 are always ranked from the 63 parks, and are drawn as numbered
+ * pins that match the card numbers. Scrolling through the cards keeps the
+ * whole map in view and just highlights each card's pin.
  *
- * Tapping a pin, a card or a search result opens that park's details
- * under the map. Data comes from the bundled fixtures via
- * src/api/parks.ts, so this renders real parks with no backend.
+ * Tapping a pin, a card or a search result zooms the map onto that park's
+ * region and deals a deck of every park on the map there, the tapped one
+ * on top. Scrolling stays in the region and highlights each card's pin;
+ * Full map, tapping the card again, or closing the sheet goes back to the
+ * whole country.
+ *
+ * Data comes from the bundled fixtures via src/api/parks.ts, so this
+ * renders real parks with no backend.
  */
 
 import { useQuery } from '@tanstack/react-query';
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   Keyboard,
   Modal,
   Pressable,
-  ScrollView,
   StyleSheet,
   TextInput,
   View,
   useWindowDimensions,
 } from 'react-native';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import Animated, {
+  LinearTransition,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { scheduleOnRN } from 'react-native-worklets';
 
 import { listSites } from '../../api/parks';
 // Placeholder ranking, not Dylan's engine - see the banner in this file.
@@ -35,6 +51,7 @@ import {
   activeFilterCount,
   BodyText,
   Button,
+  CardCarousel,
   CROWD_CEILING,
   FilterButton,
   FilterSheet,
@@ -45,11 +62,10 @@ import {
   ParkMap,
   PICK_FILL,
   STATUS_DOT,
-  Tag,
   type FeedFilters,
 } from '../../components';
 import type { Site, SiteStatus } from '../../data/parks';
-import { REGIONS } from '../../data/regions';
+import { REGIONS, regionForState, type Region } from '../../data/regions';
 import { useQuiz } from '../../quiz/QuizContext';
 import { colors, fonts, radius, shadow, space } from '../../theme';
 
@@ -59,14 +75,18 @@ const TOP_N = 10;
 /** Albers USA is roughly 1.6 wide to 1 tall; a touch taller leaves room for Alaska. */
 const MAP_ASPECT = 1.5;
 
+/** The sheet's bar, which is all that shows while it is closed. */
+const SHEET_BAR = 50;
+/** The deck's height, including the cards peeking out behind the top one. */
+const DECK_HEIGHT = 214;
+const SHEET_HEIGHT = SHEET_BAR + DECK_HEIGHT + space[2];
+const SHEET_MS = 260;
+
 /** How many search suggestions to list under the search bar. */
 const MAX_SUGGESTIONS = 5;
 
-/** What the map shows around the numbered picks. */
-type MapScope = 'picks' | 'parks' | 'all';
-
-/** Which cards sit under the map. */
-type ListMode = 'picks' | 'wishlist';
+/** What the map shows. */
+type MapScope = 'picks' | 'wishlist' | 'parks' | 'all';
 
 /** Applies the sheet's dials to a ranked list, keeping its order. */
 function applyFilters<T extends { site: Site }>(rows: T[], filters: FeedFilters): T[] {
@@ -90,15 +110,57 @@ function searchSites(sites: Site[], query: string): Site[] {
   return hits.sort((a, b) => starts(a) - starts(b) || a.name.localeCompare(b.name));
 }
 
+/** A card in the deck: a park, plus its match and rank when it has them. */
+type DeckItem = { site: Site; score?: number; reason?: string; rank?: number };
+
+function toDeckItem(
+  site: Site,
+  matchById: ReadonlyMap<string, ProvisionalMatch>,
+  rankById: ReadonlyMap<string, number>,
+): DeckItem {
+  const match = matchById.get(site.id);
+  return { site, score: match?.score, reason: match?.reason, rank: rankById.get(site.id) };
+}
+
+/** Picks first in rank order, then the best matches, then by name. */
+function byFit(a: DeckItem, b: DeckItem): number {
+  return (
+    (a.rank ?? Infinity) - (b.rank ?? Infinity) ||
+    (b.score ?? -1) - (a.score ?? -1) ||
+    a.site.name.localeCompare(b.site.name)
+  );
+}
+
+/** Region order from the map key, for dealing the rest of a full deck. */
+const REGION_ORDER = new Map(REGIONS.map((region, index) => [region.id, index]));
+
+function regionPosition(site: Site): number {
+  const region = regionForState(site.state);
+  // Territories have no region and go last.
+  return region ? (REGION_ORDER.get(region.id) ?? REGIONS.length) : REGIONS.length;
+}
+
+/** Grouped by region in the key's order, best fit first within each. */
+function byRegion(a: DeckItem, b: DeckItem): number {
+  return regionPosition(a.site) - regionPosition(b.site) || byFit(a, b);
+}
+
 export default function ExploreScreen() {
   const insets = useSafeAreaInsets();
+  const { width: windowWidth } = useWindowDimensions();
   const { answers } = useQuiz();
-  const scrollRef = useRef<ScrollView>(null);
-  const mapY = useRef(0);
 
   const [scope, setScope] = useState<MapScope>('parks');
-  const [listMode, setListMode] = useState<ListMode>('picks');
-  const [selected, setSelected] = useState<Site | null>(null);
+  /**
+   * The park tapped or searched for. While set, the map is zoomed onto its
+   * region and the deck holds that region's parks.
+   */
+  const [anchor, setAnchor] = useState<Site | null>(null);
+  const [sheetOpen, setSheetOpen] = useState(false);
+  /** Which park is on top of the deck, by id, so it survives list changes. */
+  const [deckTopId, setDeckTopId] = useState<string | null>(null);
+  /** Lets the user reopen the key while the sheet is open. */
+  const [keyOpen, setKeyOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [searchMiss, setSearchMiss] = useState<string | null>(null);
   const [filters, setFilters] = useState<FeedFilters>(NO_FILTERS);
@@ -139,41 +201,93 @@ export default function ExploreScreen() {
   );
   const filterCount = activeFilterCount(filters);
 
+  const wishlist = useMemo(() => allSites.filter((site) => site.status === 'wishlist'), [allSites]);
+
   const mapSites = useMemo(() => {
     if (scope === 'picks') return picks.map(({ site }) => site);
+    if (scope === 'wishlist') return wishlist;
     return scope === 'parks' ? parks : allSites;
-  }, [scope, picks, parks, allSites]);
+  }, [scope, picks, wishlist, parks, allSites]);
 
-  const wishlist = useMemo(
-    () => allSites.filter((site) => site.status === 'wishlist'),
-    [allSites],
+  /** The wishlist view deals the wishlist; every other view deals the picks. */
+  const showingWishlist = scope === 'wishlist';
+
+  /** The deck before any park is tapped: the wishlist or the picks. */
+  /**
+   * The deck before any park is tapped, matching what the map shows: the
+   * wishlist, the top 10, or every park/site with the top 10 first and the
+   * rest grouped by region.
+   */
+  const baseDeck = useMemo<DeckItem[]>(() => {
+    if (showingWishlist) return wishlist.map((site) => toDeckItem(site, matchById, rankById));
+
+    const top = picks.map(({ site, score, reason }, index) => ({
+      site,
+      score,
+      reason,
+      rank: index + 1,
+    }));
+    if (scope === 'picks') return top;
+
+    const rest = mapSites
+      .filter((site) => !rankById.has(site.id))
+      .map((site) => toDeckItem(site, matchById, rankById))
+      .sort(byRegion);
+    return [...top, ...rest];
+  }, [showingWishlist, scope, wishlist, picks, mapSites, matchById, rankById]);
+
+  const focusRegion = anchor ? regionForState(anchor.state) : undefined;
+
+  /** With a park tapped: every park on the map in its region, best fit first. */
+  const regionDeck = useMemo<DeckItem[] | null>(() => {
+    if (!anchor) return null;
+    const inRegion = focusRegion
+      ? mapSites.filter((site) => regionForState(site.state)?.id === focusRegion.id)
+      : [];
+    if (!inRegion.some((site) => site.id === anchor.id)) inRegion.push(anchor);
+    return inRegion.map((site) => toDeckItem(site, matchById, rankById)).sort(byFit);
+  }, [anchor, focusRegion, mapSites, matchById, rankById]);
+
+  const deck = regionDeck ?? baseDeck;
+  const deckIndex = Math.max(
+    deck.findIndex((item) => item.site.id === deckTopId),
+    0,
   );
+  // With the sheet open the map highlights whichever card is on top.
+  const topCard = sheetOpen ? deck[deckIndex] : undefined;
+  const highlightId = topCard?.site.id ?? null;
 
   const suggestions = useMemo(
     () => searchSites(allSites, query).slice(0, MAX_SUGGESTIONS),
     [allSites, query],
   );
 
-  const selectedRank = selected ? rankById.get(selected.id) : undefined;
-  const selectedMatch = selected ? matchById.get(selected.id) : undefined;
+  function openSheet(open: boolean) {
+    setSheetOpen(open);
+    setKeyOpen(false);
+    // Closing tucks the cards away and returns to the whole map.
+    if (!open) setAnchor(null);
+  }
 
   /**
-   * Opens a park's details and brings the map into view. If the park is
-   * not on the map at the current scope, the scope widens to include it.
+   * Zooms onto a park's region and deals that region's parks with this
+   * one on top. If the park is not on the map at the current scope, the
+   * scope widens to include it.
    */
-  function showOnMap(site: Site) {
+  function focusPark(site: Site) {
     if (!mapSites.some((shown) => shown.id === site.id)) {
       setScope(parkIds.has(site.id) ? 'parks' : 'all');
     }
-    setSelected(site);
-    scrollRef.current?.scrollTo({ y: Math.max(mapY.current - space[2], 0), animated: true });
+    setAnchor(site);
+    setDeckTopId(site.id);
+    openSheet(true);
   }
 
   function pickResult(site: Site) {
     setQuery('');
     setSearchMiss(null);
     Keyboard.dismiss();
-    showOnMap(site);
+    focusPark(site);
   }
 
   function submitSearch() {
@@ -182,39 +296,49 @@ export default function ExploreScreen() {
     else if (query.trim()) setSearchMiss(query.trim());
   }
 
+  const deckTitle = anchor
+    ? (focusRegion?.label ?? anchor.name)
+    : scope === 'wishlist'
+      ? 'Your wishlist'
+      : scope === 'picks'
+        ? `Your top ${picks.length || TOP_N}`
+        : scope === 'parks'
+          ? `${parks.length} national parks`
+          : `All ${allSites.length} sites`;
+
   return (
     <View style={[styles.screen, { paddingTop: insets.top + space[6] }]}>
-      <ScrollView
-        ref={scrollRef}
-        contentContainerStyle={{ paddingBottom: space[8] }}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
-      >
-        <View style={styles.header}>
-          <View style={styles.headerText}>
-            <Heading size={26}>Explore</Heading>
-            <BodyText size={12} color={colors.neutral[600]} style={styles.headerMeta}>
-              {scope === 'picks'
-                ? `Just your top ${picks.length}`
+      <View style={styles.header}>
+        <View style={styles.headerText}>
+          <Heading size={26}>Explore</Heading>
+          <BodyText size={12} color={colors.neutral[600]} style={styles.headerMeta}>
+            {scope === 'picks'
+              ? `Just your top ${picks.length}`
+              : scope === 'wishlist'
+                ? `Your wishlist · ${wishlist.length} saved`
                 : scope === 'parks'
                   ? `Your top ${picks.length} of ${parks.length} national parks`
                   : `Your top ${picks.length}, plus all ${allSites.length} sites`}
-            </BodyText>
-          </View>
-          <View style={styles.headerActions}>
-            <FilterButton count={filterCount} onPress={() => setFilterOpen(true)} />
-            <ScopeMenu
-              value={scope}
-              parkCount={parks.length}
-              siteCount={allSites.length}
-              onChange={(next) => {
-                setScope(next);
-                setSelected(null);
-              }}
-            />
-          </View>
+          </BodyText>
         </View>
+        <View style={styles.headerActions}>
+          <FilterButton count={filterCount} onPress={() => setFilterOpen(true)} />
+          <ScopeMenu
+            value={scope}
+            parkCount={parks.length}
+            siteCount={allSites.length}
+            wishlistCount={wishlist.length}
+            onChange={(next) => {
+              setScope(next);
+              setAnchor(null);
+              setDeckTopId(null);
+            }}
+          />
+        </View>
+      </View>
 
+      {/* Suggestions float over the map rather than pushing it down. */}
+      <View style={styles.searchWrap}>
         <View style={styles.search}>
           <TextInput
             value={query}
@@ -271,108 +395,110 @@ export default function ExploreScreen() {
             ))}
           </View>
         ) : searchMiss ? (
-          <BodyText size={12} color={colors.neutral[700]} style={styles.searchMiss}>
-            {`Nothing called "${searchMiss}". Try part of the name.`}
-          </BodyText>
+          <View style={styles.suggestions}>
+            <BodyText size={12} color={colors.neutral[700]} style={styles.searchMiss}>
+              {`Nothing called "${searchMiss}". Try part of the name.`}
+            </BodyText>
+          </View>
         ) : null}
+      </View>
 
-        <MapKey />
+      {/* The stage: key and map, with the card sheet over its bottom edge. */}
+      <View style={styles.stage}>
+        <Animated.View layout={LinearTransition.duration(SHEET_MS)} style={styles.keyWrap}>
+          <MapKey
+            collapsed={sheetOpen && !keyOpen}
+            onToggle={sheetOpen ? () => setKeyOpen((open) => !open) : undefined}
+          />
+        </Animated.View>
 
-        <View
-          onLayout={(event) => {
-            mapY.current = event.nativeEvent.layout.y;
-          }}
-        >
+        {/* Deliberately not a layout-animated view: the map has to be told
+            its new size when the sheet opens, or it overflows under it. */}
+        <View style={[styles.mapArea, { paddingBottom: sheetOpen ? SHEET_HEIGHT : SHEET_BAR }]}>
+          {focusRegion ? (
+            <RegionTitle
+              region={focusRegion}
+              actionLabel="Full map"
+              onAction={() => setAnchor(null)}
+            />
+          ) : null}
           <ParkMap
             sites={mapSites}
             rankById={rankById}
-            selectedId={selected?.id ?? null}
-            // Tapping the selected pin again clears it, as the prototype does.
-            onSelectSite={(site) => setSelected((prev) => (prev?.id === site.id ? null : site))}
-            style={styles.map}
+            selectedId={highlightId}
+            // Only a search, a pin tap or a card tap zooms in; scrolling
+            // the cards leaves the whole map in view.
+            focusRegion={focusRegion?.id ?? null}
+            onSelectSite={(site) => {
+              if (anchor && site.id === highlightId) {
+                // Tapping the top card's pin again zooms back out.
+                setAnchor(null);
+              } else if (regionDeck?.some((item) => item.site.id === site.id)) {
+                // Another park in the same region: bring its card to the top.
+                setDeckTopId(site.id);
+              } else {
+                focusPark(site);
+              }
+            }}
+            style={[styles.map, { maxHeight: windowWidth / MAP_ASPECT }]}
           />
         </View>
 
-        {selected ? (
-          <SelectedCard
-            site={selected}
-            rank={selectedRank}
-            match={selectedMatch}
-            onDismiss={() => setSelected(null)}
-          />
-        ) : null}
-
-        <View style={styles.listHead}>
-          <Segmented
-            options={[
-              { value: 'picks', label: `Your top ${picks.length || TOP_N}` },
-              { value: 'wishlist', label: `Wishlist (${wishlist.length})` },
-            ]}
-            value={listMode}
-            onChange={(next) => setListMode(next as ListMode)}
-          />
-          <BodyText size={12} color={colors.neutral[600]} style={styles.listMeta}>
-            {listMode === 'wishlist'
-              ? 'Parks you have saved for later'
-              : filterCount > 0
-                ? `${filtered.length} of ${parkMatches.length} parks match your filters`
-                : 'Ranked by how well each park fits your quiz answers'}
-          </BodyText>
-        </View>
-
-        <View style={styles.list}>
-          {listMode === 'picks'
-            ? picks.map(({ site, score, reason }, index) => (
+        <CardSheet
+          open={sheetOpen}
+          onOpenChange={openSheet}
+          title={deckTitle}
+          status={deck.length > 0 ? `${deckIndex + 1} of ${deck.length}` : undefined}
+        >
+          {deck.length > 0 ? (
+            <CardCarousel
+              items={deck}
+              index={deckIndex}
+              keyOf={(item) => item.site.id}
+              onIndexChange={(index) => setDeckTopId(deck[index].site.id)}
+              renderCard={(item, index) => (
                 <ParkCard
-                  key={site.id}
-                  site={site}
-                  score={score}
-                  reason={reason}
-                  rank={index + 1}
-                  highlighted={site.id === selected?.id}
-                  onPress={() => showOnMap(site)}
+                  site={item.site}
+                  score={item.score}
+                  reason={item.reason}
+                  rank={item.rank}
+                  // The full decks mix saved parks in with everything else.
+                  markWishlist={scope === 'parks' || scope === 'all'}
+                  onPress={() => {
+                    if (index !== deckIndex) {
+                      // A neighbour peeking in at the edge: bring it to the centre.
+                      setDeckTopId(item.site.id);
+                    } else if (anchor) {
+                      // Second tap: back to the whole map, on the same card.
+                      setAnchor(null);
+                    } else {
+                      // First tap: zoom onto the card's region.
+                      focusPark(item.site);
+                    }
+                  }}
+                  style={styles.deckCard}
                 />
-              ))
-            : wishlist.map((site) => (
-                <ParkCard
-                  key={site.id}
-                  site={site}
-                  score={matchById.get(site.id)?.score}
-                  reason={matchById.get(site.id)?.reason}
-                  rank={rankById.get(site.id)}
-                  highlighted={site.id === selected?.id}
-                  onPress={() => showOnMap(site)}
-                />
-              ))}
-
-          {listMode === 'wishlist' && wishlist.length === 0 ? (
+              )}
+              style={styles.deck}
+            />
+          ) : (
             <View style={styles.empty}>
-              <Heading size={19}>Nothing saved yet</Heading>
+              <Heading size={17}>
+                {showingWishlist ? 'Nothing saved yet' : 'No parks match'}
+              </Heading>
               <BodyText
                 size={13}
                 lineHeightRatio={1.5}
                 color={colors.neutral[700]}
                 style={styles.emptyBody}
               >
-                Parks you add to your wishlist will show up here.
+                {showingWishlist
+                  ? 'Parks you add to your wishlist will show up here.'
+                  : filterCount > 0
+                    ? 'Your filters are narrower than the results. Clear a few and try again.'
+                    : 'Nothing matched those answers. Widen your terrain or season by retaking the quiz in Settings.'}
               </BodyText>
-            </View>
-          ) : null}
-
-          {listMode === 'picks' && picks.length === 0 ? (
-            <View style={styles.empty}>
-              <Heading size={19}>No parks match</Heading>
-              <BodyText
-                size={13}
-                lineHeightRatio={1.5}
-                color={colors.neutral[700]}
-                style={styles.emptyBody}
-              >
-                {filterCount > 0
-                  ? 'Your filters are narrower than the results. Clear a few and try again.'
-                  : 'Nothing matched those answers. Widen your terrain or season by retaking the quiz in Settings.'}
-              </BodyText>
-              {filterCount > 0 ? (
+              {!showingWishlist && filterCount > 0 ? (
                 <Button
                   label="Clear filters"
                   variant="secondary"
@@ -381,9 +507,9 @@ export default function ExploreScreen() {
                 />
               ) : null}
             </View>
-          ) : null}
-        </View>
-      </ScrollView>
+          )}
+        </CardSheet>
+      </View>
 
       <FilterSheet
         visible={filterOpen}
@@ -399,16 +525,97 @@ export default function ExploreScreen() {
   );
 }
 
+/**
+ * The sheet along the bottom of the map. Closed, only its bar shows;
+ * dragging the bar up (or tapping it) slides the cards into view, and
+ * dragging it down tucks them away. Only the bar takes these gestures:
+ * wrapping the deck in a second pan stopped its swipes on Android.
+ */
+function CardSheet({
+  open,
+  onOpenChange,
+  title,
+  status,
+  children,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  title: string;
+  status?: string;
+  children: ReactNode;
+}) {
+  const closedY = SHEET_HEIGHT - SHEET_BAR;
+  const offset = useSharedValue(open ? 0 : closedY);
+  const dragStart = useSharedValue(0);
+
+  // Follow the open state when it changes from outside, e.g. a pin tap.
+  useEffect(() => {
+    offset.set(withTiming(open ? 0 : closedY, { duration: SHEET_MS }));
+  }, [open, closedY, offset]);
+
+  const drag = Gesture.Pan()
+    .activeOffsetY([-6, 6])
+    .onStart(() => {
+      dragStart.set(offset.get());
+    })
+    .onUpdate((event) => {
+      offset.set(Math.min(Math.max(dragStart.get() + event.translationY, 0), closedY));
+    })
+    .onEnd((event) => {
+      // A flick decides it; otherwise whichever end it is nearer.
+      const next =
+        Math.abs(event.velocityY) > 400 ? event.velocityY < 0 : offset.get() < closedY / 2;
+      offset.set(withTiming(next ? 0 : closedY, { duration: SHEET_MS }));
+      scheduleOnRN(onOpenChange, next);
+    });
+
+  // A tap on the bar toggles it; moving the finger makes it a drag instead.
+  const tapBar = Gesture.Tap()
+    .maxDistance(10)
+    .onEnd((_event, success) => {
+      if (success) scheduleOnRN(onOpenChange, !open);
+    });
+
+  const slide = useAnimatedStyle(() => ({ transform: [{ translateY: offset.get() }] }));
+
+  return (
+    <Animated.View style={[styles.sheet, slide]}>
+      <GestureDetector gesture={Gesture.Race(drag, tapBar)}>
+        <View
+          accessible
+          accessibilityRole="button"
+          accessibilityLabel={open ? `Hide ${title}` : `Show ${title}`}
+          onAccessibilityTap={() => onOpenChange(!open)}
+          style={styles.sheetBar}
+        >
+          <View style={styles.sheetHandle} />
+          <View style={styles.sheetHead}>
+            <Heading size={17} numberOfLines={1} style={styles.headerText}>
+              {title}
+            </Heading>
+            <BodyText size={12} weight="semibold" color={colors.accentRamp[700]}>
+              {open ? (status ?? '') : 'Swipe up ▴'}
+            </BodyText>
+          </View>
+        </View>
+      </GestureDetector>
+      <View style={styles.sheetBody}>{children}</View>
+    </Animated.View>
+  );
+}
+
 /** The pill under Filter that opens a menu of map scopes. */
 function ScopeMenu({
   value,
   parkCount,
   siteCount,
+  wishlistCount,
   onChange,
 }: {
   value: MapScope;
   parkCount: number;
   siteCount: number;
+  wishlistCount: number;
   onChange: (next: MapScope) => void;
 }) {
   const anchor = useRef<View>(null);
@@ -423,19 +630,25 @@ function ScopeMenu({
       detail: 'Only the parks recommended for you',
     },
     {
+      value: 'wishlist',
+      short: 'Wishlist',
+      label: `My wishlist (${wishlistCount})`,
+      detail: 'Only the parks you have saved, dealt as cards',
+    },
+    {
       value: 'parks',
       short: `${parkCount} parks`,
       label: `${parkCount} national parks`,
-      detail: 'Your picks among every national park',
+      detail: 'Every national park: your top 10 first, then by region',
     },
     {
       value: 'all',
       short: `All ${siteCount}`,
       label: `All ${siteCount} sites`,
-      detail: 'Adds monuments, seashores, recreation areas and more',
+      detail: 'Adds monuments, seashores and more, dealt the same way',
     },
   ];
-  const current = options.find((option) => option.value === value) ?? options[1];
+  const current = options.find((option) => option.value === value) ?? options[2];
 
   function open() {
     // The menu lives in a Modal, so place it from the pill's window position.
@@ -507,45 +720,71 @@ function ScopeMenu({
   );
 }
 
-/** The prototype's pill segmented control. */
-function Segmented({
-  options,
-  value,
-  onChange,
+/** The region name over a zoomed map, with a way back out of it. */
+function RegionTitle({
+  region,
+  actionLabel,
+  onAction,
 }: {
-  options: { value: string; label: string }[];
-  value: string;
-  onChange: (value: string) => void;
+  region: Region;
+  actionLabel: string;
+  onAction: () => void;
 }) {
   return (
-    <View style={styles.segmented}>
-      {options.map((option) => {
-        const active = option.value === value;
-        return (
-          <Pressable
-            key={option.value}
-            onPress={() => onChange(option.value)}
-            accessibilityRole="tab"
-            accessibilityState={{ selected: active }}
-            style={[styles.segment, active && styles.segmentActive]}
-          >
-            <BodyText size={13} weight="semibold" color={active ? colors.bg : colors.neutral[700]}>
-              {option.label}
-            </BodyText>
-          </Pressable>
-        );
-      })}
+    <View style={styles.regionTitle}>
+      <View style={[styles.regionTitleSwatch, { backgroundColor: region.fill }]} />
+      <Heading size={18} style={styles.regionTitleText}>
+        {region.label}
+      </Heading>
+      <Pressable
+        onPress={onAction}
+        accessibilityRole="button"
+        hitSlop={8}
+        style={({ pressed }) => [styles.fullMap, pressed && styles.suggestionPressed]}
+      >
+        <BodyText size={12} weight="semibold" color={colors.accentRamp[700]}>
+          {actionLabel}
+        </BodyText>
+      </Pressable>
     </View>
   );
 }
 
-/** The key above the map: what each pin means, then the region colours. */
-function MapKey() {
+/**
+ * The key above the map: what each pin means, then the region colours.
+ * While the card sheet is open it folds to one line, which reopens it.
+ */
+function MapKey({ collapsed, onToggle }: { collapsed: boolean; onToggle?: () => void }) {
   const statuses: SiteStatus[] = ['visited', 'wishlist', 'new'];
+
+  const toggle = onToggle ? (
+    <Pressable
+      onPress={onToggle}
+      accessibilityRole="button"
+      accessibilityLabel={collapsed ? 'Show the map key' : 'Hide the map key'}
+      hitSlop={10}
+    >
+      <BodyText size={12} weight="semibold" color={colors.accentRamp[700]}>
+        {collapsed ? 'Show ▾' : 'Hide ▴'}
+      </BodyText>
+    </Pressable>
+  ) : null;
+
+  if (collapsed) {
+    return (
+      <View style={[styles.key, styles.keyCollapsed]}>
+        <Kicker>Your pins & regions</Kicker>
+        {toggle}
+      </View>
+    );
+  }
 
   return (
     <View style={styles.key}>
-      <Kicker>Your pins</Kicker>
+      <View style={styles.keyHead}>
+        <Kicker>Your pins</Kicker>
+        {toggle}
+      </View>
       <View style={styles.keyRow}>
         <View style={styles.keyItem}>
           <View style={styles.pickSwatch}>
@@ -562,7 +801,10 @@ function MapKey() {
             <View
               style={[
                 styles.statusSwatch,
-                { backgroundColor: STATUS_DOT[status].fill, borderColor: STATUS_DOT[status].stroke },
+                {
+                  backgroundColor: STATUS_DOT[status].fill,
+                  borderColor: STATUS_DOT[status].stroke,
+                },
               ]}
             />
             <BodyText size={11.5} color={colors.neutral[800]}>
@@ -582,62 +824,6 @@ function MapKey() {
             </BodyText>
           </View>
         ))}
-      </View>
-    </View>
-  );
-}
-
-/** Details for the tapped pin, laid out under the map rather than over it. */
-function SelectedCard({
-  site,
-  rank,
-  match,
-  onDismiss,
-}: {
-  site: Site;
-  rank?: number;
-  match?: ProvisionalMatch;
-  onDismiss: () => void;
-}) {
-  const percent = match ? `${Math.round(match.score * 100)}% match · ${match.reason}` : null;
-
-  return (
-    <View style={styles.selected}>
-      <View style={styles.selectedHead}>
-        <View style={styles.headerText}>
-          <Heading size={19}>{site.name}</Heading>
-          <BodyText size={12} color={colors.neutral[600]} style={styles.headerMeta}>
-            {`${site.kind} · ${site.state}`}
-          </BodyText>
-        </View>
-        <Pressable
-          onPress={onDismiss}
-          accessibilityRole="button"
-          accessibilityLabel="Close park details"
-          hitSlop={10}
-          style={styles.close}
-        >
-          <BodyText size={16} weight="semibold" color={colors.neutral[700]}>
-            ×
-          </BodyText>
-        </Pressable>
-      </View>
-
-      {percent ? (
-        <BodyText size={12.5} weight="medium" lineHeightRatio={1.45} color={colors.accentRamp[800]}>
-          {rank ? `#${rank} for you · ${percent}` : percent}
-        </BodyText>
-      ) : null}
-
-      <BodyText size={13} lineHeightRatio={1.45} color={colors.neutral[700]}>
-        {site.blurb}
-      </BodyText>
-
-      <View style={styles.cardTags}>
-        <Tag tone="accent2" label={`${site.vis.toFixed(1)}M visits`} />
-        <Tag tone="outline" label={site.feature} />
-        <Tag tone="neutral" label={site.seasons.join(' · ') || 'Year-round'} />
-        {site.permit ? <Tag tone="accent" label="Permit needed" /> : null}
       </View>
     </View>
   );
@@ -695,6 +881,11 @@ const styles = StyleSheet.create({
   scopeOptionActive: {
     backgroundColor: colors.accentRamp[100],
   },
+  searchWrap: {
+    // Above the stage, so the suggestions can hang over the map.
+    zIndex: 10,
+    elevation: 10,
+  },
   search: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -717,12 +908,14 @@ const styles = StyleSheet.create({
     paddingLeft: space[2],
   },
   searchMiss: {
-    marginTop: space[2],
-    marginHorizontal: space[4] + space[2],
+    padding: space[3],
   },
   suggestions: {
+    position: 'absolute',
+    top: '100%',
+    left: space[4],
+    right: space[4],
     marginTop: space[2],
-    marginHorizontal: space[4],
     borderRadius: radius.md,
     backgroundColor: colors.neutral[100],
     overflow: 'hidden',
@@ -740,12 +933,56 @@ const styles = StyleSheet.create({
   suggestionPressed: {
     backgroundColor: colors.tintText07,
   },
-  key: {
+  stage: {
+    flex: 1,
     marginTop: space[3],
+    // The closed sheet's deck sits below this edge and stays hidden.
+    overflow: 'hidden',
+  },
+  keyWrap: {
     marginHorizontal: space[4],
+    overflow: 'hidden',
+  },
+  mapArea: {
+    flex: 1,
+  },
+  key: {
     padding: space[3],
     borderRadius: radius.md,
     backgroundColor: colors.neutral[100],
+  },
+  keyCollapsed: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: space[2],
+  },
+  keyHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  regionTitle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space[2],
+    marginTop: space[3],
+    marginHorizontal: space[4],
+  },
+  regionTitleSwatch: {
+    width: 14,
+    height: 14,
+    borderRadius: 4,
+  },
+  regionTitleText: {
+    flex: 1,
+  },
+  fullMap: {
+    paddingVertical: 5,
+    paddingHorizontal: space[3],
+    borderRadius: radius.pill,
+    borderWidth: 1.5,
+    borderColor: colors.accent,
   },
   keyKicker: {
     marginTop: space[3],
@@ -798,68 +1035,51 @@ const styles = StyleSheet.create({
     flexShrink: 1,
   },
   map: {
-    width: '100%',
-    aspectRatio: MAP_ASPECT,
-    marginTop: space[2],
-  },
-  selected: {
-    marginTop: space[2],
-    marginHorizontal: space[4],
-    padding: space[4],
-    borderRadius: radius.lg,
-    backgroundColor: colors.neutral[100],
-    gap: space[2],
-    ...shadow.md,
-  },
-  selectedHead: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: space[3],
-  },
-  close: {
-    width: 28,
-    height: 28,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: radius.pill,
-    backgroundColor: colors.neutral[200],
-  },
-  cardTags: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-    marginTop: space[1],
-  },
-  listHead: {
-    marginTop: space[6],
-  },
-  listMeta: {
-    marginTop: space[2],
-    marginHorizontal: space[4],
-  },
-  segmented: {
-    flexDirection: 'row',
-    gap: 4,
-    padding: 4,
-    marginHorizontal: space[4],
-    backgroundColor: colors.neutral[200],
-    borderRadius: radius.pill,
-  },
-  segment: {
     flex: 1,
-    alignItems: 'center',
-    paddingVertical: 9,
-    borderRadius: radius.pill,
+    width: '100%',
+    marginTop: space[2],
   },
-  segmentActive: {
-    backgroundColor: colors.accent,
+  sheet: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: SHEET_HEIGHT,
+    borderTopLeftRadius: radius.lg,
+    borderTopRightRadius: radius.lg,
+    backgroundColor: colors.neutral[100],
+    ...shadow.lg,
   },
-  list: {
+  sheetBar: {
+    height: SHEET_BAR,
     paddingHorizontal: space[4],
-    gap: space[4],
-    marginTop: space[3],
+    paddingTop: space[2],
+  },
+  sheetHandle: {
+    alignSelf: 'center',
+    width: 38,
+    height: 4,
+    borderRadius: radius.pill,
+    backgroundColor: colors.neutral[400],
+  },
+  sheetHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space[3],
+    marginTop: space[2],
+  },
+  // Full width, so the carousel's neighbouring cards can peek in at the edges.
+  sheetBody: {
+    height: DECK_HEIGHT,
+  },
+  deck: {
+    flex: 1,
+  },
+  deckCard: {
+    flex: 1,
   },
   empty: {
+    marginHorizontal: space[4],
     padding: space[4],
     borderRadius: radius.card,
     backgroundColor: colors.neutral[100],

@@ -12,20 +12,36 @@
  * map. Every other park is a small dot styled by its visit status, and
  * fades back while there are picks to show, so the picks read first.
  *
+ * Passing `focusRegion` zooms the map onto that region and hides every
+ * other region and its pins. Pinching zooms around the fingers, and once
+ * zoomed in a one-finger drag pans; at full-country size a drag is left to
+ * the page so it still scrolls. The zoom is a transform on the state
+ * outlines; pins are placed in screen space instead, so they keep their
+ * size and spread apart as the map grows.
+ *
  * A consequence of Albers USA worth knowing: it has no projection for
  * territories, so American Samoa and the Virgin Islands return null and
  * are absent from the map. The prototype notes the same limitation.
  */
 
 import { geoAlbersUsa, geoPath } from 'd3-geo';
-import { useMemo, useState } from 'react';
-import { StyleSheet, View, type LayoutChangeEvent, type StyleProp, type ViewStyle } from 'react-native';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  Pressable,
+  StyleSheet,
+  View,
+  type LayoutChangeEvent,
+  type StyleProp,
+  type ViewStyle,
+} from 'react-native';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Svg, { Circle, G, Path, Text as SvgText } from 'react-native-svg';
 
 import type { Site, SiteStatus } from '../data/parks';
-import { STATE_REGION } from '../data/regions';
+import { REGIONS, regionForState, STATE_REGION, type RegionId } from '../data/regions';
 import { US_STATES } from '../data/usStates';
-import { colors, fonts } from '../theme';
+import { colors, fonts, radius, shadow } from '../theme';
+import { BodyText } from './Typography';
 
 /** d3-geo wants a FeatureCollection to fit the projection against. */
 const STATES_COLLECTION = {
@@ -46,16 +62,38 @@ export const PICK_FILL = colors.accent;
 /** Small dots are hard to hit with a finger, so each gets a wider invisible target. */
 const HIT_RADIUS = 11;
 
+/** Room left around a zoomed region, and the most it may be magnified. */
+const ZOOM_PADDING = 22;
+const MAX_ZOOM = 4;
+const ZOOM_MS = 380;
+
+/** Limits on pinching: never smaller than the whole country, up to 8x. */
+const PINCH_MIN = 1;
+const PINCH_MAX = 8;
+
+/** Scale then translate, applied to projected map coordinates. */
+type View2D = { k: number; tx: number; ty: number };
+const IDENTITY: View2D = { k: 1, tx: 0, ty: 0 };
+
 type ParkMapProps = {
   sites: Site[];
   /** Site id -> 1-based rank, for the parks drawn as numbered pins. */
   rankById?: ReadonlyMap<string, number>;
   selectedId?: string | null;
+  /** Zooms onto this region; omit for the whole country. */
+  focusRegion?: RegionId | null;
   onSelectSite?: (site: Site) => void;
   style?: StyleProp<ViewStyle>;
 };
 
-export function ParkMap({ sites, rankById, selectedId, onSelectSite, style }: ParkMapProps) {
+export function ParkMap({
+  sites,
+  rankById,
+  selectedId,
+  focusRegion,
+  onSelectSite,
+  style,
+}: ParkMapProps) {
   const [size, setSize] = useState({ width: 0, height: 0 });
 
   function onLayout(event: LayoutChangeEvent) {
@@ -66,10 +104,8 @@ export function ParkMap({ sites, rankById, selectedId, onSelectSite, style }: Pa
     }
   }
 
-  const { statePaths, dots } = useMemo(() => {
-    if (size.width < 1 || size.height < 1) {
-      return { statePaths: [] as { id: string; d: string }[], dots: [] as PlacedDot[] };
-    }
+  const projected = useMemo(() => {
+    if (size.width < 1 || size.height < 1) return null;
 
     // A little padding so coastal outlines are not flush to the edge.
     const projection = geoAlbersUsa().fitExtent(
@@ -81,45 +117,112 @@ export function ParkMap({ sites, rankById, selectedId, onSelectSite, style }: Pa
     );
     const toPath = geoPath(projection);
 
-    const paths = US_STATES.flatMap((feature) => {
+    const statePaths = US_STATES.flatMap((feature) => {
       const d = toPath(feature);
       return d ? [{ id: feature.id, d }] : [];
     });
 
-    const placed = sites.flatMap<PlacedDot>((site) => {
+    const dots = sites.flatMap<PlacedDot>((site) => {
       // Lon/lat order, which is what GeoJSON and d3 expect.
       const point = projection([site.lon, site.lat]);
       if (!point) return []; // Outside the Albers USA domain.
       return [{ site, x: point[0], y: point[1] }];
     });
 
-    return { statePaths: paths, dots: placed };
+    return { toPath, statePaths, dots };
   }, [size.width, size.height, sites]);
 
+  /** Where the map should end up: the whole country, or framed on a region. */
+  const target = useMemo<View2D>(() => {
+    const region = REGIONS.find((r) => r.id === focusRegion);
+    if (!projected || !region) return IDENTITY;
+
+    const [[x0, y0], [x1, y1]] = projected.toPath.bounds({
+      type: 'FeatureCollection',
+      features: US_STATES.filter((feature) => region.states.includes(feature.id)),
+    });
+    const k = Math.min(
+      (size.width - ZOOM_PADDING * 2) / Math.max(x1 - x0, 1),
+      (size.height - ZOOM_PADDING * 2) / Math.max(y1 - y0, 1),
+      MAX_ZOOM,
+    );
+    return {
+      k,
+      tx: size.width / 2 - k * ((x0 + x1) / 2),
+      ty: size.height / 2 - k * ((y0 + y1) / 2),
+    };
+  }, [projected, focusRegion, size.width, size.height]);
+
+  const { view, moved, beginGesture, pinchTo, panBy, reset } = useMapView(target, size);
+
+  // Callbacks run on the JS thread (runOnJS) because the view is React
+  // state; the map is light enough for that to keep up.
+  const pinch = Gesture.Pinch()
+    .runOnJS(true)
+    .onStart((event) => beginGesture(event.focalX, event.focalY))
+    .onUpdate((event) => pinchTo(event.scale, event.focalX, event.focalY));
+
+  const pan = Gesture.Pan()
+    .runOnJS(true)
+    .maxPointers(1)
+    // At full-country size a drag belongs to the page, so it can scroll.
+    .enabled(view.k > 1.05)
+    .onStart(() => beginGesture(0, 0))
+    .onUpdate((event) => panBy(event.translationX, event.translationY));
+
+  const gesture = Gesture.Simultaneous(pinch, pan);
+
+  // Built once per layout, so each frame of a zoom only moves the group.
+  // While a region is in focus the others are left out entirely.
+  const stateShapes = useMemo(
+    () =>
+      projected?.statePaths.flatMap((state) => {
+        const region = STATE_REGION[state.id];
+        if (focusRegion != null && region?.id !== focusRegion) return [];
+        return [
+          <Path
+            key={state.id}
+            d={state.d}
+            fill={region?.fill ?? colors.neutral[300]}
+            stroke={colors.bg}
+            strokeWidth={1}
+            vectorEffect="non-scaling-stroke"
+          />,
+        ];
+      }) ?? [],
+    [projected, focusRegion],
+  );
+
+  if (!projected) {
+    return <View style={[styles.container, style]} onLayout={onLayout} />;
+  }
+
+  const place = ({ x, y }: PlacedDot) => ({
+    x: x * view.k + view.tx,
+    y: y * view.k + view.ty,
+  });
   const hasPicks = (rankById?.size ?? 0) > 0;
-  const picks = dots.filter((dot) => rankById?.has(dot.site.id));
-  const others = dots.filter((dot) => !rankById?.has(dot.site.id));
+  // While a region is in focus, only its pins (and the selected one) show.
+  const visible = focusRegion
+    ? projected.dots.filter(
+        (dot) => dot.site.id === selectedId || regionForState(dot.site.state)?.id === focusRegion,
+      )
+    : projected.dots;
+  const picks = visible.filter((dot) => rankById?.has(dot.site.id));
+  const others = visible.filter((dot) => !rankById?.has(dot.site.id));
   // Draw #1 last so it sits on top where pins overlap.
   picks.sort((a, b) => rankById!.get(b.site.id)! - rankById!.get(a.site.id)!);
 
   return (
     <View style={[styles.container, style]} onLayout={onLayout}>
-      {size.width > 0 && size.height > 0 ? (
+      <GestureDetector gesture={gesture}>
         <Svg width={size.width} height={size.height}>
-          <G>
-            {statePaths.map((state) => (
-              <Path
-                key={state.id}
-                d={state.d}
-                fill={STATE_REGION[state.id]?.fill ?? colors.neutral[300]}
-                stroke={colors.bg}
-                strokeWidth={1}
-              />
-            ))}
-          </G>
+          <G transform={`translate(${view.tx} ${view.ty}) scale(${view.k})`}>{stateShapes}</G>
 
           <G opacity={hasPicks ? 0.6 : 1}>
-            {others.map(({ site, x, y }) => {
+            {others.map((dot) => {
+              const { site } = dot;
+              const { x, y } = place(dot);
               const selected = site.id === selectedId;
               const look = STATUS_DOT[site.status];
               return (
@@ -139,15 +242,16 @@ export function ParkMap({ sites, rankById, selectedId, onSelectSite, style }: Pa
           </G>
 
           <G>
-            {picks.map(({ site, x, y }) => {
+            {picks.map((dot) => {
+              const { site } = dot;
+              const { x, y } = place(dot);
               const selected = site.id === selectedId;
-              const r = selected ? 12 : 10;
               return (
                 <G key={site.id} onPress={onSelectSite ? () => onSelectSite(site) : undefined}>
                   <Circle
                     cx={x}
                     cy={y}
-                    r={r}
+                    r={selected ? 12 : 10}
                     fill={selected ? colors.accentRamp[700] : PICK_FILL}
                     stroke={colors.neutral[100]}
                     strokeWidth={2}
@@ -169,9 +273,126 @@ export function ParkMap({ sites, rankById, selectedId, onSelectSite, style }: Pa
             })}
           </G>
         </Svg>
+      </GestureDetector>
+
+      {moved ? (
+        <Pressable
+          onPress={reset}
+          accessibilityRole="button"
+          accessibilityLabel="Reset the map zoom"
+          hitSlop={8}
+          style={({ pressed }) => [styles.reset, pressed && styles.resetPressed]}
+        >
+          <BodyText size={12} weight="semibold" color={colors.accentRamp[700]}>
+            Reset
+          </BodyText>
+        </Pressable>
       ) : null}
     </View>
   );
+}
+
+/**
+ * The map's current view. Eases to `target` whenever it changes; pinch and
+ * pan move it directly, and `reset` eases back to `target`.
+ */
+function useMapView(target: View2D, size: { width: number; height: number }) {
+  const [view, setViewState] = useState(target);
+  /** The target the user last pinched or dragged away from, if any. */
+  const [movedFrom, setMovedFrom] = useState<View2D | null>(null);
+  const current = useRef(target);
+  const frame = useRef(0);
+  const gestureStart = useRef({ view: IDENTITY, focalX: 0, focalY: 0 });
+
+  const setView = useCallback((next: View2D) => {
+    cancelAnimationFrame(frame.current);
+    current.current = next;
+    setViewState(next);
+  }, []);
+
+  /** Keeps the map from being dragged or pinched entirely out of the box. */
+  const clamp = useCallback(
+    (next: View2D): View2D => {
+      const k = Math.min(Math.max(next.k, PINCH_MIN), PINCH_MAX);
+      const { width: w, height: h } = size;
+      return {
+        k,
+        tx: Math.min(Math.max(next.tx, w / 2 - w * k), w / 2),
+        ty: Math.min(Math.max(next.ty, h / 2 - h * k), h / 2),
+      };
+    },
+    [size],
+  );
+
+  const animateTo = useCallback((to: View2D) => {
+    cancelAnimationFrame(frame.current);
+    const from = current.current;
+    const start = Date.now();
+
+    const step = () => {
+      const t = Math.min((Date.now() - start) / ZOOM_MS, 1);
+      const ease = t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2; // ease-in-out cubic
+      const next = {
+        k: from.k + (to.k - from.k) * ease,
+        tx: from.tx + (to.tx - from.tx) * ease,
+        ty: from.ty + (to.ty - from.ty) * ease,
+      };
+      current.current = next;
+      setViewState(next);
+      if (t < 1) frame.current = requestAnimationFrame(step);
+    };
+
+    frame.current = requestAnimationFrame(step);
+  }, []);
+
+  useEffect(() => {
+    animateTo(target);
+  }, [target, animateTo]);
+
+  useEffect(() => () => cancelAnimationFrame(frame.current), []);
+
+  const beginGesture = useCallback(
+    (focalX: number, focalY: number) => {
+      gestureStart.current = { view: current.current, focalX, focalY };
+      setMovedFrom(target);
+    },
+    [target],
+  );
+
+  const pinchTo = useCallback(
+    (scale: number, focalX: number, focalY: number) => {
+      const start = gestureStart.current;
+      const k = Math.min(Math.max(start.view.k * scale, PINCH_MIN), PINCH_MAX);
+      const ratio = k / start.view.k;
+      // Keep the point under the fingers fixed, and follow the fingers as they move.
+      setView(
+        clamp({
+          k,
+          tx: focalX - (start.focalX - start.view.tx) * ratio,
+          ty: focalY - (start.focalY - start.view.ty) * ratio,
+        }),
+      );
+    },
+    [clamp, setView],
+  );
+
+  const panBy = useCallback(
+    (dx: number, dy: number) => {
+      const start = gestureStart.current.view;
+      setView(clamp({ k: start.k, tx: start.tx + dx, ty: start.ty + dy }));
+    },
+    [clamp, setView],
+  );
+
+  const reset = useCallback(() => {
+    setMovedFrom(null);
+    animateTo(target);
+  }, [animateTo, target]);
+
+  // A new target (another park, or none) clears the Reset button by itself.
+  const moved = movedFrom === target;
+
+  return { view, moved, beginGesture, pinchTo, panBy, reset };
 }
 
 type PlacedDot = { site: Site; x: number; y: number };
@@ -180,5 +401,18 @@ const styles = StyleSheet.create({
   container: {
     backgroundColor: colors.bg,
     overflow: 'hidden',
+  },
+  reset: {
+    position: 'absolute',
+    top: 8,
+    right: 12,
+    paddingVertical: 5,
+    paddingHorizontal: 12,
+    borderRadius: radius.pill,
+    backgroundColor: colors.neutral[100],
+    ...shadow.sm,
+  },
+  resetPressed: {
+    opacity: 0.8,
   },
 });
