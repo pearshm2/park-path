@@ -13,9 +13,6 @@
  * report every card it passes mid-flick: the screen's updates lag behind
  * the glide, and reading a stale `index` as an outside change made the
  * carousel scroll itself backwards and fight the flick.
- *
- * This is the scrolling alternative to CardDeck, which swaps one card at
- * a time; the two take the same props.
  */
 
 import { useEffect, useRef, type ReactNode } from 'react';
