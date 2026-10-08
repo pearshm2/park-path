@@ -20,6 +20,7 @@ import {
 
 import { fetchCurrentUser, login as loginRequest, signup as signupRequest } from '../api/auth';
 import { clearToken, loadToken, saveToken } from '../api/tokenStorage';
+import { readTokenSubject } from '../lib/jwt';
 import type { Credentials, User } from '../types/auth';
 
 /**
@@ -33,6 +34,13 @@ type AuthContextValue = {
   status: AuthStatus;
   user: User | null;
   token: string | null;
+  /**
+   * The signed-in account's id, read from the token rather than from
+   * GET /auth/me, so it is available the instant a token exists even if
+   * that request is slow or fails. Anything stored per account keys off
+   * this — see QuizContext.
+   */
+  userId: string | null;
   signIn: (credentials: Credentials) => Promise<void>;
   signUp: (credentials: Credentials) => Promise<void>;
   signOut: () => Promise<void>;
@@ -122,9 +130,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setStatus('signedOut');
   }, []);
 
+  // Prefer the token's own claim; fall back to the profile if a future
+  // token shape ever stops carrying one.
+  const userId = useMemo(
+    () => readTokenSubject(token) ?? (user ? String(user.id) : null),
+    [token, user],
+  );
+
   const value = useMemo<AuthContextValue>(
-    () => ({ status, user, token, signIn, signUp, signOut }),
-    [status, user, token, signIn, signUp, signOut],
+    () => ({ status, user, token, userId, signIn, signUp, signOut }),
+    [status, user, token, userId, signIn, signUp, signOut],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -21,7 +21,7 @@ export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user, signOut } = useAuth();
-  const { answers, reset } = useQuiz();
+  const { answers } = useQuiz();
 
   const terrainSummary = answers.terrains.length
     ? answers.terrains.join(', ')
@@ -72,10 +72,10 @@ export default function SettingsScreen() {
         <Button
           label="Sign out"
           variant="secondary"
-          onPress={async () => {
-            await reset();
-            await signOut();
-          }}
+          // Deliberately does NOT clear the quiz answers: they are stored
+          // per account and should still be there on the next sign-in.
+          // "Retake the quiz" above is the way to start over.
+          onPress={signOut}
         />
       </View>
     </ScrollView>

@@ -4,6 +4,11 @@
  * There is no backend for this yet — api/app/main.py mounts only the
  * auth router — so answers live here and persist locally. When a /quiz
  * endpoint lands, `save` is the single place that needs to also POST.
+ *
+ * Answers are stored per account. Signing out leaves them on the device,
+ * so signing back in restores them rather than forcing a retake; signing
+ * in as a different account reads that account's own key, so answers
+ * never leak between users sharing a device.
  */
 
 import {
@@ -16,16 +21,20 @@ import {
   type ReactNode,
 } from 'react';
 
+import { useAuth } from '../auth/AuthContext';
 import { EMPTY_ANSWERS, type QuizAnswers } from '../data/quizSpec';
 import { getItem, removeItem, setItem } from '../lib/storage';
 
-const ANSWERS_KEY = 'parkpath.quizAnswers';
+/** One key per account — see the note above about shared devices. */
+function answersKey(userId: string): string {
+  return `parkpath.quizAnswers.${userId}`;
+}
 
 type QuizContextValue = {
-  /** False until the stored answers have been read back on launch. */
+  /** False while this account's stored answers are being read back. */
   ready: boolean;
   answers: QuizAnswers;
-  /** True once the quiz has been finished at least once. */
+  /** True once this account has finished the quiz at least once. */
   completed: boolean;
   save: (answers: QuizAnswers) => Promise<void>;
   reset: () => Promise<void>;
@@ -52,40 +61,66 @@ function parseAnswers(raw: string | null): QuizAnswers | null {
   }
 }
 
-export function QuizProvider({ children }: { children: ReactNode }) {
-  const [ready, setReady] = useState(false);
-  const [answers, setAnswers] = useState<QuizAnswers>(EMPTY_ANSWERS);
-  const [completed, setCompleted] = useState(false);
+/** What was read from storage, and which account it belongs to. */
+type LoadedAnswers = {
+  userId: string;
+  answers: QuizAnswers;
+  completed: boolean;
+};
 
+export function QuizProvider({ children }: { children: ReactNode }) {
+  const { userId } = useAuth();
+  const [loaded, setLoaded] = useState<LoadedAnswers | null>(null);
+
+  // Everything below is derived rather than stored, so switching accounts
+  // takes effect on the very next render: a stale `loaded` from the
+  // previous account simply stops matching and is ignored. That also
+  // keeps the effect free of synchronous setState, which would otherwise
+  // cascade an extra render on every sign-in.
+  const isCurrent = loaded !== null && loaded.userId === userId;
+  const ready = userId === null || isCurrent;
+  const answers = isCurrent ? loaded.answers : EMPTY_ANSWERS;
+  const completed = isCurrent ? loaded.completed : false;
+
+  // Re-reads whenever the account changes, which covers launch, sign-in,
+  // and switching accounts without a reload. Signing out needs no read —
+  // `ready` is already true and the derived answers are empty.
   useEffect(() => {
+    if (!userId) return;
+
     let cancelled = false;
 
     (async () => {
-      const stored = parseAnswers(await getItem(ANSWERS_KEY));
+      const stored = parseAnswers(await getItem(answersKey(userId)));
       if (cancelled) return;
-      if (stored) {
-        setAnswers(stored);
-        setCompleted(true);
-      }
-      setReady(true);
+      setLoaded({
+        userId,
+        answers: stored ?? EMPTY_ANSWERS,
+        completed: stored !== null,
+      });
     })();
 
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [userId]);
 
-  const save = useCallback(async (next: QuizAnswers) => {
-    setAnswers(next);
-    setCompleted(true);
-    await setItem(ANSWERS_KEY, JSON.stringify(next));
-  }, []);
+  const save = useCallback(
+    async (next: QuizAnswers) => {
+      // The quiz screen is behind an auth guard, so a missing account here
+      // only happens if the session ends mid-answer; nothing to write.
+      if (!userId) return;
+      setLoaded({ userId, answers: next, completed: true });
+      await setItem(answersKey(userId), JSON.stringify(next));
+    },
+    [userId],
+  );
 
   const reset = useCallback(async () => {
-    setAnswers(EMPTY_ANSWERS);
-    setCompleted(false);
-    await removeItem(ANSWERS_KEY);
-  }, []);
+    if (!userId) return;
+    setLoaded({ userId, answers: EMPTY_ANSWERS, completed: false });
+    await removeItem(answersKey(userId));
+  }, [userId]);
 
   const value = useMemo<QuizContextValue>(
     () => ({ ready, answers, completed, save, reset }),
