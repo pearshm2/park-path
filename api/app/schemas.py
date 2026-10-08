@@ -29,3 +29,31 @@ class UserOut(BaseModel):
 class Token(BaseModel):
     access_token: str
     token_type: str = "bearer"
+
+
+class SiteOut(BaseModel):
+    """
+    One NPS site. Curated fields are null for sites nobody has filled in
+    yet (most of the non-park units), so clients must handle missing values.
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    park_code: str
+    name: str
+    designation: str | None
+    states: str | None
+    latitude: float | None
+    longitude: float | None
+    description: str | None
+    nps_url: str | None
+    image_url: str | None
+
+    is_named_park: bool
+    terrain_group: str | None
+    feature: str | None
+    effort: int | None
+    typical_days: int | None
+    seasons: list[str] | None
+    permit_required: bool | None
+    annual_visits_millions: float | None

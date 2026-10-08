@@ -45,8 +45,9 @@ const TONES: Record<TerrainGroup, { band: string; ink: string }> = {
   badlands: { band: colors.neutral[200], ink: colors.neutral[700] },
 };
 
-export function terrainTone(group: TerrainGroup) {
-  return TONES[group] ?? { band: colors.neutral[200], ink: colors.neutral[800] };
+/** A site with no curated terrain gets the neutral tone. */
+export function terrainTone(group: TerrainGroup | null) {
+  return (group && TONES[group]) ?? { band: colors.neutral[200], ink: colors.neutral[800] };
 }
 
 /** Human label for a terrain family, matching the quiz's wording. */

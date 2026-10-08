@@ -28,7 +28,7 @@ export type ProvisionalMatch = {
 };
 
 /**
- * Scores the bundled sites against the quiz answers.
+ * Scores the sites against the quiz answers.
  *
  * Deliberately named "provisional" rather than "recommend" so it cannot
  * be mistaken for the real engine at a call site.
@@ -46,9 +46,9 @@ export async function provisionalMatches(
     // Terrain weighted heaviest only because the quiz copy promises it
     // ("This carries the heaviest weight in your feed") — not because
     // this placeholder has an opinion about signal strength.
-    if (answers.terrains.length > 0 && answers.terrains.includes(site.group as never)) {
+    if (site.group && answers.terrains.includes(site.group as never)) {
       score += 0.45;
-      reasons.push(`${site.feature.toLowerCase()} matches your terrain`);
+      reasons.push(`${(site.feature ?? 'the terrain').toLowerCase()} matches your terrain`);
     }
 
     if (answers.season && site.seasons.includes(answers.season as Season)) {
@@ -56,7 +56,7 @@ export async function provisionalMatches(
       reasons.push(`good in ${answers.season}`);
     }
 
-    if (answers.effort !== null) {
+    if (answers.effort !== null && site.effort !== null) {
       const gap = Math.abs(site.effort - answers.effort);
       if (gap === 0) {
         score += 0.2;
@@ -66,7 +66,7 @@ export async function provisionalMatches(
       }
     }
 
-    if (answers.days !== null) {
+    if (answers.days !== null && site.days !== null) {
       if (site.days <= answers.days) {
         score += 0.1;
       } else {
@@ -94,7 +94,7 @@ export async function provisionalMatches(
   });
 
   return scored
-    .sort((a, b) => b.score - a.score || b.site.vis - a.site.vis)
+    .sort((a, b) => b.score - a.score || (b.site.vis ?? 0) - (a.site.vis ?? 0))
     .filter((entry) => entry.score > 0);
 }
 

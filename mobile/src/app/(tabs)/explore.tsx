@@ -19,8 +19,7 @@
  * Full map, tapping the card again, or closing the sheet goes back to the
  * whole country.
  *
- * Data comes from the bundled fixtures via src/api/parks.ts, so this
- * renders real parks with no backend.
+ * Data comes from the API's GET /sites via src/api/parks.ts.
  */
 
 import { useQuery } from '@tanstack/react-query';
@@ -93,9 +92,14 @@ function applyFilters<T extends { site: Site }>(rows: T[], filters: FeedFilters)
   const ceiling = filters.crowd ? CROWD_CEILING[filters.crowd] : null;
 
   return rows.filter(({ site }) => {
-    if (filters.terrains.length > 0 && !filters.terrains.includes(site.group)) return false;
-    if (filters.maxEffort !== null && site.effort > filters.maxEffort) return false;
-    if (ceiling !== null && site.vis > ceiling) return false;
+    // A site missing the data a filter needs doesn't match it.
+    if (filters.terrains.length > 0) {
+      if (site.group === null || !filters.terrains.includes(site.group)) return false;
+    }
+    if (filters.maxEffort !== null) {
+      if (site.effort === null || site.effort > filters.maxEffort) return false;
+    }
+    if (ceiling !== null && (site.vis === null || site.vis > ceiling)) return false;
     return true;
   });
 }

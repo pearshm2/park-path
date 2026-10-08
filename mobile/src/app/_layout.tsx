@@ -33,7 +33,7 @@ SplashScreen.preventAutoHideAsync().catch(() => {
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      // Park data is bundled fixtures for now, so there is nothing to
+      // Park data barely changes between visits, so there is nothing to
       // refetch on focus; this keeps the demo from flickering.
       refetchOnWindowFocus: false,
       retry: 1,

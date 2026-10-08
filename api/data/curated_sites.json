@@ -1,0 +1,1647 @@
+[
+  {
+    "park_code": "acad",
+    "is_named_park": true,
+    "terrain_group": "coast",
+    "feature": "Granite coast",
+    "effort": 2,
+    "typical_days": 3,
+    "seasons": [
+      "summer",
+      "fall"
+    ],
+    "permit_required": false,
+    "annual_visits_millions": 3.9
+  },
+  {
+    "park_code": "anti",
+    "is_named_park": false,
+    "terrain_group": "forest",
+    "feature": "Battlefield",
+    "effort": 1,
+    "typical_days": 1,
+    "seasons": [
+      "spring",
+      "fall"
+    ],
+    "permit_required": false,
+    "annual_visits_millions": 0.4
+  },
+  {
+    "park_code": "apis",
+    "is_named_park": false,
+    "terrain_group": "water",
+    "feature": "Island sea caves",
+    "effort": 2,
+    "typical_days": 2,
+    "seasons": [
+      "summer"
+    ],
+    "permit_required": false,
+    "annual_visits_millions": 0.25
+  },
+  {
+    "park_code": "arch",
+    "is_named_park": true,
+    "terrain_group": "desert",
+    "feature": "Sandstone arches",
+    "effort": 2,
+    "typical_days": 2,
+    "seasons": [
+      "spring",
+      "fall"
+    ],
+    "permit_required": true,
+    "annual_visits_millions": 1.5
+  },
+  {
+    "park_code": "asis",
+    "is_named_park": false,
+    "terrain_group": "coast",
+    "feature": "Wild horse barrier island",
+    "effort": 1,
+    "typical_days": 1,
+    "seasons": [
+      "spring",
+      "fall"
+    ],
+    "permit_required": false,
+    "annual_visits_millions": 2.7
+  },
+  {
+    "park_code": "badl",
+    "is_named_park": true,
+    "terrain_group": "badlands",
+    "feature": "Eroded spires",
+    "effort": 2,
+    "typical_days": 2,
+    "seasons": [
+      "spring",
+      "fall"
+    ],
+    "permit_required": false,
+    "annual_visits_millions": 1
+  },
+  {
+    "park_code": "band",
+    "is_named_park": false,
+    "terrain_group": "canyon",
+    "feature": "Ancestral cliff sites",
+    "effort": 2,
+    "typical_days": 1,
+    "seasons": [
+      "spring",
+      "fall"
+    ],
+    "permit_required": false,
+    "annual_visits_millions": 0.19
+  },
+  {
+    "park_code": "bela",
+    "is_named_park": false,
+    "terrain_group": "dunes",
+    "feature": "Arctic tundra",
+    "effort": 3,
+    "typical_days": 4,
+    "seasons": [
+      "summer"
+    ],
+    "permit_required": true,
+    "annual_visits_millions": 0.005
+  },
+  {
+    "park_code": "bibe",
+    "is_named_park": true,
+    "terrain_group": "desert",
+    "feature": "Desert river canyon",
+    "effort": 3,
+    "typical_days": 4,
+    "seasons": [
+      "winter",
+      "spring"
+    ],
+    "permit_required": false,
+    "annual_visits_millions": 0.5
+  },
+  {
+    "park_code": "bicy",
+    "is_named_park": false,
+    "terrain_group": "water",
+    "feature": "Cypress swamp",
+    "effort": 2,
+    "typical_days": 1,
+    "seasons": [
+      "winter"
+    ],
+    "permit_required": false,
+    "annual_visits_millions": 1
+  },
+  {
+    "park_code": "bisc",
+    "is_named_park": true,
+    "terrain_group": "water",
+    "feature": "Coral reef bay",
+    "effort": 1,
+    "typical_days": 1,
+    "seasons": [
+      "winter",
+      "spring"
+    ],
+    "permit_required": false,
+    "annual_visits_millions": 0.5
+  },
+  {
+    "park_code": "blca",
+    "is_named_park": true,
+    "terrain_group": "canyon",
+    "feature": "Sheer gorge",
+    "effort": 3,
+    "typical_days": 1,
+    "seasons": [
+      "summer",
+      "fall"
+    ],
+    "permit_required": false,
+    "annual_visits_millions": 0.3
+  },
+  {
+    "park_code": "blri",
+    "is_named_park": false,
+    "terrain_group": "mountain",
+    "feature": "Ridge-top drive",
+    "effort": 1,
+    "typical_days": 3,
+    "seasons": [
+      "fall",
+      "spring"
+    ],
+    "permit_required": false,
+    "annual_visits_millions": 16.7
+  },
+  {
+    "park_code": "brca",
+    "is_named_park": true,
+    "terrain_group": "canyon",
+    "feature": "Hoodoo amphitheater",
+    "effort": 2,
+    "typical_days": 2,
+    "seasons": [
+      "spring",
+      "summer",
+      "fall"
+    ],
+    "permit_required": false,
+    "annual_visits_millions": 2.5
+  },
+  {
+    "park_code": "cabr",
+    "is_named_park": false,
+    "terrain_group": "coast",
+    "feature": "Headland tidepools",
+    "effort": 1,
+    "typical_days": 1,
+    "seasons": [
+      "winter",
+      "spring"
+    ],
+    "permit_required": false,
+    "annual_visits_millions": 0.9
+  },
+  {
+    "park_code": "cach",
+    "is_named_park": false,
+    "terrain_group": "canyon",
+    "feature": "Navajo canyon",
+    "effort": 2,
+    "typical_days": 1,
+    "seasons": [
+      "spring",
+      "fall"
+    ],
+    "permit_required": true,
+    "annual_visits_millions": 0.4
+  },
+  {
+    "park_code": "caco",
+    "is_named_park": false,
+    "terrain_group": "coast",
+    "feature": "Atlantic barrier beach",
+    "effort": 1,
+    "typical_days": 2,
+    "seasons": [
+      "summer",
+      "fall"
+    ],
+    "permit_required": false,
+    "annual_visits_millions": 4
+  },
+  {
+    "park_code": "caha",
+    "is_named_park": false,
+    "terrain_group": "coast",
+    "feature": "Outer Banks",
+    "effort": 1,
+    "typical_days": 2,
+    "seasons": [
+      "spring",
+      "fall"
+    ],
+    "permit_required": false,
+    "annual_visits_millions": 2.6
+  },
+  {
+    "park_code": "cana",
+    "is_named_park": false,
+    "terrain_group": "coast",
+    "feature": "Undeveloped Atlantic beach",
+    "effort": 1,
+    "typical_days": 1,
+    "seasons": [
+      "winter",
+      "spring"
+    ],
+    "permit_required": false,
+    "annual_visits_millions": 1.6
+  },
+  {
+    "park_code": "cany",
+    "is_named_park": true,
+    "terrain_group": "canyon",
+    "feature": "Mesa and river",
+    "effort": 3,
+    "typical_days": 3,
+    "seasons": [
+      "spring",
+      "fall"
+    ],
+    "permit_required": true,
+    "annual_visits_millions": 0.8
+  },
+  {
+    "park_code": "care",
+    "is_named_park": true,
+    "terrain_group": "canyon",
+    "feature": "Monocline cliffs",
+    "effort": 2,
+    "typical_days": 2,
+    "seasons": [
+      "spring",
+      "fall"
+    ],
+    "permit_required": false,
+    "annual_visits_millions": 1.2
+  },
+  {
+    "park_code": "cave",
+    "is_named_park": true,
+    "terrain_group": "caves",
+    "feature": "Show cave",
+    "effort": 2,
+    "typical_days": 1,
+    "seasons": [
+      "spring",
+      "fall"
+    ],
+    "permit_required": true,
+    "annual_visits_millions": 0.4
+  },
+  {
+    "park_code": "cebr",
+    "is_named_park": false,
+    "terrain_group": "canyon",
+    "feature": "High amphitheater",
+    "effort": 1,
+    "typical_days": 1,
+    "seasons": [
+      "summer",
+      "fall"
+    ],
+    "permit_required": false,
+    "annual_visits_millions": 0.7
+  },
+  {
+    "park_code": "chcu",
+    "is_named_park": false,
+    "terrain_group": "canyon",
+    "feature": "Great houses",
+    "effort": 2,
+    "typical_days": 2,
+    "seasons": [
+      "spring",
+      "fall"
+    ],
+    "permit_required": false,
+    "annual_visits_millions": 0.06
+  },
+  {
+    "park_code": "chir",
+    "is_named_park": false,
+    "terrain_group": "canyon",
+    "feature": "Rock pinnacles",
+    "effort": 2,
+    "typical_days": 1,
+    "seasons": [
+      "spring",
+      "fall"
+    ],
+    "permit_required": false,
+    "annual_visits_millions": 0.06
+  },
+  {
+    "park_code": "chis",
+    "is_named_park": true,
+    "terrain_group": "coast",
+    "feature": "Island archipelago",
+    "effort": 3,
+    "typical_days": 2,
+    "seasons": [
+      "spring",
+      "summer"
+    ],
+    "permit_required": true,
+    "annual_visits_millions": 0.4
+  },
+  {
+    "park_code": "colm",
+    "is_named_park": false,
+    "terrain_group": "canyon",
+    "feature": "Red rock canyons",
+    "effort": 2,
+    "typical_days": 1,
+    "seasons": [
+      "spring",
+      "fall"
+    ],
+    "permit_required": false,
+    "annual_visits_millions": 0.4
+  },
+  {
+    "park_code": "cong",
+    "is_named_park": true,
+    "terrain_group": "water",
+    "feature": "Floodplain forest",
+    "effort": 1,
+    "typical_days": 1,
+    "seasons": [
+      "winter",
+      "spring"
+    ],
+    "permit_required": false,
+    "annual_visits_millions": 0.25
+  },
+  {
+    "park_code": "crla",
+    "is_named_park": true,
+    "terrain_group": "mountain",
+    "feature": "Caldera lake",
+    "effort": 2,
+    "typical_days": 2,
+    "seasons": [
+      "summer"
+    ],
+    "permit_required": false,
+    "annual_visits_millions": 0.6
+  },
+  {
+    "park_code": "crmo",
+    "is_named_park": false,
+    "terrain_group": "desert",
+    "feature": "Lava field",
+    "effort": 2,
+    "typical_days": 1,
+    "seasons": [
+      "spring",
+      "summer"
+    ],
+    "permit_required": false,
+    "annual_visits_millions": 0.25
+  },
+  {
+    "park_code": "cuis",
+    "is_named_park": false,
+    "terrain_group": "coast",
+    "feature": "Maritime forest island",
+    "effort": 2,
+    "typical_days": 2,
+    "seasons": [
+      "winter",
+      "spring"
+    ],
+    "permit_required": true,
+    "annual_visits_millions": 0.06
+  },
+  {
+    "park_code": "cure",
+    "is_named_park": false,
+    "terrain_group": "canyon",
+    "feature": "Reservoir canyon",
+    "effort": 2,
+    "typical_days": 2,
+    "seasons": [
+      "summer",
+      "fall"
+    ],
+    "permit_required": false,
+    "annual_visits_millions": 0.9
+  },
+  {
+    "park_code": "cuva",
+    "is_named_park": true,
+    "terrain_group": "forest",
+    "feature": "River valley",
+    "effort": 1,
+    "typical_days": 1,
+    "seasons": [
+      "spring",
+      "summer",
+      "fall"
+    ],
+    "permit_required": false,
+    "annual_visits_millions": 2.9
+  },
+  {
+    "park_code": "dena",
+    "is_named_park": true,
+    "terrain_group": "mountain",
+    "feature": "Subarctic range",
+    "effort": 3,
+    "typical_days": 5,
+    "seasons": [
+      "summer"
+    ],
+    "permit_required": true,
+    "annual_visits_millions": 0.4
+  },
+  {
+    "park_code": "depo",
+    "is_named_park": false,
+    "terrain_group": "mountain",
+    "feature": "Basalt columns",
+    "effort": 2,
+    "typical_days": 1,
+    "seasons": [
+      "summer"
+    ],
+    "permit_required": true,
+    "annual_visits_millions": 0.14
+  },
+  {
+    "park_code": "deto",
+    "is_named_park": false,
+    "terrain_group": "mountain",
+    "feature": "Igneous column",
+    "effort": 2,
+    "typical_days": 1,
+    "seasons": [
+      "summer",
+      "fall"
+    ],
+    "permit_required": false,
+    "annual_visits_millions": 0.5
+  },
+  {
+    "park_code": "deva",
+    "is_named_park": true,
+    "terrain_group": "desert",
+    "feature": "Salt basin",
+    "effort": 2,
+    "typical_days": 3,
+    "seasons": [
+      "winter",
+      "spring"
+    ],
+    "permit_required": false,
+    "annual_visits_millions": 1.1
+  },
+  {
+    "park_code": "dewa",
+    "is_named_park": false,
+    "terrain_group": "forest",
+    "feature": "River gap",
+    "effort": 2,
+    "typical_days": 1,
+    "seasons": [
+      "spring",
+      "fall"
+    ],
+    "permit_required": false,
+    "annual_visits_millions": 4.1
+  },
+  {
+    "park_code": "dino",
+    "is_named_park": false,
+    "terrain_group": "canyon",
+    "feature": "Fossil quarry canyons",
+    "effort": 2,
+    "typical_days": 2,
+    "seasons": [
+      "spring",
+      "fall"
+    ],
+    "permit_required": false,
+    "annual_visits_millions": 0.3
+  },
+  {
+    "park_code": "drto",
+    "is_named_park": true,
+    "terrain_group": "coast",
+    "feature": "Reef and fort",
+    "effort": 1,
+    "typical_days": 2,
+    "seasons": [
+      "winter",
+      "spring"
+    ],
+    "permit_required": true,
+    "annual_visits_millions": 0.08
+  },
+  {
+    "park_code": "efmo",
+    "is_named_park": false,
+    "terrain_group": "forest",
+    "feature": "Animal-shaped mounds",
+    "effort": 1,
+    "typical_days": 1,
+    "seasons": [
+      "spring",
+      "fall"
+    ],
+    "permit_required": false,
+    "annual_visits_millions": 0.07
+  },
+  {
+    "park_code": "ever",
+    "is_named_park": true,
+    "terrain_group": "water",
+    "feature": "Sawgrass wetland",
+    "effort": 1,
+    "typical_days": 2,
+    "seasons": [
+      "winter"
+    ],
+    "permit_required": false,
+    "annual_visits_millions": 0.8
+  },
+  {
+    "park_code": "fiis",
+    "is_named_park": false,
+    "terrain_group": "coast",
+    "feature": "Barrier island",
+    "effort": 1,
+    "typical_days": 1,
+    "seasons": [
+      "summer",
+      "fall"
+    ],
+    "permit_required": false,
+    "annual_visits_millions": 0.6
+  },
+  {
+    "park_code": "flfo",
+    "is_named_park": false,
+    "terrain_group": "forest",
+    "feature": "Fossil beds",
+    "effort": 1,
+    "typical_days": 1,
+    "seasons": [
+      "summer",
+      "fall"
+    ],
+    "permit_required": false,
+    "annual_visits_millions": 0.08
+  },
+  {
+    "park_code": "gaar",
+    "is_named_park": true,
+    "terrain_group": "mountain",
+    "feature": "Brooks Range",
+    "effort": 3,
+    "typical_days": 6,
+    "seasons": [
+      "summer"
+    ],
+    "permit_required": true,
+    "annual_visits_millions": 0.01
+  },
+  {
+    "park_code": "gett",
+    "is_named_park": false,
+    "terrain_group": "forest",
+    "feature": "Battlefield",
+    "effort": 1,
+    "typical_days": 1,
+    "seasons": [
+      "spring",
+      "fall"
+    ],
+    "permit_required": false,
+    "annual_visits_millions": 0.9
+  },
+  {
+    "park_code": "glac",
+    "is_named_park": true,
+    "terrain_group": "mountain",
+    "feature": "Glacial valley",
+    "effort": 3,
+    "typical_days": 4,
+    "seasons": [
+      "summer"
+    ],
+    "permit_required": true,
+    "annual_visits_millions": 2.9
+  },
+  {
+    "park_code": "glba",
+    "is_named_park": true,
+    "terrain_group": "water",
+    "feature": "Glacial fjord",
+    "effort": 2,
+    "typical_days": 3,
+    "seasons": [
+      "summer"
+    ],
+    "permit_required": true,
+    "annual_visits_millions": 0.7
+  },
+  {
+    "park_code": "glca",
+    "is_named_park": false,
+    "terrain_group": "canyon",
+    "feature": "Reservoir slot canyons",
+    "effort": 2,
+    "typical_days": 3,
+    "seasons": [
+      "spring",
+      "fall"
+    ],
+    "permit_required": false,
+    "annual_visits_millions": 5.2
+  },
+  {
+    "park_code": "grba",
+    "is_named_park": true,
+    "terrain_group": "mountain",
+    "feature": "Bristlecone slopes",
+    "effort": 3,
+    "typical_days": 2,
+    "seasons": [
+      "summer",
+      "fall"
+    ],
+    "permit_required": true,
+    "annual_visits_millions": 0.14
+  },
+  {
+    "park_code": "grca",
+    "is_named_park": true,
+    "terrain_group": "canyon",
+    "feature": "Rim and inner gorge",
+    "effort": 3,
+    "typical_days": 4,
+    "seasons": [
+      "spring",
+      "fall"
+    ],
+    "permit_required": true,
+    "annual_visits_millions": 4.7
+  },
+  {
+    "park_code": "grsa",
+    "is_named_park": true,
+    "terrain_group": "dunes",
+    "feature": "Continental dunes",
+    "effort": 2,
+    "typical_days": 1,
+    "seasons": [
+      "spring",
+      "fall"
+    ],
+    "permit_required": false,
+    "annual_visits_millions": 0.5
+  },
+  {
+    "park_code": "grsm",
+    "is_named_park": true,
+    "terrain_group": "mountain",
+    "feature": "Ridge forest",
+    "effort": 2,
+    "typical_days": 3,
+    "seasons": [
+      "spring",
+      "fall"
+    ],
+    "permit_required": false,
+    "annual_visits_millions": 13.3
+  },
+  {
+    "park_code": "grte",
+    "is_named_park": true,
+    "terrain_group": "mountain",
+    "feature": "Glacial range",
+    "effort": 3,
+    "typical_days": 3,
+    "seasons": [
+      "summer",
+      "fall"
+    ],
+    "permit_required": false,
+    "annual_visits_millions": 3.4
+  },
+  {
+    "park_code": "guis",
+    "is_named_park": false,
+    "terrain_group": "coast",
+    "feature": "White quartz beach",
+    "effort": 1,
+    "typical_days": 2,
+    "seasons": [
+      "spring",
+      "fall"
+    ],
+    "permit_required": false,
+    "annual_visits_millions": 5.6
+  },
+  {
+    "park_code": "gumo",
+    "is_named_park": true,
+    "terrain_group": "mountain",
+    "feature": "Fossil reef",
+    "effort": 3,
+    "typical_days": 2,
+    "seasons": [
+      "fall",
+      "spring"
+    ],
+    "permit_required": false,
+    "annual_visits_millions": 0.2
+  },
+  {
+    "park_code": "hafe",
+    "is_named_park": false,
+    "terrain_group": "forest",
+    "feature": "River confluence town",
+    "effort": 2,
+    "typical_days": 1,
+    "seasons": [
+      "spring",
+      "fall"
+    ],
+    "permit_required": false,
+    "annual_visits_millions": 0.4
+  },
+  {
+    "park_code": "hale",
+    "is_named_park": true,
+    "terrain_group": "mountain",
+    "feature": "Volcanic summit",
+    "effort": 2,
+    "typical_days": 1,
+    "seasons": [
+      "winter",
+      "spring"
+    ],
+    "permit_required": true,
+    "annual_visits_millions": 0.85
+  },
+  {
+    "park_code": "havo",
+    "is_named_park": true,
+    "terrain_group": "desert",
+    "feature": "Active volcano",
+    "effort": 2,
+    "typical_days": 3,
+    "seasons": [
+      "winter",
+      "spring"
+    ],
+    "permit_required": false,
+    "annual_visits_millions": 1.6
+  },
+  {
+    "park_code": "hosp",
+    "is_named_park": true,
+    "terrain_group": "forest",
+    "feature": "Thermal springs",
+    "effort": 1,
+    "typical_days": 1,
+    "seasons": [
+      "spring",
+      "fall"
+    ],
+    "permit_required": false,
+    "annual_visits_millions": 2.5
+  },
+  {
+    "park_code": "hove",
+    "is_named_park": false,
+    "terrain_group": "canyon",
+    "feature": "Ancestral towers",
+    "effort": 2,
+    "typical_days": 1,
+    "seasons": [
+      "spring",
+      "fall"
+    ],
+    "permit_required": false,
+    "annual_visits_millions": 0.03
+  },
+  {
+    "park_code": "inde",
+    "is_named_park": false,
+    "terrain_group": "forest",
+    "feature": "Founding-era city blocks",
+    "effort": 1,
+    "typical_days": 1,
+    "seasons": [
+      "spring",
+      "fall"
+    ],
+    "permit_required": true,
+    "annual_visits_millions": 3.6
+  },
+  {
+    "park_code": "indu",
+    "is_named_park": true,
+    "terrain_group": "coast",
+    "feature": "Lake dunes",
+    "effort": 1,
+    "typical_days": 1,
+    "seasons": [
+      "summer",
+      "fall"
+    ],
+    "permit_required": false,
+    "annual_visits_millions": 2.8
+  },
+  {
+    "park_code": "isro",
+    "is_named_park": true,
+    "terrain_group": "water",
+    "feature": "Island wilderness",
+    "effort": 3,
+    "typical_days": 4,
+    "seasons": [
+      "summer"
+    ],
+    "permit_required": true,
+    "annual_visits_millions": 0.03
+  },
+  {
+    "park_code": "jeca",
+    "is_named_park": false,
+    "terrain_group": "caves",
+    "feature": "Calcite cave",
+    "effort": 2,
+    "typical_days": 1,
+    "seasons": [
+      "summer"
+    ],
+    "permit_required": true,
+    "annual_visits_millions": 0.09
+  },
+  {
+    "park_code": "jeff",
+    "is_named_park": true,
+    "terrain_group": "water",
+    "feature": "Urban riverfront",
+    "effort": 1,
+    "typical_days": 1,
+    "seasons": [
+      "spring",
+      "summer",
+      "fall"
+    ],
+    "permit_required": true,
+    "annual_visits_millions": 2.9
+  },
+  {
+    "park_code": "joda",
+    "is_named_park": false,
+    "terrain_group": "badlands",
+    "feature": "Painted hills",
+    "effort": 1,
+    "typical_days": 2,
+    "seasons": [
+      "spring",
+      "fall"
+    ],
+    "permit_required": false,
+    "annual_visits_millions": 0.2
+  },
+  {
+    "park_code": "jotr",
+    "is_named_park": true,
+    "terrain_group": "desert",
+    "feature": "High desert",
+    "effort": 1,
+    "typical_days": 2,
+    "seasons": [
+      "winter",
+      "spring"
+    ],
+    "permit_required": false,
+    "annual_visits_millions": 3.3
+  },
+  {
+    "park_code": "katm",
+    "is_named_park": true,
+    "terrain_group": "water",
+    "feature": "Salmon river",
+    "effort": 3,
+    "typical_days": 4,
+    "seasons": [
+      "summer"
+    ],
+    "permit_required": true,
+    "annual_visits_millions": 0.04
+  },
+  {
+    "park_code": "kefj",
+    "is_named_park": true,
+    "terrain_group": "water",
+    "feature": "Tidewater glaciers",
+    "effort": 2,
+    "typical_days": 2,
+    "seasons": [
+      "summer"
+    ],
+    "permit_required": false,
+    "annual_visits_millions": 0.4
+  },
+  {
+    "park_code": "klgo",
+    "is_named_park": false,
+    "terrain_group": "mountain",
+    "feature": "Gold rush trail",
+    "effort": 3,
+    "typical_days": 3,
+    "seasons": [
+      "summer"
+    ],
+    "permit_required": true,
+    "annual_visits_millions": 0.7
+  },
+  {
+    "park_code": "kova",
+    "is_named_park": true,
+    "terrain_group": "dunes",
+    "feature": "Arctic dunes",
+    "effort": 3,
+    "typical_days": 5,
+    "seasons": [
+      "summer"
+    ],
+    "permit_required": true,
+    "annual_visits_millions": 0.02
+  },
+  {
+    "park_code": "labe",
+    "is_named_park": false,
+    "terrain_group": "caves",
+    "feature": "Lava tube caves",
+    "effort": 2,
+    "typical_days": 1,
+    "seasons": [
+      "spring",
+      "fall"
+    ],
+    "permit_required": false,
+    "annual_visits_millions": 0.1
+  },
+  {
+    "park_code": "lacl",
+    "is_named_park": true,
+    "terrain_group": "water",
+    "feature": "Salmon lakes",
+    "effort": 3,
+    "typical_days": 4,
+    "seasons": [
+      "summer"
+    ],
+    "permit_required": true,
+    "annual_visits_millions": 0.02
+  },
+  {
+    "park_code": "lake",
+    "is_named_park": false,
+    "terrain_group": "desert",
+    "feature": "Desert reservoir",
+    "effort": 1,
+    "typical_days": 2,
+    "seasons": [
+      "winter",
+      "spring"
+    ],
+    "permit_required": false,
+    "annual_visits_millions": 5.7
+  },
+  {
+    "park_code": "lavo",
+    "is_named_park": true,
+    "terrain_group": "mountain",
+    "feature": "Hydrothermal peaks",
+    "effort": 3,
+    "typical_days": 2,
+    "seasons": [
+      "summer"
+    ],
+    "permit_required": false,
+    "annual_visits_millions": 0.4
+  },
+  {
+    "park_code": "maca",
+    "is_named_park": true,
+    "terrain_group": "caves",
+    "feature": "Longest cave",
+    "effort": 1,
+    "typical_days": 2,
+    "seasons": [
+      "spring",
+      "fall"
+    ],
+    "permit_required": true,
+    "annual_visits_millions": 0.65
+  },
+  {
+    "park_code": "meve",
+    "is_named_park": true,
+    "terrain_group": "canyon",
+    "feature": "Cliff dwellings",
+    "effort": 2,
+    "typical_days": 2,
+    "seasons": [
+      "spring",
+      "fall"
+    ],
+    "permit_required": true,
+    "annual_visits_millions": 0.5
+  },
+  {
+    "park_code": "moja",
+    "is_named_park": false,
+    "terrain_group": "desert",
+    "feature": "Joshua tree and cinder cones",
+    "effort": 2,
+    "typical_days": 2,
+    "seasons": [
+      "winter",
+      "spring"
+    ],
+    "permit_required": false,
+    "annual_visits_millions": 0.9
+  },
+  {
+    "park_code": "mora",
+    "is_named_park": true,
+    "terrain_group": "mountain",
+    "feature": "Volcano meadow",
+    "effort": 3,
+    "typical_days": 3,
+    "seasons": [
+      "summer"
+    ],
+    "permit_required": true,
+    "annual_visits_millions": 1.6
+  },
+  {
+    "park_code": "muwo",
+    "is_named_park": false,
+    "terrain_group": "forest",
+    "feature": "Coast redwoods",
+    "effort": 1,
+    "typical_days": 1,
+    "seasons": [
+      "spring",
+      "summer",
+      "fall"
+    ],
+    "permit_required": true,
+    "annual_visits_millions": 0.9
+  },
+  {
+    "park_code": "nabr",
+    "is_named_park": false,
+    "terrain_group": "canyon",
+    "feature": "Stone bridges",
+    "effort": 2,
+    "typical_days": 1,
+    "seasons": [
+      "spring",
+      "fall"
+    ],
+    "permit_required": false,
+    "annual_visits_millions": 0.09
+  },
+  {
+    "park_code": "natr",
+    "is_named_park": false,
+    "terrain_group": "forest",
+    "feature": "Historic trace drive",
+    "effort": 1,
+    "typical_days": 3,
+    "seasons": [
+      "spring",
+      "fall"
+    ],
+    "permit_required": false,
+    "annual_visits_millions": 6.4
+  },
+  {
+    "park_code": "neri",
+    "is_named_park": true,
+    "terrain_group": "forest",
+    "feature": "River gorge",
+    "effort": 2,
+    "typical_days": 2,
+    "seasons": [
+      "spring",
+      "fall"
+    ],
+    "permit_required": false,
+    "annual_visits_millions": 1.8
+  },
+  {
+    "park_code": "noca",
+    "is_named_park": true,
+    "terrain_group": "mountain",
+    "feature": "Glaciated wilderness",
+    "effort": 3,
+    "typical_days": 3,
+    "seasons": [
+      "summer"
+    ],
+    "permit_required": true,
+    "annual_visits_millions": 0.04
+  },
+  {
+    "park_code": "npsa",
+    "is_named_park": true,
+    "terrain_group": "coast",
+    "feature": "Tropical reef and rainforest",
+    "effort": 2,
+    "typical_days": 3,
+    "seasons": [
+      "winter",
+      "spring"
+    ],
+    "permit_required": false,
+    "annual_visits_millions": 0.05
+  },
+  {
+    "park_code": "olym",
+    "is_named_park": true,
+    "terrain_group": "forest",
+    "feature": "Temperate rainforest",
+    "effort": 2,
+    "typical_days": 4,
+    "seasons": [
+      "summer",
+      "fall"
+    ],
+    "permit_required": false,
+    "annual_visits_millions": 2.9
+  },
+  {
+    "park_code": "orca",
+    "is_named_park": false,
+    "terrain_group": "caves",
+    "feature": "Marble cave",
+    "effort": 2,
+    "typical_days": 1,
+    "seasons": [
+      "summer"
+    ],
+    "permit_required": true,
+    "annual_visits_millions": 0.07
+  },
+  {
+    "park_code": "orpi",
+    "is_named_park": false,
+    "terrain_group": "desert",
+    "feature": "Sonoran desert",
+    "effort": 2,
+    "typical_days": 2,
+    "seasons": [
+      "winter",
+      "spring"
+    ],
+    "permit_required": false,
+    "annual_visits_millions": 0.25
+  },
+  {
+    "park_code": "pais",
+    "is_named_park": false,
+    "terrain_group": "coast",
+    "feature": "Longest undeveloped barrier island",
+    "effort": 1,
+    "typical_days": 2,
+    "seasons": [
+      "winter",
+      "spring"
+    ],
+    "permit_required": false,
+    "annual_visits_millions": 0.4
+  },
+  {
+    "park_code": "pefo",
+    "is_named_park": true,
+    "terrain_group": "desert",
+    "feature": "Painted desert",
+    "effort": 1,
+    "typical_days": 1,
+    "seasons": [
+      "spring",
+      "fall"
+    ],
+    "permit_required": false,
+    "annual_visits_millions": 0.5
+  },
+  {
+    "park_code": "pinn",
+    "is_named_park": true,
+    "terrain_group": "mountain",
+    "feature": "Volcanic spires",
+    "effort": 2,
+    "typical_days": 1,
+    "seasons": [
+      "winter",
+      "spring"
+    ],
+    "permit_required": false,
+    "annual_visits_millions": 0.3
+  },
+  {
+    "park_code": "pipe",
+    "is_named_park": false,
+    "terrain_group": "badlands",
+    "feature": "Quarry and prairie",
+    "effort": 1,
+    "typical_days": 1,
+    "seasons": [
+      "spring",
+      "summer"
+    ],
+    "permit_required": false,
+    "annual_visits_millions": 0.07
+  },
+  {
+    "park_code": "piro",
+    "is_named_park": false,
+    "terrain_group": "coast",
+    "feature": "Sandstone cliffs",
+    "effort": 2,
+    "typical_days": 2,
+    "seasons": [
+      "summer",
+      "fall"
+    ],
+    "permit_required": false,
+    "annual_visits_millions": 1
+  },
+  {
+    "park_code": "pore",
+    "is_named_park": false,
+    "terrain_group": "coast",
+    "feature": "Fog coast headland",
+    "effort": 2,
+    "typical_days": 1,
+    "seasons": [
+      "spring",
+      "fall"
+    ],
+    "permit_required": false,
+    "annual_visits_millions": 2.2
+  },
+  {
+    "park_code": "redw",
+    "is_named_park": true,
+    "terrain_group": "forest",
+    "feature": "Tallest trees",
+    "effort": 2,
+    "typical_days": 2,
+    "seasons": [
+      "summer",
+      "fall"
+    ],
+    "permit_required": false,
+    "annual_visits_millions": 0.9
+  },
+  {
+    "park_code": "romo",
+    "is_named_park": true,
+    "terrain_group": "mountain",
+    "feature": "Alpine tundra",
+    "effort": 3,
+    "typical_days": 3,
+    "seasons": [
+      "summer",
+      "fall"
+    ],
+    "permit_required": true,
+    "annual_visits_millions": 4.1
+  },
+  {
+    "park_code": "saan",
+    "is_named_park": false,
+    "terrain_group": "desert",
+    "feature": "Spanish colonial missions",
+    "effort": 1,
+    "typical_days": 1,
+    "seasons": [
+      "winter",
+      "spring"
+    ],
+    "permit_required": false,
+    "annual_visits_millions": 1.9
+  },
+  {
+    "park_code": "sagu",
+    "is_named_park": true,
+    "terrain_group": "desert",
+    "feature": "Cactus forest",
+    "effort": 2,
+    "typical_days": 1,
+    "seasons": [
+      "winter",
+      "spring"
+    ],
+    "permit_required": false,
+    "annual_visits_millions": 1
+  },
+  {
+    "park_code": "samo",
+    "is_named_park": false,
+    "terrain_group": "coast",
+    "feature": "Chaparral range",
+    "effort": 2,
+    "typical_days": 1,
+    "seasons": [
+      "winter",
+      "spring"
+    ],
+    "permit_required": false,
+    "annual_visits_millions": 0.9
+  },
+  {
+    "park_code": "scbl",
+    "is_named_park": false,
+    "terrain_group": "badlands",
+    "feature": "Trail landmark bluff",
+    "effort": 1,
+    "typical_days": 1,
+    "seasons": [
+      "spring",
+      "fall"
+    ],
+    "permit_required": false,
+    "annual_visits_millions": 0.13
+  },
+  {
+    "park_code": "seki",
+    "is_named_park": true,
+    "terrain_group": "forest",
+    "feature": "Giant sequoia grove",
+    "effort": 2,
+    "typical_days": 3,
+    "seasons": [
+      "summer",
+      "fall"
+    ],
+    "permit_required": false,
+    "annual_visits_millions": 1.2
+  },
+  {
+    "park_code": "shen",
+    "is_named_park": true,
+    "terrain_group": "forest",
+    "feature": "Blue Ridge",
+    "effort": 2,
+    "typical_days": 2,
+    "seasons": [
+      "spring",
+      "fall"
+    ],
+    "permit_required": false,
+    "annual_visits_millions": 1.6
+  },
+  {
+    "park_code": "slbe",
+    "is_named_park": false,
+    "terrain_group": "dunes",
+    "feature": "Perched lake dunes",
+    "effort": 2,
+    "typical_days": 2,
+    "seasons": [
+      "summer",
+      "fall"
+    ],
+    "permit_required": false,
+    "annual_visits_millions": 1.7
+  },
+  {
+    "park_code": "sucr",
+    "is_named_park": false,
+    "terrain_group": "desert",
+    "feature": "Cinder cone",
+    "effort": 1,
+    "typical_days": 1,
+    "seasons": [
+      "spring",
+      "fall"
+    ],
+    "permit_required": false,
+    "annual_visits_millions": 0.8
+  },
+  {
+    "park_code": "tapr",
+    "is_named_park": false,
+    "terrain_group": "badlands",
+    "feature": "Tallgrass prairie",
+    "effort": 1,
+    "typical_days": 1,
+    "seasons": [
+      "spring",
+      "fall"
+    ],
+    "permit_required": false,
+    "annual_visits_millions": 0.03
+  },
+  {
+    "park_code": "thro",
+    "is_named_park": true,
+    "terrain_group": "badlands",
+    "feature": "Prairie badlands",
+    "effort": 2,
+    "typical_days": 2,
+    "seasons": [
+      "summer",
+      "fall"
+    ],
+    "permit_required": false,
+    "annual_visits_millions": 0.7
+  },
+  {
+    "park_code": "tica",
+    "is_named_park": false,
+    "terrain_group": "caves",
+    "feature": "Cave and canyon",
+    "effort": 3,
+    "typical_days": 1,
+    "seasons": [
+      "summer"
+    ],
+    "permit_required": true,
+    "annual_visits_millions": 0.08
+  },
+  {
+    "park_code": "vafo",
+    "is_named_park": false,
+    "terrain_group": "forest",
+    "feature": "Encampment grounds",
+    "effort": 1,
+    "typical_days": 1,
+    "seasons": [
+      "spring",
+      "fall"
+    ],
+    "permit_required": false,
+    "annual_visits_millions": 2
+  },
+  {
+    "park_code": "vall",
+    "is_named_park": false,
+    "terrain_group": "mountain",
+    "feature": "Volcanic grassland",
+    "effort": 2,
+    "typical_days": 1,
+    "seasons": [
+      "summer",
+      "fall"
+    ],
+    "permit_required": false,
+    "annual_visits_millions": 0.05
+  },
+  {
+    "park_code": "viis",
+    "is_named_park": true,
+    "terrain_group": "coast",
+    "feature": "Caribbean reef",
+    "effort": 1,
+    "typical_days": 3,
+    "seasons": [
+      "winter",
+      "spring"
+    ],
+    "permit_required": false,
+    "annual_visits_millions": 0.34
+  },
+  {
+    "park_code": "voya",
+    "is_named_park": true,
+    "terrain_group": "water",
+    "feature": "Boundary lakes",
+    "effort": 2,
+    "typical_days": 3,
+    "seasons": [
+      "summer"
+    ],
+    "permit_required": false,
+    "annual_visits_millions": 0.24
+  },
+  {
+    "park_code": "whis",
+    "is_named_park": false,
+    "terrain_group": "forest",
+    "feature": "Waterfall lake",
+    "effort": 2,
+    "typical_days": 1,
+    "seasons": [
+      "spring",
+      "summer"
+    ],
+    "permit_required": false,
+    "annual_visits_millions": 0.6
+  },
+  {
+    "park_code": "whsa",
+    "is_named_park": true,
+    "terrain_group": "dunes",
+    "feature": "Gypsum dunes",
+    "effort": 1,
+    "typical_days": 1,
+    "seasons": [
+      "winter",
+      "spring"
+    ],
+    "permit_required": false,
+    "annual_visits_millions": 0.6
+  },
+  {
+    "park_code": "wica",
+    "is_named_park": true,
+    "terrain_group": "caves",
+    "feature": "Boxwork cave",
+    "effort": 1,
+    "typical_days": 1,
+    "seasons": [
+      "summer"
+    ],
+    "permit_required": false,
+    "annual_visits_millions": 0.7
+  },
+  {
+    "park_code": "wrst",
+    "is_named_park": true,
+    "terrain_group": "mountain",
+    "feature": "Icefield range",
+    "effort": 3,
+    "typical_days": 5,
+    "seasons": [
+      "summer"
+    ],
+    "permit_required": true,
+    "annual_visits_millions": 0.08
+  },
+  {
+    "park_code": "yell",
+    "is_named_park": true,
+    "terrain_group": "mountain",
+    "feature": "Geothermal basin",
+    "effort": 2,
+    "typical_days": 5,
+    "seasons": [
+      "summer",
+      "fall"
+    ],
+    "permit_required": false,
+    "annual_visits_millions": 4.5
+  },
+  {
+    "park_code": "yose",
+    "is_named_park": true,
+    "terrain_group": "mountain",
+    "feature": "Granite valley",
+    "effort": 3,
+    "typical_days": 4,
+    "seasons": [
+      "spring",
+      "summer"
+    ],
+    "permit_required": true,
+    "annual_visits_millions": 3.9
+  },
+  {
+    "park_code": "zion",
+    "is_named_park": true,
+    "terrain_group": "canyon",
+    "feature": "Slot canyon",
+    "effort": 3,
+    "typical_days": 3,
+    "seasons": [
+      "spring",
+      "fall"
+    ],
+    "permit_required": true,
+    "annual_visits_millions": 4.6
+  }
+]

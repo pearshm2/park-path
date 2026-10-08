@@ -73,9 +73,11 @@ export function ParkCard({
       {/* Terrain band — the card's visual anchor, and what makes the
           deck scannable without reading every name. */}
       <View style={[styles.band, { backgroundColor: tone.band }]}>
-        <TerrainIcon group={site.group} size={26} />
+        {site.group ? <TerrainIcon group={site.group} size={26} /> : null}
         <BodyText size={10} weight="semibold" color={tone.ink} style={styles.bandLabel}>
-          {TERRAIN_LABEL[site.group]?.toUpperCase() ?? site.group.toUpperCase()}
+          {site.group
+            ? (TERRAIN_LABEL[site.group]?.toUpperCase() ?? site.group.toUpperCase())
+            : site.kind.toUpperCase()}
         </BodyText>
         {markWishlist && site.status === 'wishlist' ? (
           <View style={styles.wishlistBadge}>
@@ -127,9 +129,11 @@ export function ParkCard({
         {/* One row only; anything that does not fit is clipped. */}
         <View style={styles.tags}>
           {site.permit ? <Tag tone="accent" label="Permit needed" /> : null}
-          <Tag tone="accent2" label={crowdLabel(site.vis)} />
-          <Tag tone="outline" label={site.feature} />
-          <Tag tone="neutral" label={EFFORT_LABEL[site.effort] ?? `Effort ${site.effort}`} />
+          {site.vis !== null ? <Tag tone="accent2" label={crowdLabel(site.vis)} /> : null}
+          {site.feature ? <Tag tone="outline" label={site.feature} /> : null}
+          {site.effort !== null ? (
+            <Tag tone="neutral" label={EFFORT_LABEL[site.effort] ?? `Effort ${site.effort}`} />
+          ) : null}
         </View>
 
         {/* Match strength on one line — the point of the deck is why this
