@@ -5,13 +5,18 @@
  * the deck into view, folds the key away and moves the map up so both
  * fit, and dragging it down tucks the cards away again.
  *
- * The scope menu under Filter picks what the map shows: just the picks,
- * just the wishlist, the 63 national parks, or every site. The deck holds
- * the same parks as the map: the top 10, the wishlist, or every park or
- * site with the top 10 dealt first and the rest grouped by region. The
+ * The scope menu under Filter picks what the map shows: the 63 national
+ * parks, every site, or just the wishlist. The deck holds the same parks
+ * as the map: every park or site with the top 10 dealt first and the rest
+ * grouped by region, or the wishlist. The
  * top 10 are always ranked from the 63 parks, and are drawn as numbered
  * pins that match the card numbers. Scrolling through the cards keeps the
  * whole map in view and just highlights each card's pin.
+ *
+ * Numbers belong to the recommendation engine alone: the filters never
+ * change the top 10. They apply only to the 63-park and all-sites views,
+ * where matching parks are highlighted in the match colour (unnumbered)
+ * and dealt straight after the top 10.
  *
  * Tapping a pin, a card or a search result zooms the map onto that park's
  * region and deals a deck of every park on the map there, the tapped one
@@ -49,7 +54,6 @@ import { provisionalMatches, type ProvisionalMatch } from '../../api/provisional
 import {
   activeFilterCount,
   BodyText,
-  Button,
   CardCarousel,
   CROWD_CEILING,
   FilterButton,
@@ -59,6 +63,7 @@ import {
   NO_FILTERS,
   ParkCard,
   ParkMap,
+  MATCH_DOT,
   PICK_FILL,
   STATUS_DOT,
   type FeedFilters,
@@ -85,7 +90,7 @@ const SHEET_MS = 260;
 const MAX_SUGGESTIONS = 5;
 
 /** What the map shows. */
-type MapScope = 'picks' | 'wishlist' | 'parks' | 'all';
+type MapScope = 'parks' | 'all' | 'wishlist';
 
 /** Applies the sheet's dials to a ranked list, keeping its order. */
 function applyFilters<T extends { site: Site }>(rows: T[], filters: FeedFilters): T[] {
@@ -197,30 +202,37 @@ export default function ExploreScreen() {
     [matches],
   );
 
-  const filtered = useMemo(() => applyFilters(parkMatches, filters), [parkMatches, filters]);
-  const picks = useMemo(() => filtered.slice(0, TOP_N), [filtered]);
+  // The engine's top 10, untouched by the filters.
+  const picks = useMemo(() => parkMatches.slice(0, TOP_N), [parkMatches]);
   const rankById = useMemo(
     () => new Map(picks.map(({ site }, index) => [site.id, index + 1])),
     [picks],
   );
   const filterCount = activeFilterCount(filters);
+  /** The filters only apply to the views that show every park or site. */
+  const filtersApply = scope === 'parks' || scope === 'all';
 
   const wishlist = useMemo(() => allSites.filter((site) => site.status === 'wishlist'), [allSites]);
 
   const mapSites = useMemo(() => {
-    if (scope === 'picks') return picks.map(({ site }) => site);
     if (scope === 'wishlist') return wishlist;
     return scope === 'parks' ? parks : allSites;
-  }, [scope, picks, wishlist, parks, allSites]);
+  }, [scope, wishlist, parks, allSites]);
 
-  /** The wishlist view deals the wishlist; every other view deals the picks. */
+  /** The wishlist view deals the wishlist; the others deal every park, picks first. */
   const showingWishlist = scope === 'wishlist';
 
-  /** The deck before any park is tapped: the wishlist or the picks. */
+  /** Unnumbered parks on the map that match the filters, when they apply. */
+  const matchIds = useMemo(() => {
+    if (!filtersApply || filterCount === 0) return new Set<string>();
+    const candidates = mapSites.filter((site) => !rankById.has(site.id)).map((site) => ({ site }));
+    return new Set(applyFilters(candidates, filters).map(({ site }) => site.id));
+  }, [filtersApply, filterCount, mapSites, rankById, filters]);
+
   /**
    * The deck before any park is tapped, matching what the map shows: the
-   * wishlist, the top 10, or every park/site with the top 10 first and the
-   * rest grouped by region.
+   * wishlist, or every park/site with the top 10 first, then any filter
+   * matches, then the rest, each group by region.
    */
   const baseDeck = useMemo<DeckItem[]>(() => {
     if (showingWishlist) return wishlist.map((site) => toDeckItem(site, matchById, rankById));
@@ -231,14 +243,15 @@ export default function ExploreScreen() {
       reason,
       rank: index + 1,
     }));
-    if (scope === 'picks') return top;
 
-    const rest = mapSites
+    const unranked = mapSites
       .filter((site) => !rankById.has(site.id))
       .map((site) => toDeckItem(site, matchById, rankById))
       .sort(byRegion);
-    return [...top, ...rest];
-  }, [showingWishlist, scope, wishlist, picks, mapSites, matchById, rankById]);
+    const matched = unranked.filter((item) => matchIds.has(item.site.id));
+    const rest = unranked.filter((item) => !matchIds.has(item.site.id));
+    return [...top, ...matched, ...rest];
+  }, [showingWishlist, wishlist, picks, mapSites, matchById, rankById, matchIds]);
 
   const focusRegion = anchor ? regionForState(anchor.state) : undefined;
 
@@ -304,11 +317,9 @@ export default function ExploreScreen() {
     ? (focusRegion?.label ?? anchor.name)
     : scope === 'wishlist'
       ? 'Your wishlist'
-      : scope === 'picks'
-        ? `Your top ${picks.length || TOP_N}`
-        : scope === 'parks'
-          ? `${parks.length} national parks`
-          : `All ${allSites.length} sites`;
+      : scope === 'parks'
+        ? `${parks.length} national parks`
+        : `All ${allSites.length} sites`;
 
   return (
     <View style={[styles.screen, { paddingTop: insets.top + space[6] }]}>
@@ -316,17 +327,23 @@ export default function ExploreScreen() {
         <View style={styles.headerText}>
           <Heading size={26}>Explore</Heading>
           <BodyText size={12} color={colors.neutral[600]} style={styles.headerMeta}>
-            {scope === 'picks'
-              ? `Just your top ${picks.length}`
-              : scope === 'wishlist'
-                ? `Your wishlist · ${wishlist.length} saved`
+            {scope === 'wishlist'
+              ? `Your wishlist · ${wishlist.length} saved`
+              : matchIds.size > 0
+                ? `Your top ${picks.length} · ${matchIds.size} more match your filters`
                 : scope === 'parks'
                   ? `Your top ${picks.length} of ${parks.length} national parks`
                   : `Your top ${picks.length}, plus all ${allSites.length} sites`}
           </BodyText>
         </View>
         <View style={styles.headerActions}>
-          <FilterButton count={filterCount} onPress={() => setFilterOpen(true)} />
+          <FilterButton
+            count={filtersApply ? filterCount : 0}
+            onPress={() => setFilterOpen(true)}
+            // Filters highlight parks beyond the top 10; the wishlist view
+            // has none to highlight.
+            disabled={!filtersApply}
+          />
           <ScopeMenu
             value={scope}
             parkCount={parks.length}
@@ -409,9 +426,17 @@ export default function ExploreScreen() {
 
       {/* The stage: key and map, with the card sheet over its bottom edge. */}
       <View style={styles.stage}>
-        <Animated.View layout={LinearTransition.duration(SHEET_MS)} style={styles.keyWrap}>
+        <Animated.View
+          // The layout transition keeps a stale height when the key's
+          // content grows on its own (the filter swatch adds a line), so
+          // remount it whenever that swatch comes or goes.
+          key={matchIds.size > 0 ? 'key-with-matches' : 'key'}
+          layout={LinearTransition.duration(SHEET_MS)}
+          style={styles.keyWrap}
+        >
           <MapKey
             collapsed={sheetOpen && !keyOpen}
+            showMatches={matchIds.size > 0}
             onToggle={sheetOpen ? () => setKeyOpen((open) => !open) : undefined}
           />
         </Animated.View>
@@ -429,10 +454,12 @@ export default function ExploreScreen() {
           <ParkMap
             sites={mapSites}
             rankById={rankById}
+            matchIds={matchIds}
             selectedId={highlightId}
             // Only a search, a pin tap or a card tap zooms in; scrolling
             // the cards leaves the whole map in view.
             focusRegion={focusRegion?.id ?? null}
+            featureIcons={scope === 'parks'}
             onSelectSite={(site) => {
               if (anchor && site.id === highlightId) {
                 // Tapping the top card's pin again zooms back out.
@@ -483,6 +510,8 @@ export default function ExploreScreen() {
                   style={styles.deckCard}
                 />
               )}
+              // The cards' taps depend on these, so redraw them when either changes.
+              extraData={`${deckIndex}:${anchor?.id ?? ''}`}
               style={styles.deck}
             />
           ) : (
@@ -498,18 +527,8 @@ export default function ExploreScreen() {
               >
                 {showingWishlist
                   ? 'Parks you add to your wishlist will show up here.'
-                  : filterCount > 0
-                    ? 'Your filters are narrower than the results. Clear a few and try again.'
-                    : 'Nothing matched those answers. Widen your terrain or season by retaking the quiz in Settings.'}
+                  : 'Nothing matched those answers. Widen your terrain or season by retaking the quiz in Settings.'}
               </BodyText>
-              {!showingWishlist && filterCount > 0 ? (
-                <Button
-                  label="Clear filters"
-                  variant="secondary"
-                  onPress={() => setFilters(NO_FILTERS)}
-                  style={styles.emptyAction}
-                />
-              ) : null}
             </View>
           )}
         </CardSheet>
@@ -518,7 +537,12 @@ export default function ExploreScreen() {
       <FilterSheet
         visible={filterOpen}
         value={filters}
-        countFor={(draft) => applyFilters(parkMatches, draft).length}
+        countFor={(draft) =>
+          applyFilters(
+            mapSites.filter((site) => !rankById.has(site.id)).map((site) => ({ site })),
+            draft,
+          ).length
+        }
         onApply={(next) => {
           setFilters(next);
           setFilterOpen(false);
@@ -628,18 +652,6 @@ function ScopeMenu({
 
   const options: { value: MapScope; short: string; label: string; detail: string }[] = [
     {
-      value: 'picks',
-      short: `Top ${TOP_N}`,
-      label: `Just my top ${TOP_N}`,
-      detail: 'Only the parks recommended for you',
-    },
-    {
-      value: 'wishlist',
-      short: 'Wishlist',
-      label: `My wishlist (${wishlistCount})`,
-      detail: 'Only the parks you have saved, dealt as cards',
-    },
-    {
       value: 'parks',
       short: `${parkCount} parks`,
       label: `${parkCount} national parks`,
@@ -651,8 +663,14 @@ function ScopeMenu({
       label: `All ${siteCount} sites`,
       detail: 'Adds monuments, seashores and more, dealt the same way',
     },
+    {
+      value: 'wishlist',
+      short: 'Wishlist',
+      label: `My wishlist (${wishlistCount})`,
+      detail: 'Only the parks you have saved, dealt as cards',
+    },
   ];
-  const current = options.find((option) => option.value === value) ?? options[2];
+  const current = options.find((option) => option.value === value) ?? options[0];
 
   function open() {
     // The menu lives in a Modal, so place it from the pill's window position.
@@ -758,7 +776,16 @@ function RegionTitle({
  * The key above the map: what each pin means, then the region colours.
  * While the card sheet is open it folds to one line, which reopens it.
  */
-function MapKey({ collapsed, onToggle }: { collapsed: boolean; onToggle?: () => void }) {
+function MapKey({
+  collapsed,
+  showMatches,
+  onToggle,
+}: {
+  collapsed: boolean;
+  /** Adds the filter-match swatch while filters are highlighting parks. */
+  showMatches: boolean;
+  onToggle?: () => void;
+}) {
   const statuses: SiteStatus[] = ['visited', 'wishlist', 'new'];
 
   const toggle = onToggle ? (
@@ -800,6 +827,19 @@ function MapKey({ collapsed, onToggle }: { collapsed: boolean; onToggle?: () => 
             Top 10 for you
           </BodyText>
         </View>
+        {showMatches ? (
+          <View style={styles.keyItem}>
+            <View
+              style={[
+                styles.matchSwatch,
+                { backgroundColor: MATCH_DOT.fill, borderColor: MATCH_DOT.stroke },
+              ]}
+            />
+            <BodyText size={11.5} color={colors.neutral[800]}>
+              Matches filters
+            </BodyText>
+          </View>
+        ) : null}
         {statuses.map((status) => (
           <View key={status} style={styles.keyItem}>
             <View
@@ -1011,6 +1051,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: PICK_FILL,
   },
+  matchSwatch: {
+    width: 13,
+    height: 13,
+    borderRadius: radius.pill,
+    borderWidth: 1.5,
+  },
   statusSwatch: {
     width: 10,
     height: 10,
@@ -1091,9 +1137,5 @@ const styles = StyleSheet.create({
   },
   emptyBody: {
     marginTop: space[2],
-  },
-  emptyAction: {
-    alignSelf: 'flex-start',
-    marginTop: space[3],
   },
 });
