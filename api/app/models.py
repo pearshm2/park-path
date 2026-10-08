@@ -10,7 +10,7 @@ tables here.
 
 from datetime import UTC, datetime
 
-from sqlalchemy import Boolean, DateTime, Float, Integer, String, Text
+from sqlalchemy import Boolean, DateTime, Float, Integer, String, Text, false
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -70,6 +70,13 @@ class Site(Base):
     last_synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     # --- Curated by us (used by the recommendation engine) ---
+    # One of the 63 national parks. NPS's designation can't say this on its
+    # own: Denali is a "National Park & Preserve", Redwood is "National and
+    # State Parks", American Samoa has none, and Sequoia & Kings Canyon is
+    # one NPS unit ("seki") covering two parks.
+    is_named_park: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=false()
+    )
     terrain_group: Mapped[str | None] = mapped_column(String(50))  # "canyon"
     feature: Mapped[str | None] = mapped_column(String(100))  # "Slot canyon"
     effort: Mapped[int | None] = mapped_column(Integer)  # 1 easy, 2 moderate, 3 strenuous

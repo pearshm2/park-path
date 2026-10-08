@@ -133,20 +133,25 @@ You should see two rows, `db` and `api`, both with a status of `Up`.
 
 ### 2. Load park data (first time on a computer)
 
-This loads the 474 NPS sites from the committed snapshot. It needs no internet
-connection and no API key.
+This loads the 474 NPS sites from the committed snapshot, then adds our own
+data (terrain, effort, seasons, which sites are national parks) on top. It
+needs no internet connection and no API key.
 
 ```bash
 docker compose exec api python -m app.nps_sync --from-snapshot
+docker compose exec api python -m app.curate_sites
 ```
 
-You should see `Sites in database: ... 474 after`. Running it again is safe;
-the count stays the same.
+You should see `Sites in database: ... 474 after`, then
+`Curated 119 of 119 sites.` Running either again is safe; nothing is
+duplicated. If `data/curated_sites.json` changes after a `git pull`, run the
+second command again.
 
 ### 3. Check the API
 
 Open **http://localhost:8000/docs** in a browser. You should see the
-**ParkPath API** documentation page.
+**ParkPath API** documentation page. Opening
+**http://localhost:8000/sites?scope=parks** should list the national parks.
 
 ### 4. Start the virtual phone
 
