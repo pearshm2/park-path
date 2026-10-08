@@ -15,22 +15,28 @@ import { BodyText } from './Typography';
 export function FilterButton({
   count,
   onPress,
+  disabled = false,
 }: {
   /** Number of active filters; 0 renders the resting state. */
   count: number;
   onPress: () => void;
+  /** Greyed out and inert, for views the filters do not apply to. */
+  disabled?: boolean;
 }) {
   const active = count > 0;
 
   return (
     <Pressable
       onPress={onPress}
+      disabled={disabled}
       accessibilityRole="button"
+      accessibilityState={{ disabled }}
       accessibilityLabel={active ? `Filters, ${count} active` : 'Filters'}
       style={({ pressed }) => [
         styles.button,
         active ? styles.active : styles.resting,
         pressed && styles.pressed,
+        disabled && styles.disabled,
       ]}
     >
       <Svg width={17} height={17} viewBox="0 0 24 24" fill="none">
@@ -76,6 +82,9 @@ const styles = StyleSheet.create({
   },
   pressed: {
     opacity: 0.88,
+  },
+  disabled: {
+    opacity: 0.4,
   },
   badge: {
     minWidth: 18,

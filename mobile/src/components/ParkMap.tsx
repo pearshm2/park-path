@@ -7,10 +7,12 @@
  * box. react-native-maps was deliberately not used here: it does not run
  * on web at all, and tile imagery cannot carry the Organic palette.
  *
- * Two kinds of pin share the map. Parks in `rankById` are the quiz's
- * picks and get a large numbered pin that matches their card below the
- * map. Every other park is a small dot styled by its visit status, and
- * fades back while there are picks to show, so the picks read first.
+ * Three kinds of pin share the map. Parks in `rankById` are the
+ * recommendation engine's picks and get a large numbered pin that matches
+ * their card below the map; numbers are reserved for them. Parks in
+ * `matchIds` (the Explore filters) get a larger dot in the match colour,
+ * never a number. Every other park is a small dot styled by its visit
+ * status, and fades back so the picks and matches read first.
  *
  * Passing `focusRegion` zooms the map onto that region and hides every
  * other region and its pins. Pinching zooms around the fingers, and once
@@ -59,6 +61,9 @@ export const STATUS_DOT: Record<SiteStatus, { fill: string; stroke: string; labe
 /** The numbered pin's fill. Shared with the map key. */
 export const PICK_FILL = colors.accent;
 
+/** A park that matches the active filters. Shared with the map key. */
+export const MATCH_DOT = { fill: colors.accent2Ramp[600], stroke: colors.neutral[100] };
+
 /** Small dots are hard to hit with a finger, so each gets a wider invisible target. */
 const HIT_RADIUS = 11;
 
@@ -79,6 +84,8 @@ type ParkMapProps = {
   sites: Site[];
   /** Site id -> 1-based rank, for the parks drawn as numbered pins. */
   rankById?: ReadonlyMap<string, number>;
+  /** Parks matching the active filters, drawn in the match colour. */
+  matchIds?: ReadonlySet<string>;
   selectedId?: string | null;
   /** Zooms onto this region; omit for the whole country. */
   focusRegion?: RegionId | null;
@@ -89,6 +96,7 @@ type ParkMapProps = {
 export function ParkMap({
   sites,
   rankById,
+  matchIds,
   selectedId,
   focusRegion,
   onSelectSite,
@@ -209,7 +217,10 @@ export function ParkMap({
       )
     : projected.dots;
   const picks = visible.filter((dot) => rankById?.has(dot.site.id));
-  const others = visible.filter((dot) => !rankById?.has(dot.site.id));
+  const unranked = visible.filter((dot) => !rankById?.has(dot.site.id));
+  const matched = unranked.filter((dot) => matchIds?.has(dot.site.id));
+  const others = unranked.filter((dot) => !matchIds?.has(dot.site.id));
+  const filtering = (matchIds?.size ?? 0) > 0;
   // Draw #1 last so it sits on top where pins overlap.
   picks.sort((a, b) => rankById!.get(b.site.id)! - rankById!.get(a.site.id)!);
 
@@ -219,7 +230,8 @@ export function ParkMap({
         <Svg width={size.width} height={size.height}>
           <G transform={`translate(${view.tx} ${view.ty}) scale(${view.k})`}>{stateShapes}</G>
 
-          <G opacity={hasPicks ? 0.6 : 1}>
+          {/* Unmatched parks recede further while a filter is on. */}
+          <G opacity={filtering ? 0.35 : hasPicks ? 0.6 : 1}>
             {others.map((dot) => {
               const { site } = dot;
               const { x, y } = place(dot);
@@ -235,6 +247,27 @@ export function ParkMap({
                     fill={look.fill}
                     stroke={selected ? colors.text : look.stroke}
                     strokeWidth={selected ? 2.5 : 1.5}
+                  />
+                </G>
+              );
+            })}
+          </G>
+
+          <G>
+            {matched.map((dot) => {
+              const { site } = dot;
+              const { x, y } = place(dot);
+              const selected = site.id === selectedId;
+              return (
+                <G key={site.id} onPress={onSelectSite ? () => onSelectSite(site) : undefined}>
+                  <Circle cx={x} cy={y} r={HIT_RADIUS} fill="transparent" />
+                  <Circle
+                    cx={x}
+                    cy={y}
+                    r={selected ? 8 : 6}
+                    fill={MATCH_DOT.fill}
+                    stroke={selected ? colors.text : MATCH_DOT.stroke}
+                    strokeWidth={selected ? 2.5 : 1.75}
                   />
                 </G>
               );
