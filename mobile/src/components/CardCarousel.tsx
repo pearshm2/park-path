@@ -53,6 +53,12 @@ type CardCarouselProps<T> = {
   onIndexChange: (index: number) => void;
   keyOf: (item: T) => string;
   renderCard: (item: T, index: number) => ReactNode;
+  /**
+   * Anything `renderCard` reads besides the item. The list only redraws a
+   * card when its data changes, so without this a card can keep a stale
+   * tap handler.
+   */
+  extraData?: unknown;
   style?: StyleProp<ViewStyle>;
 };
 
@@ -62,6 +68,7 @@ export function CardCarousel<T>({
   onIndexChange,
   keyOf,
   renderCard,
+  extraData,
   style,
 }: CardCarouselProps<T>) {
   const { width } = useWindowDimensions();
@@ -130,12 +137,19 @@ export function CardCarousel<T>({
       // Typed loosely by Reanimated; the ref is a plain FlatList.
       ref={list as never}
       data={items}
+      extraData={extraData}
       keyExtractor={keyOf}
       horizontal
       showsHorizontalScrollIndicator={false}
       snapToInterval={interval}
       decelerationRate={DECELERATION}
       contentOffset={{ x: index * interval, y: 0 }}
+      // Only three cards are ever in view (the centred one and the two
+      // peeking in), so keep a few either side rather than the default ~21
+      // screens' worth; every one of those re-renders when the centre moves.
+      initialNumToRender={3}
+      maxToRenderPerBatch={3}
+      windowSize={5}
       getItemLayout={(_data, itemIndex) => ({
         length: interval,
         offset: SIDE + itemIndex * interval,
