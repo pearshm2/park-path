@@ -108,6 +108,8 @@ type ParkMapProps = {
   focusRegion?: RegionId | null;
   /** Show feature badges once zoomed in. Meant for the national parks view. */
   featureIcons?: boolean;
+  /** Show the badges at every zoom, for a map big enough to fit them (full screen). */
+  iconsAtAnyZoom?: boolean;
   /** Shows a button in the bottom corner that opens the map full screen. */
   onExpand?: () => void;
   /**
@@ -126,6 +128,7 @@ export function ParkMap({
   selectedId,
   focusRegion,
   featureIcons = false,
+  iconsAtAnyZoom = false,
   onExpand,
   controlInset,
   onSelectSite,
@@ -252,7 +255,8 @@ export function ParkMap({
   const filtering = (matchIds?.size ?? 0) > 0;
   // A region in focus always gets badges: Alaska & Hawaii spans so much of
   // the map that framing it barely zooms in at all.
-  const showIcons = featureIcons && (focusRegion != null || view.k >= ICON_ZOOM);
+  const showIcons =
+    featureIcons && (iconsAtAnyZoom || focusRegion != null || view.k >= ICON_ZOOM);
   /** The park's feature, when badges are showing and it has one. */
   const badgeFor = (site: Site) => (showIcons ? featureForPark(site.id) : undefined);
   /** Where each badge is drawn, nudged apart where parks sit close together. */
@@ -262,6 +266,7 @@ export function ParkMap({
           featureForPark(dot.site.id) ? [{ id: dot.site.id, ...place(dot) }] : [],
         ),
         selectedId,
+        size,
       )
     : new Map<string, Point>();
   // Draw #1 last so it sits on top where pins overlap.
@@ -493,6 +498,7 @@ type Point = { x: number; y: number };
 function spreadBadges(
   points: (Point & { id: string })[],
   selectedId?: string | null,
+  bounds?: { width: number; height: number },
 ): Map<string, Point> {
   const spots = points.map(({ x, y }) => ({ x, y }));
   const baseGap = BADGE_R * 2 + 2;
@@ -521,6 +527,15 @@ function spreadBadges(
         b.x += (dx / d) * push;
         b.y += (dy / d) * push;
         moved = true;
+      }
+    }
+    // Keep every badge on screen: pushing apart a crowded area can
+    // otherwise shove one past the map's edge.
+    if (bounds) {
+      const pad = BADGE_R + 3;
+      for (const spot of spots) {
+        spot.x = Math.min(Math.max(spot.x, pad), bounds.width - pad);
+        spot.y = Math.min(Math.max(spot.y, pad), bounds.height - pad);
       }
     }
     if (!moved) break;

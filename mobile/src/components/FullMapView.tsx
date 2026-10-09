@@ -21,6 +21,7 @@ import Animated, { FadeIn } from 'react-native-reanimated';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import type { Site } from '../data/parks';
+import { regionForState } from '../data/regions';
 import { colors, radius, shadow, space } from '../theme';
 import { Button } from './Button';
 import { ParkMap } from './ParkMap';
@@ -85,6 +86,7 @@ function FullMapBody({
   const { width, height } = useWindowDimensions();
   const landscape = width > height;
   const [selected, setSelected] = useState<Site | null>(null);
+  const region = selected ? regionForState(selected.state) : undefined;
 
   return (
     // Gestures inside a modal need their own root on Android.
@@ -100,6 +102,8 @@ function FullMapBody({
             rankById={rankById}
             matchIds={matchIds}
             featureIcons={featureIcons}
+            // The full-screen map has room for the badges without zooming.
+            iconsAtAnyZoom
             selectedId={selected?.id ?? null}
             // A second tap on the same park clears it.
             onSelectSite={(site) =>
@@ -146,9 +150,20 @@ function FullMapBody({
                   <BodyText size={15} weight="semibold" numberOfLines={1}>
                     {selected.name}
                   </BodyText>
-                  <BodyText size={12} color={colors.neutral[600]} numberOfLines={1}>
-                    {`${selected.kind} · ${selected.state}`}
-                  </BodyText>
+                  {/* The region, since the map key isn't shown here. */}
+                  <View style={styles.meta}>
+                    {region ? (
+                      <View style={[styles.regionSwatch, { backgroundColor: region.fill }]} />
+                    ) : null}
+                    <BodyText size={12} color={colors.neutral[600]} numberOfLines={1}>
+                      {region ? (
+                        <BodyText size={12} weight="semibold" color={colors.neutral[800]}>
+                          {`${region.label} · `}
+                        </BodyText>
+                      ) : null}
+                      {`${selected.kind} · ${selected.state}`}
+                    </BodyText>
+                  </View>
                 </View>
                 <Button
                   label="View"
@@ -181,12 +196,13 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
   },
+  // Stacked, so it fits in the empty margin left of the sideways map
+  // instead of covering the Pacific Northwest.
   bar: {
     position: 'absolute',
-    flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     gap: space[2],
-    maxWidth: '75%',
+    maxWidth: '24%',
   },
   titles: {
     flexShrink: 1,
@@ -216,5 +232,19 @@ const styles = StyleSheet.create({
   },
   chipText: {
     flex: 1,
+  },
+  meta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 2,
+  },
+  /** The same rounded square as the map key's region swatches. */
+  regionSwatch: {
+    width: 10,
+    height: 10,
+    borderRadius: 3,
+    borderWidth: 1,
+    borderColor: colors.neutral[400],
   },
 });
