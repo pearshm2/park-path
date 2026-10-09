@@ -49,6 +49,7 @@ import type { Site, SiteStatus } from '../data/parks';
 import { REGIONS, regionForState, STATE_REGION, type RegionId } from '../data/regions';
 import { US_STATES } from '../data/usStates';
 import { colors, fonts, radius, shadow } from '../theme';
+import { ExpandIcon } from './ExpandIcon';
 import { featureForPark, FeatureGlyph, type Feature } from './FeatureGlyph';
 import { terrainTone } from './TerrainIcon';
 import { BodyText } from './Typography';
@@ -107,6 +108,8 @@ type ParkMapProps = {
   focusRegion?: RegionId | null;
   /** Show feature badges once zoomed in. Meant for the national parks view. */
   featureIcons?: boolean;
+  /** Shows a button in the bottom corner that opens the map full screen. */
+  onExpand?: () => void;
   onSelectSite?: (site: Site) => void;
   style?: StyleProp<ViewStyle>;
 };
@@ -118,6 +121,7 @@ export function ParkMap({
   selectedId,
   focusRegion,
   featureIcons = false,
+  onExpand,
   onSelectSite,
   style,
 }: ParkMapProps) {
@@ -422,6 +426,18 @@ export function ParkMap({
         </Svg>
       </GestureDetector>
 
+      {onExpand ? (
+        <Pressable
+          onPress={onExpand}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel="Open the map full screen"
+          style={({ pressed }) => [styles.expand, pressed && styles.resetPressed]}
+        >
+          <ExpandIcon size={16} color={colors.accentRamp[700]} />
+        </Pressable>
+      ) : null}
+
       {moved ? (
         <Pressable
           onPress={reset}
@@ -664,6 +680,18 @@ const styles = StyleSheet.create({
     right: 12,
     paddingVertical: 5,
     paddingHorizontal: 12,
+    borderRadius: radius.pill,
+    backgroundColor: colors.neutral[100],
+    ...shadow.sm,
+  },
+  expand: {
+    position: 'absolute',
+    bottom: 8,
+    right: 12,
+    width: 34,
+    height: 34,
+    alignItems: 'center',
+    justifyContent: 'center',
     borderRadius: radius.pill,
     backgroundColor: colors.neutral[100],
     ...shadow.sm,

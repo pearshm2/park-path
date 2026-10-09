@@ -57,6 +57,7 @@ import {
   CROWD_CEILING,
   FilterButton,
   FilterSheet,
+  FullMapView,
   Heading,
   Kicker,
   NO_FILTERS,
@@ -181,6 +182,7 @@ export default function ExploreScreen() {
   /** Lets the user reopen the key while the sheet is open. */
   const [keyOpen, setKeyOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [fullMapOpen, setFullMapOpen] = useState(false);
   const [filters, setFilters] = useState<FeedFilters>(NO_FILTERS);
   const [filterOpen, setFilterOpen] = useState(false);
   /** The site whose detail sheet is open, from a card's expand button. */
@@ -399,6 +401,7 @@ export default function ExploreScreen() {
             // the cards leaves the whole map in view.
             focusRegion={focusRegion?.id ?? null}
             featureIcons={scope === 'parks'}
+            onExpand={() => setFullMapOpen(true)}
             onSelectSite={(site) => {
               if (anchor && site.id === highlightId) {
                 // Tapping the top card's pin again zooms back out.
@@ -473,6 +476,20 @@ export default function ExploreScreen() {
           )}
         </CardSheet>
       </View>
+
+      <FullMapView
+        visible={fullMapOpen}
+        title={scopeLabel.charAt(0).toUpperCase() + scopeLabel.slice(1)}
+        sites={mapSites}
+        rankById={rankById}
+        matchIds={matchIds}
+        featureIcons={scope === 'parks'}
+        onClose={() => setFullMapOpen(false)}
+        onView={(site) => {
+          setFullMapOpen(false);
+          focusPark(site);
+        }}
+      />
 
       <SearchPanel
         visible={searchOpen}

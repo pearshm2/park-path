@@ -13,7 +13,6 @@
  */
 
 import { Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
-import Svg, { Path } from 'react-native-svg';
 
 import type { Site } from '../data/parks';
 import { regionForState } from '../data/regions';
@@ -21,6 +20,7 @@ import { colors, radius, shadow, space } from '../theme';
 import { STATUS_DOT } from './ParkMap';
 import { Tag } from './Tag';
 import { TERRAIN_LABEL, TerrainIcon, terrainTone } from './TerrainIcon';
+import { ExpandIcon } from './ExpandIcon';
 import { BodyText, Heading } from './Typography';
 
 /** Visitation is the closest thing the data has to a crowd signal. */
@@ -30,9 +30,6 @@ export function crowdLabel(visitsMillions: number): string {
   if (visitsMillions >= 0.5) return 'Some company';
   return 'Quiet';
 }
-
-/** Two arrows pointing out to opposite corners: "see more of this". */
-const EXPAND_PATHS = ['M14 4h6v6', 'M10 20H4v-6', 'M20 4l-6.5 6.5', 'M4 20l6.5-6.5'];
 
 const EFFORT_LABEL: Record<number, string> = {
   1: 'Easy walks',
@@ -122,18 +119,7 @@ export function ParkCard({
                 accessibilityLabel={`Details for ${site.name}`}
                 style={({ pressed }) => [styles.expand, pressed && styles.expandPressed]}
               >
-                <Svg width={14} height={14} viewBox="0 0 24 24" fill="none">
-                  {EXPAND_PATHS.map((d) => (
-                    <Path
-                      key={d}
-                      d={d}
-                      stroke={colors.neutral[800]}
-                      strokeWidth={2.75}
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  ))}
-                </Svg>
+                <ExpandIcon color={colors.neutral[800]} />
               </Pressable>
             ) : null}
           </View>

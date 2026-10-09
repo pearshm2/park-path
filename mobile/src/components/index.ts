@@ -11,6 +11,7 @@ export {
   type Crowd,
   type FeedFilters,
 } from './FilterSheet';
+export { FullMapView } from './FullMapView';
 export { GoogleButton, OrDivider } from './GoogleButton';
 export { ParkCard } from './ParkCard';
 export { MATCH_DOT, ParkMap, PICK_FILL, STATUS_DOT } from './ParkMap';
