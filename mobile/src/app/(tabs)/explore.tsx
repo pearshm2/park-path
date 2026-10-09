@@ -323,9 +323,8 @@ export default function ExploreScreen() {
     ? (focusRegion?.label ?? anchor.name)
     : scope === 'wishlist'
       ? 'Your wishlist'
-      : scope === 'parks'
-        ? `${parks.length} national parks`
-        : `All ${allSites.length} sites`;
+      : // The map's own title says which parks; the deck is the paths to them.
+        'Parks → Paths → Destination';
 
   return (
     <View style={[styles.screen, { paddingTop: insets.top + space[2] }]}>
@@ -405,9 +404,11 @@ export default function ExploreScreen() {
             />
           ) : (
             // What the map is showing, now that the scope button is an icon.
-            <Heading size={16} style={styles.mapTitle}>
-              {scopeLabel.charAt(0).toUpperCase() + scopeLabel.slice(1)}
-            </Heading>
+            <View style={styles.mapTitle}>
+              <Heading size={16}>
+                {scopeLabel.charAt(0).toUpperCase() + scopeLabel.slice(1)}
+              </Heading>
+            </View>
           )}
           <ParkMap
             sites={mapSites}
@@ -609,15 +610,13 @@ function CardSheet({
         <View
           accessible
           accessibilityRole="button"
-          accessibilityLabel={open ? `Hide ${title}` : `Show ${title}`}
+          accessibilityLabel={`${open ? 'Hide' : 'Show'} ${title.replaceAll(' → ', ' to ')}`}
           onAccessibilityTap={() => onOpenChange(!open)}
           style={styles.sheetBar}
         >
           <View style={styles.sheetHandle} />
           <View style={styles.sheetHead}>
-            <Heading size={17} numberOfLines={1} style={styles.headerText}>
-              {title}
-            </Heading>
+            <SheetTitle title={title} />
             <BodyText size={12} weight="semibold" color={colors.accentRamp[700]}>
               {open ? (status ?? '') : 'Swipe up ▴'}
             </BodyText>
@@ -753,6 +752,56 @@ function LeafIcon() {
         stroke={colors.accent2Ramp[200]}
         strokeWidth={2}
         strokeLinecap="round"
+      />
+    </Svg>
+  );
+}
+
+/**
+ * The sheet's title. Each " → " in it is drawn as an arrow in the accent:
+ * the heading font has no arrow, so the phone substitutes a thin one from
+ * another font that sits low beside the heavy letters.
+ */
+/** A touch smaller than other headings, so the three-part title fits. */
+const SHEET_TITLE_SIZE = 15;
+
+function SheetTitle({ title }: { title: string }) {
+  const parts = title.split(' → ');
+  if (parts.length === 1) {
+    return (
+      <Heading size={SHEET_TITLE_SIZE} numberOfLines={1} style={styles.headerText}>
+        {title}
+      </Heading>
+    );
+  }
+  return (
+    <View style={[styles.headerText, styles.sheetTitleRow]}>
+      {parts.map((part, index) => (
+        <View key={part} style={styles.sheetTitleRow}>
+          {index > 0 ? <TitleArrow /> : null}
+          {/* Only the last word gives way, with an ellipsis, if text is large. */}
+          <Heading
+            size={SHEET_TITLE_SIZE}
+            numberOfLines={1}
+            style={index === parts.length - 1 ? styles.sheetTitleLast : undefined}
+          >
+            {part}
+          </Heading>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+function TitleArrow() {
+  return (
+    <Svg width={14} height={11} viewBox="0 0 24 18" fill="none">
+      <Path
+        d="M2 9h18M13 2l7 7-7 7"
+        stroke={colors.accent}
+        strokeWidth={3.5}
+        strokeLinecap="round"
+        strokeLinejoin="round"
       />
     </Svg>
   );
@@ -990,8 +1039,15 @@ const styles = StyleSheet.create({
     // Centres the map in the room between the key and the card sheet.
     justifyContent: 'center',
   },
+  // A rounded label box, like the key above it.
   mapTitle: {
-    textAlign: 'center',
+    alignSelf: 'center',
+    paddingVertical: 6,
+    paddingHorizontal: space[4],
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: colors.neutral[300],
+    backgroundColor: colors.neutral[100],
   },
   key: {
     padding: space[3],
@@ -1106,6 +1162,15 @@ const styles = StyleSheet.create({
     height: SHEET_BAR,
     paddingHorizontal: space[4],
     paddingTop: space[2],
+  },
+  sheetTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    flexShrink: 1,
+  },
+  sheetTitleLast: {
+    flexShrink: 1,
   },
   sheetHandle: {
     alignSelf: 'center',
