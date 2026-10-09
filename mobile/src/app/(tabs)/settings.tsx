@@ -7,21 +7,23 @@
  */
 
 import { useRouter } from 'expo-router';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { API_BASE_URL } from '../../api/client';
 import { useAuth } from '../../auth/AuthContext';
-import { BodyText, Button, Heading } from '../../components';
+import { BodyText, Button, Heading, useTabBarSpace } from '../../components';
 import { QUIZ_STEPS } from '../../data/quizSpec';
 import { useQuiz } from '../../quiz/QuizContext';
-import { colors, radius, shadow, space } from '../../theme';
+import { colors, radius, shadow, space, TEXT_SIZES, useTextSize } from '../../theme';
 
 export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user, signOut } = useAuth();
   const { answers } = useQuiz();
+  const { size: textSize, setSize: setTextSize } = useTextSize();
+  const tabSpace = useTabBarSpace();
 
   const terrainSummary = answers.terrains.length
     ? answers.terrains.join(', ')
@@ -32,13 +34,51 @@ export default function SettingsScreen() {
       style={styles.screen}
       contentContainerStyle={[
         styles.content,
-        { paddingTop: insets.top + space[6], paddingBottom: space[8] },
+        // Clear of the floating tab bar, which covers the bottom of the screen.
+        { paddingTop: insets.top + space[2], paddingBottom: tabSpace + space[6] },
       ]}
     >
       <Heading size={26}>Settings</Heading>
       <BodyText size={12} color={colors.neutral[600]}>
         {user ? user.email : 'Signed in'}
       </BodyText>
+
+      <View style={styles.group}>
+        <BodyText size={10} weight="semibold" color={colors.neutral[600]} style={styles.groupTitle}>
+          TEXT SIZE
+        </BodyText>
+        <View style={styles.card}>
+          <View style={styles.switch} accessibilityRole="radiogroup">
+            {TEXT_SIZES.map((option) => {
+              const active = option.value === textSize;
+              return (
+                <Pressable
+                  key={option.value}
+                  onPress={() => setTextSize(option.value)}
+                  accessibilityRole="radio"
+                  accessibilityState={{ checked: active }}
+                  style={[styles.switchOption, active && styles.switchActive]}
+                >
+                  <BodyText
+                    size={12.5}
+                    weight="semibold"
+                    color={active ? colors.neutral[100] : colors.neutral[700]}
+                  >
+                    {option.label}
+                  </BodyText>
+                </Pressable>
+              );
+            })}
+          </View>
+          {/* A sample at the chosen size, so the effect is visible right here. */}
+          <BodyText size={13.5} lineHeightRatio={1.5}>
+            Zion: a river cut a narrow corridor through sandstone.
+          </BodyText>
+          <BodyText size={11.5} lineHeightRatio={1.45} color={colors.textMuted}>
+            {"Your phone's own text size setting applies on top of this."}
+          </BodyText>
+        </View>
+      </View>
 
       <View style={styles.group}>
         <BodyText size={10} weight="semibold" color={colors.neutral[600]} style={styles.groupTitle}>
@@ -139,5 +179,22 @@ const styles = StyleSheet.create({
   },
   action: {
     alignSelf: 'flex-start',
+  },
+  // The same pill switch as the detail sheet's Features / Facts.
+  switch: {
+    flexDirection: 'row',
+    gap: 4,
+    padding: 4,
+    borderRadius: radius.pill,
+    backgroundColor: colors.neutral[200],
+  },
+  switchOption: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 8,
+    borderRadius: radius.pill,
+  },
+  switchActive: {
+    backgroundColor: colors.accent,
   },
 });

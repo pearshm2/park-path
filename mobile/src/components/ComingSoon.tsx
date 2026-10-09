@@ -28,7 +28,7 @@ export function ComingSoon({
   const insets = useSafeAreaInsets();
 
   return (
-    <View style={[styles.screen, { paddingTop: insets.top + space[6] }]}>
+    <View style={[styles.screen, { paddingTop: insets.top + space[2] }]}>
       <Kicker>{kicker}</Kicker>
       <Heading size={26} style={styles.title}>
         {title}

@@ -32,7 +32,7 @@
  * are absent from the map. The prototype notes the same limitation.
  */
 
-import { geoAlbersUsa, geoPath } from 'd3-geo';
+import { geoAlbersUsa, geoPath, type GeoPath } from 'd3-geo';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Pressable,
@@ -47,16 +47,23 @@ import Svg, { Circle, G, Path, Text as SvgText } from 'react-native-svg';
 
 import type { Site, SiteStatus } from '../data/parks';
 import { REGIONS, regionForState, STATE_REGION, type RegionId } from '../data/regions';
-import { US_STATES } from '../data/usStates';
+import { US_STATES, type StateFeature } from '../data/usStates';
 import { colors, fonts, radius, shadow } from '../theme';
+import { ExpandIcon } from './ExpandIcon';
 import { featureForPark, FeatureGlyph, type Feature } from './FeatureGlyph';
 import { terrainTone } from './TerrainIcon';
 import { BodyText } from './Typography';
 
-/** d3-geo wants a FeatureCollection to fit the projection against. */
-const STATES_COLLECTION = {
+/**
+ * What the projection is sized to: every state but Alaska. Alaska's inset
+ * trails its Aleutian Islands far to the left, so fitting to it pushed the
+ * lower 48 off-centre and shrank them. Without it the map is about 8%
+ * larger and centred; only the far tip of the Aleutians (no parks there)
+ * runs off the left edge, and Alaska's parks all stay in view.
+ */
+const FIT_COLLECTION = {
   type: 'FeatureCollection' as const,
-  features: US_STATES,
+  features: US_STATES.filter((state) => state.id !== '02'),
 };
 
 /** How each visit status draws as a small dot. Shared with the map key. */
@@ -80,9 +87,12 @@ const ICON_ZOOM = 1.6;
 /** A feature badge's radius, and its glyph's width. */
 const BADGE_R = 12;
 const GLYPH_SIZE = 15;
+/** How far the selected badge's glow reaches past its ring. */
+const HALO = 9;
 
 /** Room left around a zoomed region, and the most it may be magnified. */
 const ZOOM_PADDING = 22;
+const ZOOM_PADDING_X = 40;
 const MAX_ZOOM = 4;
 const ZOOM_MS = 380;
 
@@ -105,6 +115,15 @@ type ParkMapProps = {
   focusRegion?: RegionId | null;
   /** Show feature badges once zoomed in. Meant for the national parks view. */
   featureIcons?: boolean;
+  /** Show the badges at every zoom, for a map big enough to fit them (full screen). */
+  iconsAtAnyZoom?: boolean;
+  /** Shows a button in the bottom corner that opens the map full screen. */
+  onExpand?: () => void;
+  /**
+   * Extra room for the map's own buttons, for a map that runs under the
+   * notch or status bar (the full-screen view).
+   */
+  controlInset?: { top?: number; right?: number; bottom?: number };
   onSelectSite?: (site: Site) => void;
   style?: StyleProp<ViewStyle>;
 };
@@ -116,6 +135,9 @@ export function ParkMap({
   selectedId,
   focusRegion,
   featureIcons = false,
+  iconsAtAnyZoom = false,
+  onExpand,
+  controlInset,
   onSelectSite,
   style,
 }: ParkMapProps) {
@@ -138,7 +160,7 @@ export function ParkMap({
         [8, 8],
         [size.width - 8, size.height - 8],
       ],
-      STATES_COLLECTION,
+      FIT_COLLECTION,
     );
     const toPath = geoPath(projection);
 
@@ -162,12 +184,17 @@ export function ParkMap({
     const region = REGIONS.find((r) => r.id === focusRegion);
     if (!projected || !region) return IDENTITY;
 
-    const [[x0, y0], [x1, y1]] = projected.toPath.bounds({
+    const { toPath } = projected;
+    const [[x0, y0], [x1, y1]] = toPath.bounds({
       type: 'FeatureCollection',
-      features: US_STATES.filter((feature) => region.states.includes(feature.id)),
+      features: US_STATES.filter((feature) => region.states.includes(feature.id)).map(
+        (feature) => mainLand(feature, toPath),
+      ),
     });
     const k = Math.min(
-      (size.width - ZOOM_PADDING * 2) / Math.max(x1 - x0, 1),
+      // Wider at the sides: an edge park's badge (and the expand button in
+      // the corner) needs the room.
+      (size.width - ZOOM_PADDING_X * 2) / Math.max(x1 - x0, 1),
       (size.height - ZOOM_PADDING * 2) / Math.max(y1 - y0, 1),
       MAX_ZOOM,
     );
@@ -240,7 +267,12 @@ export function ParkMap({
   const filtering = (matchIds?.size ?? 0) > 0;
   // A region in focus always gets badges: Alaska & Hawaii spans so much of
   // the map that framing it barely zooms in at all.
-  const showIcons = featureIcons && (focusRegion != null || view.k >= ICON_ZOOM);
+  // On the whole map, badges follow a pinch only (`moved`): while it eases
+  // back out of a region it passes through the same zoom, and every park in
+  // the country would flash up as a badge on the way.
+  const showIcons =
+    featureIcons &&
+    (iconsAtAnyZoom || focusRegion != null || (moved && view.k >= ICON_ZOOM));
   /** The park's feature, when badges are showing and it has one. */
   const badgeFor = (site: Site) => (showIcons ? featureForPark(site.id) : undefined);
   /** Where each badge is drawn, nudged apart where parks sit close together. */
@@ -249,10 +281,18 @@ export function ParkMap({
         visible.flatMap((dot) =>
           featureForPark(dot.site.id) ? [{ id: dot.site.id, ...place(dot) }] : [],
         ),
+        selectedId,
+        size,
       )
     : new Map<string, Point>();
   // Draw #1 last so it sits on top where pins overlap.
   picks.sort((a, b) => rankById!.get(b.site.id)! - rankById!.get(a.site.id)!);
+  // The selected park goes on top of its own group, glow and all.
+  const selectedLast = (a: PlacedDot, b: PlacedDot) =>
+    Number(a.site.id === selectedId) - Number(b.site.id === selectedId);
+  others.sort(selectedLast);
+  matched.sort(selectedLast);
+  picks.sort(selectedLast);
 
   return (
     <View style={[styles.container, style]} onLayout={onLayout}>
@@ -413,13 +453,39 @@ export function ParkMap({
         </Svg>
       </GestureDetector>
 
+      {onExpand ? (
+        <Pressable
+          onPress={onExpand}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel="Open the map full screen"
+          style={({ pressed }) => [
+            styles.expand,
+            controlInset && {
+              bottom: 8 + (controlInset.bottom ?? 0),
+              right: 12 + (controlInset.right ?? 0),
+            },
+            pressed && styles.resetPressed,
+          ]}
+        >
+          <ExpandIcon size={16} color={colors.accentRamp[700]} />
+        </Pressable>
+      ) : null}
+
       {moved ? (
         <Pressable
           onPress={reset}
           accessibilityRole="button"
           accessibilityLabel="Reset the map zoom"
           hitSlop={8}
-          style={({ pressed }) => [styles.reset, pressed && styles.resetPressed]}
+          style={({ pressed }) => [
+            styles.reset,
+            controlInset && {
+              top: 8 + (controlInset.top ?? 0),
+              right: 12 + (controlInset.right ?? 0),
+            },
+            pressed && styles.resetPressed,
+          ]}
         >
           <BodyText size={12} weight="semibold" color={colors.accentRamp[700]}>
             Reset
@@ -440,14 +506,19 @@ type Point = { x: number; y: number };
 
 /**
  * Pushes overlapping badges apart so each one can be read and tapped.
- * Utah's five parks overlap even at region zoom without this. A few
- * rounds of pairwise nudging is plenty for the dozen or so badges a
- * region shows, and cheap enough to rerun on every frame of a zoom.
+ * Utah's five parks overlap even at region zoom without this, and more
+ * so when large text shrinks the map. Thirty rounds of pairwise nudging
+ * settle the dozen or so badges a region shows, cheaply enough to rerun
+ * on every frame of a zoom.
  */
-function spreadBadges(points: (Point & { id: string })[]): Map<string, Point> {
+function spreadBadges(
+  points: (Point & { id: string })[],
+  selectedId?: string | null,
+  bounds?: { width: number; height: number },
+): Map<string, Point> {
   const spots = points.map(({ x, y }) => ({ x, y }));
-  const gap = BADGE_R * 2 + 2;
-  for (let round = 0; round < 12; round++) {
+  const baseGap = BADGE_R * 2 + 2;
+  for (let round = 0; round < 30; round++) {
     let moved = false;
     for (let i = 0; i < spots.length; i++) {
       for (let j = i + 1; j < spots.length; j++) {
@@ -456,6 +527,9 @@ function spreadBadges(points: (Point & { id: string })[]): Map<string, Point> {
         let dx = b.x - a.x;
         let dy = b.y - a.y;
         let d = Math.hypot(dx, dy);
+        // The selected badge's glow needs room too, so neighbours don't cover it.
+        const gap =
+          baseGap + (points[i].id === selectedId || points[j].id === selectedId ? HALO : 0);
         if (d >= gap) continue;
         if (d < 0.01) {
           // Same spot: split them along a fixed angle so it's stable.
@@ -469,6 +543,15 @@ function spreadBadges(points: (Point & { id: string })[]): Map<string, Point> {
         b.x += (dx / d) * push;
         b.y += (dy / d) * push;
         moved = true;
+      }
+    }
+    // Keep every badge on screen: pushing apart a crowded area can
+    // otherwise shove one past the map's edge.
+    if (bounds) {
+      const pad = BADGE_R + 3;
+      for (const spot of spots) {
+        spot.x = Math.min(Math.max(spot.x, pad), bounds.width - pad);
+        spot.y = Math.min(Math.max(spot.y, pad), bounds.height - pad);
       }
     }
     if (!moved) break;
@@ -509,6 +592,14 @@ function FeatureBadge({
         <>
           <Path d={`M${x} ${y}L${bx} ${by}`} stroke={tone.ink} strokeWidth={1.25} opacity={0.6} />
           <Circle cx={x} cy={y} r={2.25} fill={tone.ink} />
+        </>
+      ) : null}
+      {selected ? (
+        // A soft glow and a thin accent ring outside the black one, so the
+        // selected park stands out from its neighbours.
+        <>
+          <Circle cx={bx} cy={by} r={r + HALO} fill={colors.accent} opacity={0.2} />
+          <Circle cx={bx} cy={by} r={r + 4.5} fill="none" stroke={colors.accent} strokeWidth={2} />
         </>
       ) : null}
       <Circle
@@ -629,6 +720,30 @@ function useMapView(target: View2D, size: { width: number; height: number }) {
 
 type PlacedDot = { site: Site; x: number; y: number };
 
+/** Islands smaller than this share of a state's largest landmass don't count when framing it. */
+const MIN_LAND_SHARE = 0.01;
+
+/**
+ * A state's main landmasses only, for framing a region zoom. Alaska's
+ * outline trails the Aleutian chain far to the west (its tip even wraps
+ * past the date line, drawn out towards Hawaii), which framed Alaska &
+ * Hawaii far too wide. Hawaii's main islands all stay; no park sits on a
+ * dropped island.
+ */
+function mainLand(feature: StateFeature, toPath: GeoPath): StateFeature {
+  if (feature.geometry.type !== 'MultiPolygon') return feature;
+  const polygons = feature.geometry.coordinates;
+  const areas = polygons.map((coordinates) => toPath.area({ type: 'Polygon', coordinates }));
+  const largest = Math.max(...areas);
+  return {
+    ...feature,
+    geometry: {
+      type: 'MultiPolygon',
+      coordinates: polygons.filter((_, index) => areas[index] >= largest * MIN_LAND_SHARE),
+    },
+  };
+}
+
 const styles = StyleSheet.create({
   container: {
     backgroundColor: colors.bg,
@@ -640,6 +755,18 @@ const styles = StyleSheet.create({
     right: 12,
     paddingVertical: 5,
     paddingHorizontal: 12,
+    borderRadius: radius.pill,
+    backgroundColor: colors.neutral[100],
+    ...shadow.sm,
+  },
+  expand: {
+    position: 'absolute',
+    bottom: 8,
+    right: 12,
+    width: 34,
+    height: 34,
+    alignItems: 'center',
+    justifyContent: 'center',
     borderRadius: radius.pill,
     backgroundColor: colors.neutral[100],
     ...shadow.sm,

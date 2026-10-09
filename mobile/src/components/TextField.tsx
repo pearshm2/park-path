@@ -19,7 +19,7 @@ import {
   type ViewStyle,
 } from 'react-native';
 
-import { colors, fonts, MIN_TAP_TARGET, radius, space } from '../theme';
+import { colors, fonts, MIN_TAP_TARGET, radius, scaleType, space, useTextScale } from '../theme';
 
 type TextFieldProps = TextInputProps & {
   label: string;
@@ -34,9 +34,10 @@ export const TextField = forwardRef<TextInput, TextFieldProps>(function TextFiel
 ) {
   const [focused, setFocused] = useState(false);
 
+  const scale = useTextScale();
   return (
     <View style={containerStyle}>
-      <Text style={styles.label}>{label}</Text>
+      <Text style={[styles.label, scaleType(styles.label, scale)]}>{label}</Text>
       <TextInput
         ref={ref}
         accessibilityLabel={label}
@@ -54,6 +55,7 @@ export const TextField = forwardRef<TextInput, TextFieldProps>(function TextFiel
         }}
         style={[
           styles.input,
+          scaleType(styles.input, scale),
           focused && styles.inputFocused,
           // An error outranks focus: the person needs to see what is wrong
           // even while the cursor is still in the field.
@@ -66,7 +68,7 @@ export const TextField = forwardRef<TextInput, TextFieldProps>(function TextFiel
         // accent-700 rather than the base accent: the design system notes
         // the accent only clears 3:1 on this ground, so paragraph-size
         // text in it needs a deep ramp step.
-        <Text style={styles.error}>{error}</Text>
+        <Text style={[styles.error, scaleType(styles.error, scale)]}>{error}</Text>
       ) : null}
     </View>
   );

@@ -20,10 +20,11 @@ import { colors, radius, shadow, space } from '../theme';
 import { STATUS_DOT } from './ParkMap';
 import { Tag } from './Tag';
 import { TERRAIN_LABEL, TerrainIcon, terrainTone } from './TerrainIcon';
+import { ExpandIcon } from './ExpandIcon';
 import { BodyText, Heading } from './Typography';
 
 /** Visitation is the closest thing the data has to a crowd signal. */
-function crowdLabel(visitsMillions: number): string {
+export function crowdLabel(visitsMillions: number): string {
   if (visitsMillions >= 4) return 'Very busy';
   if (visitsMillions >= 1.5) return 'Busy';
   if (visitsMillions >= 0.5) return 'Some company';
@@ -43,6 +44,7 @@ export function ParkCard({
   rank,
   markWishlist = false,
   onPress,
+  onExpand,
   style,
 }: {
   site: Site;
@@ -54,6 +56,8 @@ export function ParkCard({
   /** Flags a wishlist park on the band, for decks that mix them with others. */
   markWishlist?: boolean;
   onPress?: () => void;
+  /** Shows the expand button, which opens the site's detail sheet. */
+  onExpand?: () => void;
   style?: StyleProp<ViewStyle>;
 }) {
   const tone = terrainTone(site.group);
@@ -70,92 +74,111 @@ export function ParkCard({
         .join('. ')}
       style={({ pressed }) => [styles.card, style, pressed && onPress && styles.pressed]}
     >
-      {/* Terrain band — the card's visual anchor, and what makes the
-          deck scannable without reading every name. */}
-      <View style={[styles.band, { backgroundColor: tone.band }]}>
-        {site.group ? <TerrainIcon group={site.group} size={26} /> : null}
-        <BodyText size={10} weight="semibold" color={tone.ink} style={styles.bandLabel}>
-          {site.group
-            ? (TERRAIN_LABEL[site.group]?.toUpperCase() ?? site.group.toUpperCase())
-            : site.kind.toUpperCase()}
-        </BodyText>
-        {markWishlist && site.status === 'wishlist' ? (
-          <View style={styles.wishlistBadge}>
-            {/* The map's wishlist pin, so the badge reads like the key. */}
-            <View style={styles.wishlistRing} />
-            <BodyText size={11} weight="semibold" color={colors.accent2Ramp[800]}>
-              Wishlist
-            </BodyText>
-          </View>
-        ) : null}
-        {rank !== undefined ? (
-          <View style={styles.rankBadge}>
-            <BodyText size={11} weight="bold" color={colors.bg}>
-              {`#${rank}`}
-            </BodyText>
-          </View>
-        ) : null}
-      </View>
-
-      <View style={styles.body}>
-        <Heading size={18} numberOfLines={1}>
-          {site.name}
-        </Heading>
-        <View style={styles.meta}>
-          {region ? <View style={[styles.regionSwatch, { backgroundColor: region.fill }]} /> : null}
-          <BodyText size={12} color={colors.neutral[600]} numberOfLines={1} style={styles.metaText}>
-            {region ? (
-              <BodyText size={12} weight="semibold" color={colors.neutral[800]}>
-                {`${region.label} · `}
+      {/* Two layers on purpose: on iOS, clipping a view to its corners
+          (overflow: hidden) also clips its shadow, so the outer layer
+          carries the shadow and border and this inner one does the clipping. */}
+      <View style={styles.clip}>
+        {/* Terrain band — the card's visual anchor, and what makes the
+            deck scannable without reading every name. */}
+        <View style={[styles.band, { backgroundColor: tone.band }]}>
+          {site.group ? <TerrainIcon group={site.group} size={26} /> : null}
+          <BodyText size={10} weight="semibold" color={tone.ink} style={styles.bandLabel}>
+            {site.group
+              ? (TERRAIN_LABEL[site.group]?.toUpperCase() ?? site.group.toUpperCase())
+              : site.kind.toUpperCase()}
+          </BodyText>
+          {markWishlist && site.status === 'wishlist' ? (
+            <View style={styles.wishlistBadge}>
+              {/* The map's wishlist pin, so the badge reads like the key. */}
+              <View style={styles.wishlistRing} />
+              <BodyText size={11} weight="semibold" color={colors.accent2Ramp[800]}>
+                Wishlist
               </BodyText>
-            ) : null}
-            {`${site.kind} · ${site.state}`}
-          </BodyText>
-        </View>
-
-        {reason ? (
-          <BodyText
-            size={12.5}
-            weight="medium"
-            lineHeightRatio={1.4}
-            color={colors.accentRamp[800]}
-            style={styles.reason}
-            numberOfLines={1}
-          >
-            {reason}
-          </BodyText>
-        ) : null}
-
-        {/* One row only; anything that does not fit is clipped. */}
-        <View style={styles.tags}>
-          {site.permit ? <Tag tone="accent" label="Permit needed" /> : null}
-          {site.vis !== null ? <Tag tone="accent2" label={crowdLabel(site.vis)} /> : null}
-          {site.feature ? <Tag tone="outline" label={site.feature} /> : null}
-          {site.effort !== null ? (
-            <Tag tone="neutral" label={EFFORT_LABEL[site.effort] ?? `Effort ${site.effort}`} />
+            </View>
+          ) : null}
+          {rank !== undefined ? (
+            <View style={styles.rankBadge}>
+              <BodyText size={11} weight="bold" color={colors.bg}>
+                {`#${rank}`}
+              </BodyText>
+            </View>
           ) : null}
         </View>
 
-        {/* Match strength on one line — the point of the deck is why this
-            park and not another. Pinned to the bottom of the card. */}
-        {percent !== null ? (
-          <View style={styles.matchRow}>
-            <BodyText
-              size={10}
-              weight="semibold"
-              color={colors.neutral[600]}
-              style={styles.matchLabel}
-            >
-              MATCH
-            </BodyText>
-            <View style={styles.matchTrack}>
-              <View style={[styles.matchFill, { width: `${Math.max(percent, 3)}%` }]} />
-            </View>
-            <BodyText size={14} weight="bold" color={colors.accentRamp[700]}>
-              {`${percent}%`}
+        <View style={styles.body}>
+          <View style={styles.nameRow}>
+            <Heading size={18} numberOfLines={1} style={styles.name}>
+              {site.name}
+            </Heading>
+            {onExpand ? (
+              // Its own target, so the card's tap (zoom to region) is untouched.
+              <Pressable
+                onPress={onExpand}
+                hitSlop={10}
+                accessibilityRole="button"
+                accessibilityLabel={`Details for ${site.name}`}
+                style={({ pressed }) => [styles.expand, pressed && styles.expandPressed]}
+              >
+                <ExpandIcon color={colors.neutral[800]} />
+              </Pressable>
+            ) : null}
+          </View>
+          <View style={styles.meta}>
+            {region ? <View style={[styles.regionSwatch, { backgroundColor: region.fill }]} /> : null}
+            <BodyText size={12} color={colors.neutral[600]} numberOfLines={1} style={styles.metaText}>
+              {region ? (
+                <BodyText size={12} weight="semibold" color={colors.neutral[800]}>
+                  {`${region.label} · `}
+                </BodyText>
+              ) : null}
+              {`${site.kind} · ${site.state}`}
             </BodyText>
           </View>
-        ) : null}
+
+          {reason ? (
+            <BodyText
+              size={12.5}
+              weight="medium"
+              lineHeightRatio={1.4}
+              color={colors.accentRamp[800]}
+              style={styles.reason}
+              numberOfLines={1}
+            >
+              {reason}
+            </BodyText>
+          ) : null}
+
+          {/* One row only; anything that does not fit is clipped. */}
+          <View style={styles.tags}>
+            {site.permit ? <Tag tone="accent" label="Permit needed" /> : null}
+            {site.vis !== null ? <Tag tone="accent2" label={crowdLabel(site.vis)} /> : null}
+            {site.feature ? <Tag tone="outline" label={site.feature} /> : null}
+            {site.effort !== null ? (
+              <Tag tone="neutral" label={EFFORT_LABEL[site.effort] ?? `Effort ${site.effort}`} />
+            ) : null}
+          </View>
+
+          {/* Match strength on one line — the point of the deck is why this
+              park and not another. Pinned to the bottom of the card. */}
+          {percent !== null ? (
+            <View style={styles.matchRow}>
+              <BodyText
+                size={10}
+                weight="semibold"
+                color={colors.neutral[600]}
+                style={styles.matchLabel}
+              >
+                MATCH
+              </BodyText>
+              <View style={styles.matchTrack}>
+                <View style={[styles.matchFill, { width: `${Math.max(percent, 3)}%` }]} />
+              </View>
+              <BodyText size={14} weight="bold" color={colors.accentRamp[700]}>
+                {`${percent}%`}
+              </BodyText>
+            </View>
+          ) : null}
+        </View>
       </View>
     </Pressable>
   );
@@ -165,8 +188,16 @@ const styles = StyleSheet.create({
   card: {
     borderRadius: radius.card,
     backgroundColor: colors.neutral[100],
-    overflow: 'hidden',
+    // The card sits on a sheet of the same colour, so the edge needs both a
+    // line and a shadow to read on a phone.
+    borderWidth: 1,
+    borderColor: colors.neutral[300],
     ...shadow.md,
+  },
+  clip: {
+    flex: 1,
+    borderRadius: radius.card - 1,
+    overflow: 'hidden',
   },
   pressed: {
     opacity: 0.92,
@@ -210,6 +241,25 @@ const styles = StyleSheet.create({
     paddingHorizontal: space[4],
     paddingTop: space[3],
     paddingBottom: space[3],
+  },
+  nameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space[2],
+  },
+  name: {
+    flex: 1,
+  },
+  expand: {
+    width: 28,
+    height: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: radius.pill,
+    backgroundColor: colors.neutral[200],
+  },
+  expandPressed: {
+    backgroundColor: colors.neutral[300],
   },
   meta: {
     flexDirection: 'row',

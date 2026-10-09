@@ -12,3 +12,4 @@ export {
   space,
 } from './tokens';
 export { useAppFonts } from './fonts';
+export { scaleType, TEXT_SIZES, TextSizeProvider, useTextScale, useTextSize, type TextSize } from './textSize';

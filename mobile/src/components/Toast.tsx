@@ -9,7 +9,7 @@
 import { useEffect, useState } from 'react';
 import { Animated, StyleSheet, Text } from 'react-native';
 
-import { colors, fonts, radius, shadow, space } from '../theme';
+import { colors, fonts, radius, scaleType, shadow, space, useTextScale } from '../theme';
 
 export function Toast({ message }: { message: string | null }) {
   // Created once via a lazy initialiser; reading a ref during render
@@ -26,6 +26,7 @@ export function Toast({ message }: { message: string | null }) {
 
   // Kept mounted while fading out so the exit animation can play, but
   // taken out of the a11y tree and hit-testing when there is no message.
+  const scale = useTextScale();
   return (
     <Animated.View
       pointerEvents="none"
@@ -34,7 +35,7 @@ export function Toast({ message }: { message: string | null }) {
       importantForAccessibility={message ? 'yes' : 'no-hide-descendants'}
       style={[styles.container, { opacity }]}
     >
-      <Text style={styles.text}>{message ?? ''}</Text>
+      <Text style={[styles.text, scaleType(styles.text, scale)]}>{message ?? ''}</Text>
     </Animated.View>
   );
 }

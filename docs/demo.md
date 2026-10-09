@@ -250,3 +250,27 @@ If the computer can't run the emulator, use an Android phone connected **by USB*
 
 The phone and computer must be on the **same Wi-Fi**, and Windows may ask to
 allow access through the firewall. Click **Allow**.
+---
+
+## Running on an iPhone
+
+The app is the same code on iPhone; only the connection setup differs.
+There is no iPhone simulator on Windows, so this uses a real iPhone.
+
+1. On the iPhone, install **Expo Go** from the App Store. It only supports the
+   newest Expo version, so check it opens the app well before demo day.
+2. Find the computer's network address: run `ipconfig` and note the Wi-Fi
+   **IPv4 Address** (for example `192.168.1.154`).
+3. In `mobile/.env`, use that address. The Android emulator can use it too:
+   ```
+   EXPO_PUBLIC_API_URL=http://192.168.1.154:8000
+   ```
+4. Run `npx expo start` (restart it after any `.env` change) and scan the QR
+   code with the iPhone's **Camera** app.
+5. When Expo Go asks to find devices on your **local network**, tap **Allow**.
+   If you tapped Don't Allow, turn it on under Settings → Expo Go → Local Network.
+
+The iPhone and computer must be on the **same Wi-Fi**, and that network must
+let devices reach each other. Home Wi-Fi usually does; campus and venue Wi-Fi
+often doesn't. There is no USB fallback for iPhone like Android's
+`adb reverse`, so for presentations on unfamiliar Wi-Fi, plan on a hosted API.

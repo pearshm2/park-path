@@ -14,6 +14,7 @@
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Stack } from 'expo-router';
+import * as ScreenOrientation from 'expo-screen-orientation';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
@@ -24,7 +25,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { AuthProvider, useAuth } from '../auth/AuthContext';
 import { QuizProvider, useQuiz } from '../quiz/QuizContext';
-import { colors, useAppFonts } from '../theme';
+import { colors, TextSizeProvider, useAppFonts } from '../theme';
 
 SplashScreen.preventAutoHideAsync().catch(() => {
   // Already hidden, or unsupported on this platform (web). Not fatal.
@@ -45,6 +46,12 @@ const queryClient = new QueryClient({
 export default function RootLayout() {
   const fontsReady = useAppFonts();
 
+  // Every screen is laid out for a tall phone, so the app stays portrait.
+  // The full-screen map unlocks rotation while it is open (FullMapView).
+  useEffect(() => {
+    ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP).catch(() => {});
+  }, []);
+
   if (!fontsReady) return null;
 
   return (
@@ -53,8 +60,10 @@ export default function RootLayout() {
         <QueryClientProvider client={queryClient}>
           <AuthProvider>
             <QuizProvider>
-              <StatusBar style="dark" />
-              <SessionGate />
+              <TextSizeProvider>
+                <StatusBar style="dark" />
+                <SessionGate />
+              </TextSizeProvider>
             </QuizProvider>
           </AuthProvider>
         </QueryClientProvider>

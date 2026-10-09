@@ -22,6 +22,8 @@ import {
   HEADING_LETTER_SPACING_RATIO,
   HEADING_LINE_HEIGHT_RATIO,
   headingSize,
+  scaleType,
+  useTextScale,
 } from '../theme';
 
 type HeadingLevel = keyof typeof headingSize;
@@ -44,7 +46,9 @@ export function Heading({
   children,
   ...rest
 }: HeadingProps) {
-  const fontSize = size ?? headingSize[level];
+  // Scaled by the in-app text size (Settings); the phone's own setting
+  // is applied on top by React Native.
+  const fontSize = (size ?? headingSize[level]) * useTextScale();
 
   return (
     <Text
@@ -93,13 +97,14 @@ export function BodyText({
   children,
   ...rest
 }: BodyTextProps) {
+  const fontSize = size * useTextScale();
   return (
     <Text
       style={[
         {
           fontFamily: WEIGHT_FAMILY[weight],
-          fontSize: size,
-          lineHeight: size * lineHeightRatio,
+          fontSize,
+          lineHeight: fontSize * lineHeightRatio,
           color,
         },
         style,
@@ -116,8 +121,9 @@ export function BodyText({
  * section kicker above headings.
  */
 export function Kicker({ style, children, ...rest }: TextProps & { style?: StyleProp<TextStyle> }) {
+  const scale = useTextScale();
   return (
-    <Text style={[styles.kicker, style]} {...rest}>
+    <Text style={[styles.kicker, scaleType(styles.kicker, scale), style]} {...rest}>
       {children}
     </Text>
   );

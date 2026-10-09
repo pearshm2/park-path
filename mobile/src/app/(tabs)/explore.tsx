@@ -28,24 +28,26 @@
  */
 
 import { useQuery } from '@tanstack/react-query';
+import { useRouter } from 'expo-router';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
-  Keyboard,
   Modal,
   Pressable,
   StyleSheet,
-  TextInput,
   View,
   useWindowDimensions,
 } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
+  Extrapolation,
+  interpolate,
   LinearTransition,
   useAnimatedStyle,
   useSharedValue,
   withTiming,
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Svg, { Path } from 'react-native-svg';
 import { scheduleOnRN } from 'react-native-worklets';
 
 import { listSites } from '../../api/parks';
@@ -55,14 +57,23 @@ import {
   activeFilterCount,
   BodyText,
   CardCarousel,
+  ExpandIcon,
   CROWD_CEILING,
   FilterButton,
   FilterSheet,
+  FullMapView,
   Heading,
   Kicker,
   NO_FILTERS,
   ParkCard,
   ParkMap,
+  SearchButton,
+  useTabBarSpace,
+  SectionDeck,
+  SECTION_PEEK,
+  type DeckSection,
+  SearchPanel,
+  SitePeek,
   MATCH_DOT,
   PICK_FILL,
   STATUS_DOT,
@@ -70,8 +81,9 @@ import {
 } from '../../components';
 import type { Site, SiteStatus } from '../../data/parks';
 import { REGIONS, regionForState, type Region } from '../../data/regions';
+import { RAISE } from '../../components/tabBar';
 import { useQuiz } from '../../quiz/QuizContext';
-import { colors, fonts, radius, shadow, space } from '../../theme';
+import { colors, radius, shadow, space, useTextScale } from '../../theme';
 
 /** How many recommendations get a numbered pin and a card. */
 const TOP_N = 10;
@@ -81,13 +93,43 @@ const MAP_ASPECT = 1.5;
 
 /** The sheet's bar, which is all that shows while it is closed. */
 const SHEET_BAR = 50;
-/** The deck's height, including the cards peeking out behind the top one. */
+/**
+ * Extra room under the map while the sheet is down. The map is centred in
+ * the space it has, so this lifts it by half, and leaves room below for the
+ * full-screen button.
+ */
+const EXTRA_LIFT = 72;
+/** How far the open sheet sits lower than its deck needs, to give the map room. */
+const SHEET_LOWER = 28;
+/** Breathing room between the sheet's title row and the top card. */
+const DECK_GAP = 8;
+/** The deck's height at normal text size, including the cards peeking out behind the top one. */
 const DECK_HEIGHT = 214;
-const SHEET_HEIGHT = SHEET_BAR + DECK_HEIGHT + space[2];
+/**
+ * How far the deck grows with the phone's text-size setting. Past this the
+ * map would be squeezed out, so the very largest sizes still clip a little.
+ */
+const MAX_DECK_SCALE = 1.5;
+/** The part of a card's height that is text and so grows with it. */
+const TEXT_SHARE = 0.7;
+
+/**
+ * The deck and sheet heights at the phone's text size. The cards are mostly
+ * text, so a fixed height cuts off their bottom row when text is enlarged.
+ */
+function useSheetSize(extra = 0) {
+  const { fontScale } = useWindowDimensions();
+  // The phone's text size and the app's own Settings choice multiply.
+  const scale = Math.min(Math.max(fontScale * useTextScale(), 1), MAX_DECK_SCALE);
+  // About 70% of a card's height is text; the band, padding and gaps stay put.
+  const deck = Math.round(DECK_HEIGHT * (1 + (scale - 1) * TEXT_SHARE));
+  // The open sheet stops SHEET_LOWER short of holding the whole deck: the
+  // bottom of the deck (the next card's peek) runs on behind the tab bar,
+  // and the map keeps that much more room.
+  return { deck: deck + extra, sheet: SHEET_BAR + deck + extra + space[2] - SHEET_LOWER };
+}
 const SHEET_MS = 260;
 
-/** How many search suggestions to list under the search bar. */
-const MAX_SUGGESTIONS = 5;
 
 /** What the map shows. */
 type MapScope = 'parks' | 'all' | 'wishlist';
@@ -107,16 +149,6 @@ function applyFilters<T extends { site: Site }>(rows: T[], filters: FeedFilters)
     if (ceiling !== null && (site.vis === null || site.vis > ceiling)) return false;
     return true;
   });
-}
-
-/** Name matches for the search bar, names that start with the query first. */
-function searchSites(sites: Site[], query: string): Site[] {
-  const q = query.trim().toLowerCase();
-  if (!q) return [];
-
-  const hits = sites.filter((site) => site.name.toLowerCase().includes(q));
-  const starts = (site: Site) => (site.name.toLowerCase().startsWith(q) ? 0 : 1);
-  return hits.sort((a, b) => starts(a) - starts(b) || a.name.localeCompare(b.name));
 }
 
 /** A card in the deck: a park, plus its match and rank when it has them. */
@@ -157,6 +189,7 @@ function byRegion(a: DeckItem, b: DeckItem): number {
 export default function ExploreScreen() {
   const insets = useSafeAreaInsets();
   const { width: windowWidth } = useWindowDimensions();
+  const textScale = useTextScale();
   const { answers } = useQuiz();
 
   const [scope, setScope] = useState<MapScope>('parks');
@@ -170,10 +203,13 @@ export default function ExploreScreen() {
   const [deckTopId, setDeckTopId] = useState<string | null>(null);
   /** Lets the user reopen the key while the sheet is open. */
   const [keyOpen, setKeyOpen] = useState(false);
-  const [query, setQuery] = useState('');
-  const [searchMiss, setSearchMiss] = useState<string | null>(null);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [fullMapOpen, setFullMapOpen] = useState(false);
   const [filters, setFilters] = useState<FeedFilters>(NO_FILTERS);
   const [filterOpen, setFilterOpen] = useState(false);
+  /** The site whose detail sheet is open, from a card's expand button. */
+  const [peekSite, setPeekSite] = useState<Site | null>(null);
+  const router = useRouter();
 
   const { data: parks = [] } = useQuery({
     queryKey: ['sites', 'parks'],
@@ -253,6 +289,30 @@ export default function ExploreScreen() {
     return [...top, ...matched, ...rest];
   }, [showingWishlist, wishlist, picks, mapSites, matchById, rankById, matchIds]);
 
+  /**
+   * The full deck split into sections for SectionDeck: each is a page you
+   * swipe sideways to, with its cards running downward. The wishlist stays
+   * one sideways row.
+   */
+  const sections = useMemo<DeckSection<DeckItem>[] | null>(() => {
+    if (showingWishlist) return null;
+    const recommended = baseDeck.filter((item) => item.rank !== undefined);
+    const unranked = baseDeck.filter((item) => item.rank === undefined);
+    return [
+      { key: 'recommended', title: 'Recommended For You', items: recommended },
+      {
+        key: 'filtered',
+        title: 'Filtered For You',
+        items: unranked.filter((item) => matchIds.has(item.site.id)),
+      },
+      {
+        key: 'explore',
+        title: 'Parks to Explore',
+        items: unranked.filter((item) => !matchIds.has(item.site.id)),
+      },
+    ].filter((section) => section.items.length > 0);
+  }, [showingWishlist, baseDeck, matchIds]);
+
   const focusRegion = anchor ? regionForState(anchor.state) : undefined;
 
   /** With a park tapped: every park on the map in its region, best fit first. */
@@ -273,11 +333,6 @@ export default function ExploreScreen() {
   // With the sheet open the map highlights whichever card is on top.
   const topCard = sheetOpen ? deck[deckIndex] : undefined;
   const highlightId = topCard?.site.id ?? null;
-
-  const suggestions = useMemo(
-    () => searchSites(allSites, query).slice(0, MAX_SUGGESTIONS),
-    [allSites, query],
-  );
 
   function openSheet(open: boolean) {
     setSheetOpen(open);
@@ -300,128 +355,93 @@ export default function ExploreScreen() {
     openSheet(true);
   }
 
-  function pickResult(site: Site) {
-    setQuery('');
-    setSearchMiss(null);
-    Keyboard.dismiss();
-    focusPark(site);
-  }
+  /** What the search panel searches, in words: the parks the map shows. */
+  const scopeLabel =
+    scope === 'wishlist'
+      ? `your ${wishlist.length} saved parks`
+      : scope === 'parks'
+        ? `${parks.length} national parks`
+        : `all ${allSites.length} sites`;
 
-  function submitSearch() {
-    const [best] = searchSites(allSites, query);
-    if (best) pickResult(best);
-    else if (query.trim()) setSearchMiss(query.trim());
-  }
+  /**
+   * The full deck is dealt in sections: the top 10, then filter matches,
+   * then everything else. While the sheet is open its title names the
+   * section of the card on top, and changes as you scroll past each one.
+   */
+  /** The section the top card is in, and the card's place in it. */
+  const useSections = sections !== null && !anchor;
+  // Sized for the sectioned deck in every view, so the sheet and card keep
+  // their size when tapping a card switches to the region carousel.
+  const { deck: deckHeight, sheet: sheetHeight } = useSheetSize(SECTION_PEEK);
+  // The tab bar floats over the bottom of the screen; the sheet runs behind it.
+  const tabSpace = useTabBarSpace();
+  const inSection = useMemo(() => {
+    if (!useSections || !topCard) return null;
+    const page = sections.findIndex((section) =>
+      section.items.some((item) => item.site.id === topCard.site.id),
+    );
+    if (page < 0) return null;
+    const index = sections[page].items.findIndex((item) => item.site.id === topCard.site.id);
+    return { page, index, section: sections[page] };
+  }, [useSections, sections, topCard]);
 
   const deckTitle = anchor
     ? (focusRegion?.label ?? anchor.name)
     : scope === 'wishlist'
       ? 'Your wishlist'
-      : scope === 'parks'
-        ? `${parks.length} national parks`
-        : `All ${allSites.length} sites`;
+      : inSection
+        ? inSection.section.title
+        : // Closed, there's no card in view: an invitation to swipe up.
+          LETS_GO;
 
   return (
-    <View style={[styles.screen, { paddingTop: insets.top + space[6] }]}>
+    <View style={[styles.screen, { paddingTop: insets.top + space[2] }]}>
       <View style={styles.header}>
         <View style={styles.headerText}>
-          <Heading size={26}>Explore</Heading>
-          <BodyText size={12} color={colors.neutral[600]} style={styles.headerMeta}>
-            {scope === 'wishlist'
-              ? `Your wishlist · ${wishlist.length} saved`
-              : matchIds.size > 0
-                ? `Your top ${picks.length} · ${matchIds.size} more match your filters`
-                : scope === 'parks'
-                  ? `Your top ${picks.length} of ${parks.length} national parks`
-                  : `Your top ${picks.length}, plus all ${allSites.length} sites`}
-          </BodyText>
-        </View>
-        <View style={styles.headerActions}>
-          <FilterButton
-            count={filtersApply ? filterCount : 0}
-            onPress={() => setFilterOpen(true)}
-            // Filters highlight parks beyond the top 10; the wishlist view
-            // has none to highlight.
-            disabled={!filtersApply}
-          />
-          <ScopeMenu
-            value={scope}
-            parkCount={parks.length}
-            siteCount={allSites.length}
-            wishlistCount={wishlist.length}
-            onChange={(next) => {
-              setScope(next);
-              setAnchor(null);
-              setDeckTopId(null);
-            }}
-          />
-        </View>
-      </View>
-
-      {/* Suggestions float over the map rather than pushing it down. */}
-      <View style={styles.searchWrap}>
-        <View style={styles.search}>
-          <TextInput
-            value={query}
-            onChangeText={(text) => {
-              setQuery(text);
-              setSearchMiss(null);
-            }}
-            onSubmitEditing={submitSearch}
-            placeholder={`Search ${allSites.length} parks and sites`}
-            placeholderTextColor={colors.neutral[600]}
-            returnKeyType="search"
-            autoCorrect={false}
-            accessibilityLabel="Search parks"
-            style={styles.searchInput}
-          />
-          {query ? (
-            <Pressable
-              onPress={() => {
-                setQuery('');
-                setSearchMiss(null);
-              }}
-              accessibilityRole="button"
-              accessibilityLabel="Clear search"
-              hitSlop={10}
-              style={styles.searchClear}
-            >
-              <BodyText size={15} weight="semibold" color={colors.neutral[700]}>
-                ×
-              </BodyText>
-            </Pressable>
-          ) : null}
-        </View>
-
-        {suggestions.length > 0 ? (
-          <View style={styles.suggestions}>
-            {suggestions.map((site, index) => (
-              <Pressable
-                key={site.id}
-                onPress={() => pickResult(site)}
-                accessibilityRole="button"
-                style={({ pressed }) => [
-                  styles.suggestion,
-                  index > 0 && styles.suggestionDivider,
-                  pressed && styles.suggestionPressed,
-                ]}
-              >
-                <BodyText size={13.5} weight="medium" color={colors.text}>
-                  {site.name}
-                </BodyText>
-                <BodyText size={11.5} color={colors.neutral[600]}>
-                  {`${site.kind} · ${site.state}`}
-                </BodyText>
-              </Pressable>
-            ))}
-          </View>
-        ) : searchMiss ? (
-          <View style={styles.suggestions}>
-            <BodyText size={12} color={colors.neutral[700]} style={styles.searchMiss}>
-              {`Nothing called "${searchMiss}". Try part of the name.`}
+          <Heading size={TITLE_SIZE}>Explore</Heading>
+          {/* The leaf sits under the middle of the title's "x", which is
+              0.98em in; the indent follows the title as text size changes. */}
+          <View
+            style={[
+              styles.headerMetaRow,
+              { paddingLeft: TITLE_SIZE * textScale * X_CENTRE_EM - LEAF_SIZE / 2 },
+            ]}
+          >
+            <LeafIcon />
+            <BodyText size={12} color={colors.neutral[600]} style={styles.headerMetaText}>
+              {/* The key and the title above the map already say what's shown;
+                  this line is the invitation, plus anything the map can't say. */}
+              {scope === 'wishlist'
+                ? `Where to next? Pick from your ${wishlist.length} saved`
+                : matchIds.size > 0
+                  ? `Where to next? ${matchIds.size} more fit your filters`
+                  : 'Where to next?'}
             </BodyText>
           </View>
-        ) : null}
+        </View>
+        <View style={styles.headerActions}>
+          <View style={styles.headerRow}>
+            <SearchButton onPress={() => setSearchOpen(true)} />
+            <ScopeMenu
+              value={scope}
+              parkCount={parks.length}
+              siteCount={allSites.length}
+              wishlistCount={wishlist.length}
+              onChange={(next) => {
+                setScope(next);
+                setAnchor(null);
+                setDeckTopId(null);
+              }}
+            />
+            <FilterButton
+              count={filtersApply ? filterCount : 0}
+              onPress={() => setFilterOpen(true)}
+              // Filters highlight parks beyond the top 10; the wishlist view
+              // has none to highlight.
+              disabled={!filtersApply}
+            />
+          </View>
+        </View>
       </View>
 
       {/* The stage: key and map, with the card sheet over its bottom edge. */}
@@ -443,14 +463,28 @@ export default function ExploreScreen() {
 
         {/* Deliberately not a layout-animated view: the map has to be told
             its new size when the sheet opens, or it overflows under it. */}
-        <View style={[styles.mapArea, { paddingBottom: sheetOpen ? SHEET_HEIGHT : SHEET_BAR }]}>
+        <View style={[styles.mapArea, {
+              paddingBottom:
+                // With the sheet down there's room to spare: lift the map a
+                // little towards the key rather than centring it.
+                (sheetOpen ? sheetHeight + DECK_GAP : SHEET_BAR + EXTRA_LIFT) + tabSpace,
+            }]}>
           {focusRegion ? (
             <RegionTitle
               region={focusRegion}
               actionLabel="Full map"
               onAction={() => setAnchor(null)}
             />
-          ) : null}
+          ) : (
+            // What the map is showing, now that the scope button is an icon.
+            // With the sheet down the map sits lower, so lift the title a
+            // touch to keep it close under the key.
+            <View style={[styles.mapTitle, !sheetOpen && styles.mapTitleRaised]}>
+              <Heading size={14}>
+                {scopeLabel.charAt(0).toUpperCase() + scopeLabel.slice(1)}
+              </Heading>
+            </View>
+          )}
           <ParkMap
             sites={mapSites}
             rankById={rankById}
@@ -460,6 +494,9 @@ export default function ExploreScreen() {
             // the cards leaves the whole map in view.
             focusRegion={focusRegion?.id ?? null}
             featureIcons={scope === 'parks'}
+            // With the sheet open there's no room under the map, so the
+            // button stays in the map's corner; closed, it sits below.
+            onExpand={sheetOpen ? () => setFullMapOpen(true) : undefined}
             onSelectSite={(site) => {
               if (anchor && site.id === highlightId) {
                 // Tapping the top card's pin again zooms back out.
@@ -473,15 +510,76 @@ export default function ExploreScreen() {
             }}
             style={[styles.map, { maxHeight: windowWidth / MAP_ASPECT }]}
           />
+          {!sheetOpen ? (
+            <Pressable
+              onPress={() => setFullMapOpen(true)}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel="Open the map full screen"
+              style={({ pressed }) => [
+                styles.expandBelow,
+                // Up near the map; the room under it is EXTRA_LIFT's.
+                { bottom: SHEET_BAR + tabSpace + space[8] + space[1] },
+                pressed && styles.suggestionPressed,
+              ]}
+            >
+              <ExpandIcon size={16} color={colors.accentRamp[700]} />
+            </Pressable>
+          ) : null}
         </View>
 
         <CardSheet
           open={sheetOpen}
           onOpenChange={openSheet}
           title={deckTitle}
-          status={deck.length > 0 ? `${deckIndex + 1} of ${deck.length}` : undefined}
+          status={
+            inSection
+              ? `${inSection.index + 1} of ${inSection.section.items.length}`
+              : deck.length > 0
+                ? `${deckIndex + 1} of ${deck.length}`
+                : undefined
+          }
+          extra={SECTION_PEEK}
+          below={tabSpace}
+          pages={
+            useSections && sections.length > 1 && inSection
+              ? { count: sections.length, active: inSection.page }
+              : undefined
+          }
         >
-          {deck.length > 0 ? (
+          {useSections && deck.length > 0 ? (
+            <SectionDeck
+              // New sections (another view, other filters) start a fresh deck.
+              key={`${scope}:${sections.map((section) => `${section.key}${section.items.length}`).join()}`}
+              sections={sections}
+              activeId={deck[deckIndex]?.site.id}
+              keyOf={(item) => item.site.id}
+              onActiveChange={(item) => setDeckTopId(item.site.id)}
+              height={deckHeight}
+              // The next card carries on down behind the tab bar.
+              extraBelow={tabSpace}
+              renderCard={(item, active, bringIntoView) => (
+                <ParkCard
+                  site={item.site}
+                  score={item.score}
+                  reason={item.reason}
+                  rank={item.rank}
+                  markWishlist
+                  onExpand={() => setPeekSite(item.site)}
+                  onPress={() => {
+                    if (!active) {
+                      // The card peeking up from below: bring it into view.
+                      bringIntoView();
+                    } else {
+                      // Zoom onto the card's region.
+                      focusPark(item.site);
+                    }
+                  }}
+                  style={styles.deckCard}
+                />
+              )}
+            />
+          ) : deck.length > 0 ? (
             <CardCarousel
               items={deck}
               index={deckIndex}
@@ -495,6 +593,7 @@ export default function ExploreScreen() {
                   rank={item.rank}
                   // The full decks mix saved parks in with everything else.
                   markWishlist={scope === 'parks' || scope === 'all'}
+                  onExpand={() => setPeekSite(item.site)}
                   onPress={() => {
                     if (index !== deckIndex) {
                       // A neighbour peeking in at the edge: bring it to the centre.
@@ -512,7 +611,12 @@ export default function ExploreScreen() {
               )}
               // The cards' taps depend on these, so redraw them when either changes.
               extraData={`${deckIndex}:${anchor?.id ?? ''}`}
-              style={styles.deck}
+              // No card peeks up below here, so the card runs down into that
+              // room, to just above the tab bar's raised circle. Lists grow to
+              // fill their parent by default, and the sheet runs on behind the
+              // tab bar, so pin the height.
+              side={22}
+              style={{ height: deckHeight + RAISE - 6 - SHEET_LOWER, flexGrow: 0 }}
             />
           ) : (
             <View style={styles.empty}>
@@ -533,6 +637,42 @@ export default function ExploreScreen() {
           )}
         </CardSheet>
       </View>
+
+      <FullMapView
+        visible={fullMapOpen}
+        title={scopeLabel.charAt(0).toUpperCase() + scopeLabel.slice(1)}
+        sites={mapSites}
+        rankById={rankById}
+        matchIds={matchIds}
+        featureIcons={scope === 'parks'}
+        onClose={() => setFullMapOpen(false)}
+        onView={(site) => {
+          setFullMapOpen(false);
+          focusPark(site);
+        }}
+      />
+
+      <SearchPanel
+        visible={searchOpen}
+        sites={mapSites}
+        scopeLabel={scopeLabel}
+        onPick={(site) => {
+          setSearchOpen(false);
+          focusPark(site);
+        }}
+        onClose={() => setSearchOpen(false)}
+      />
+
+      <SitePeek
+        site={peekSite}
+        // Great Smoky Mountains, the busiest park, is the crowding yardstick.
+        referenceVisits={allSites.find((site) => site.id === 'grsm')?.vis ?? undefined}
+        onDismiss={() => setPeekSite(null)}
+        onOpen={(site) => {
+          setPeekSite(null);
+          router.push(`/site/${site.id}`);
+        }}
+      />
 
       <FilterSheet
         visible={filterOpen}
@@ -564,15 +704,25 @@ function CardSheet({
   onOpenChange,
   title,
   status,
+  pages,
+  extra = 0,
+  below = 0,
   children,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   title: string;
   status?: string;
+  /** Dots for the deck's sections, when it has more than one. */
+  pages?: { count: number; active: number };
+  /** Extra deck height, for the sectioned deck's peek. */
+  extra?: number;
+  /** Room under the deck, behind the floating tab bar. */
+  below?: number;
   children: ReactNode;
 }) {
-  const closedY = SHEET_HEIGHT - SHEET_BAR;
+  const { deck: deckHeight, sheet: sheetHeight } = useSheetSize(extra);
+  const closedY = sheetHeight + DECK_GAP - SHEET_BAR;
   const offset = useSharedValue(open ? 0 : closedY);
   const dragStart = useSharedValue(0);
 
@@ -605,29 +755,42 @@ function CardSheet({
     });
 
   const slide = useAnimatedStyle(() => ({ transform: [{ translateY: offset.get() }] }));
+  // The cards fade out as the sheet closes: closed, the top of the deck
+  // would otherwise sit behind the see-through tab bar.
+  const deckFade = useAnimatedStyle(() => ({
+    opacity: interpolate(offset.get(), [0, closedY * 0.6], [1, 0], Extrapolation.CLAMP),
+  }));
 
   return (
-    <Animated.View style={[styles.sheet, slide]}>
+    <Animated.View style={[styles.sheet, { height: sheetHeight + DECK_GAP + below }, slide]}>
       <GestureDetector gesture={Gesture.Race(drag, tapBar)}>
         <View
           accessible
           accessibilityRole="button"
-          accessibilityLabel={open ? `Hide ${title}` : `Show ${title}`}
+          accessibilityLabel={`${open ? 'Hide' : 'Show'} ${title.replaceAll(' → ', ' to ')}`}
           onAccessibilityTap={() => onOpenChange(!open)}
           style={styles.sheetBar}
         >
           <View style={styles.sheetHandle} />
           <View style={styles.sheetHead}>
-            <Heading size={17} numberOfLines={1} style={styles.headerText}>
-              {title}
-            </Heading>
+            <SheetTitle title={title} />
+            {open && pages ? (
+              <View style={styles.pageDots} accessibilityLabel={`Section ${pages.active + 1} of ${pages.count}`}>
+                {Array.from({ length: pages.count }, (_, index) => (
+                  <View
+                    key={index}
+                    style={[styles.pageDot, index === pages.active && styles.pageDotActive]}
+                  />
+                ))}
+              </View>
+            ) : null}
             <BodyText size={12} weight="semibold" color={colors.accentRamp[700]}>
               {open ? (status ?? '') : 'Swipe up ▴'}
             </BodyText>
           </View>
         </View>
       </GestureDetector>
-      <View style={styles.sheetBody}>{children}</View>
+      <Animated.View style={[{ height: deckHeight + below, marginTop: DECK_GAP }, deckFade]}>{children}</Animated.View>
     </Animated.View>
   );
 }
@@ -688,9 +851,7 @@ function ScopeMenu({
         accessibilityLabel={`Map shows: ${current.label}. Change`}
         style={({ pressed }) => [styles.scopePill, pressed && styles.suggestionPressed]}
       >
-        <BodyText size={12} weight="semibold" color={colors.accentRamp[700]}>
-          {`${current.short} ▾`}
-        </BodyText>
+        <MapIcon />
       </Pressable>
 
       <Modal
@@ -743,6 +904,107 @@ function ScopeMenu({
 }
 
 /** The region name over a zoomed map, with a way back out of it. */
+/** The Explore title's size, and where its "x" is centred, in ems (measured). */
+const TITLE_SIZE = 26;
+const X_CENTRE_EM = 0.98;
+const LEAF_SIZE = 13;
+
+/** A small filled leaf, for a touch of the second accent beside the subtitle. */
+function LeafIcon() {
+  return (
+    <Svg width={LEAF_SIZE} height={LEAF_SIZE} viewBox="0 0 24 24">
+      <Path d="M4 20C4 10 10 4 21 3c0 11-6 17-17 17z" fill={colors.accent2Ramp[700]} />
+      <Path
+        d="M4 20L14 10"
+        stroke={colors.accent2Ramp[200]}
+        strokeWidth={2}
+        strokeLinecap="round"
+      />
+    </Svg>
+  );
+}
+
+/**
+ * The sheet's title. Each " → " in it is drawn as an arrow in the accent:
+ * the heading font has no arrow, so the phone substitutes a thin one from
+ * another font that sits low beside the heavy letters.
+ */
+/** A touch smaller than other headings, so the three-part title fits. */
+const SHEET_TITLE_SIZE = 15;
+
+/** The closed sheet's title, shown with a leaf like "Where to next?". */
+const LETS_GO = "Let's Go!";
+
+function SheetTitle({ title }: { title: string }) {
+  if (title === LETS_GO) {
+    return (
+      <View style={[styles.headerText, styles.sheetTitleRow]}>
+        <Heading size={SHEET_TITLE_SIZE} numberOfLines={1}>
+          {title}
+        </Heading>
+        <LeafIcon />
+      </View>
+    );
+  }
+  const parts = title.split(' → ');
+  if (parts.length === 1) {
+    return (
+      <Heading size={SHEET_TITLE_SIZE} numberOfLines={1} style={styles.headerText}>
+        {title}
+      </Heading>
+    );
+  }
+  return (
+    <View style={[styles.headerText, styles.sheetTitleRow]}>
+      {parts.map((part, index) => (
+        <View key={part} style={styles.sheetTitleRow}>
+          {index > 0 ? <TitleArrow /> : null}
+          {/* Only the last word gives way, with an ellipsis, if text is large. */}
+          <Heading
+            size={SHEET_TITLE_SIZE}
+            numberOfLines={1}
+            style={index === parts.length - 1 ? styles.sheetTitleLast : undefined}
+          >
+            {part}
+          </Heading>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+function TitleArrow() {
+  return (
+    <Svg width={14} height={11} viewBox="0 0 24 18" fill="none">
+      <Path
+        d="M2 9h18M13 2l7 7-7 7"
+        stroke={colors.accent}
+        strokeWidth={3.5}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </Svg>
+  );
+}
+
+/** A folded map: the scope button's icon. */
+function MapIcon() {
+  return (
+    <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
+      {['M3 6l6-3 6 3 6-3v15l-6 3-6-3-6 3z', 'M9 3v15', 'M15 6v15'].map((d) => (
+        <Path
+          key={d}
+          d={d}
+          stroke={colors.accentRamp[700]}
+          strokeWidth={2.75}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      ))}
+    </Svg>
+  );
+}
+
 function RegionTitle({
   region,
   actionLabel,
@@ -880,7 +1142,7 @@ const styles = StyleSheet.create({
   },
   header: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     justifyContent: 'space-between',
     gap: space[3],
     paddingHorizontal: space[4],
@@ -888,16 +1150,30 @@ const styles = StyleSheet.create({
   headerText: {
     flex: 1,
   },
-  headerMeta: {
+  headerMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
     marginTop: 2,
+  },
+  headerMetaText: {
+    flexShrink: 1,
   },
   headerActions: {
     alignItems: 'flex-end',
     gap: space[2],
   },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space[2],
+  },
+  // Matches the search button beside it.
   scopePill: {
-    paddingVertical: 6,
-    paddingHorizontal: space[3],
+    width: 34,
+    height: 34,
+    alignItems: 'center',
+    justifyContent: 'center',
     borderRadius: radius.pill,
     borderWidth: 1.5,
     borderColor: colors.accent,
@@ -925,73 +1201,63 @@ const styles = StyleSheet.create({
   scopeOptionActive: {
     backgroundColor: colors.accentRamp[100],
   },
-  searchWrap: {
-    // Above the stage, so the suggestions can hang over the map.
-    zIndex: 10,
-    elevation: 10,
-  },
-  search: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: space[3],
-    marginHorizontal: space[4],
-    paddingHorizontal: space[4],
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    borderColor: colors.divider,
-    backgroundColor: colors.surface,
-  },
-  searchInput: {
-    flex: 1,
-    paddingVertical: 11,
-    fontFamily: fonts.body,
-    fontSize: 15,
-    color: colors.text,
-  },
-  searchClear: {
-    paddingLeft: space[2],
-  },
-  searchMiss: {
-    padding: space[3],
-  },
-  suggestions: {
-    position: 'absolute',
-    top: '100%',
-    left: space[4],
-    right: space[4],
-    marginTop: space[2],
-    borderRadius: radius.md,
-    backgroundColor: colors.neutral[100],
-    overflow: 'hidden',
-    ...shadow.sm,
-  },
-  suggestion: {
-    paddingVertical: space[2],
-    paddingHorizontal: space[4],
-    gap: 1,
-  },
-  suggestionDivider: {
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.divider,
-  },
   suggestionPressed: {
     backgroundColor: colors.tintText07,
   },
   stage: {
     flex: 1,
-    marginTop: space[3],
+    // A little more air above and below the key.
+    marginTop: space[4],
     // The closed sheet's deck sits below this edge and stays hidden.
     overflow: 'hidden',
   },
   keyWrap: {
     marginHorizontal: space[4],
+    marginBottom: space[2],
     overflow: 'hidden',
   },
   mapArea: {
     flex: 1,
+    // Centres the map in the room between the key and the card sheet.
+    justifyContent: 'center',
+  },
+  // A rounded label box, like the key above it.
+  mapTitle: {
+    alignSelf: 'center',
+    // Drawn over the map's top edge, which it now overlaps a little.
+    zIndex: 1,
+    elevation: 1,
+    // Clear of the key above, and close to the map it names; kept small so
+    // the map gets the height.
+    marginTop: space[3],
+    marginBottom: -space[2],
+    paddingVertical: 4,
+    paddingHorizontal: space[4],
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: colors.neutral[300],
+    backgroundColor: colors.neutral[100],
+  },
+  // Centred under the map, just above the closed sheet.
+  expandBelow: {
+    position: 'absolute',
+    alignSelf: 'center',
+    width: 34,
+    height: 34,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: radius.pill,
+    backgroundColor: colors.neutral[100],
+    ...shadow.sm,
+  },
+  mapTitleRaised: {
+    // Nudged down towards the map; it's drawn above it (zIndex).
+    transform: [{ translateY: space[1] }],
   },
   key: {
     padding: space[3],
+    // A little taller than its contents, so the key reads as its own block.
+    paddingVertical: space[4],
     borderRadius: radius.md,
     backgroundColor: colors.neutral[100],
   },
@@ -1094,7 +1360,6 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    height: SHEET_HEIGHT,
     borderTopLeftRadius: radius.lg,
     borderTopRightRadius: radius.lg,
     backgroundColor: colors.neutral[100],
@@ -1104,6 +1369,30 @@ const styles = StyleSheet.create({
     height: SHEET_BAR,
     paddingHorizontal: space[4],
     paddingTop: space[2],
+  },
+  pageDots: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  pageDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: colors.neutral[400],
+  },
+  pageDotActive: {
+    width: 16,
+    backgroundColor: colors.accent,
+  },
+  sheetTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    flexShrink: 1,
+  },
+  sheetTitleLast: {
+    flexShrink: 1,
   },
   sheetHandle: {
     alignSelf: 'center',
@@ -1117,10 +1406,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: space[3],
     marginTop: space[2],
-  },
-  // Full width, so the carousel's neighbouring cards can peek in at the edges.
-  sheetBody: {
-    height: DECK_HEIGHT,
   },
   deck: {
     flex: 1,
