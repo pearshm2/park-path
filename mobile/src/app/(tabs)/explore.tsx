@@ -45,6 +45,7 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Svg, { Path } from 'react-native-svg';
 import { scheduleOnRN } from 'react-native-worklets';
 
 import { listSites } from '../../api/parks';
@@ -391,7 +392,12 @@ export default function ExploreScreen() {
               actionLabel="Full map"
               onAction={() => setAnchor(null)}
             />
-          ) : null}
+          ) : (
+            // What the map is showing, now that the scope button is an icon.
+            <Heading size={16} style={styles.mapTitle}>
+              {scopeLabel.charAt(0).toUpperCase() + scopeLabel.slice(1)}
+            </Heading>
+          )}
           <ParkMap
             sites={mapSites}
             rankById={rankById}
@@ -668,9 +674,7 @@ function ScopeMenu({
         accessibilityLabel={`Map shows: ${current.label}. Change`}
         style={({ pressed }) => [styles.scopePill, pressed && styles.suggestionPressed]}
       >
-        <BodyText size={12} weight="semibold" color={colors.accentRamp[700]}>
-          {`${current.short} ▾`}
-        </BodyText>
+        <MapIcon />
       </Pressable>
 
       <Modal
@@ -723,6 +727,24 @@ function ScopeMenu({
 }
 
 /** The region name over a zoomed map, with a way back out of it. */
+/** A folded map: the scope button's icon. */
+function MapIcon() {
+  return (
+    <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
+      {['M3 6l6-3 6 3 6-3v15l-6 3-6-3-6 3z', 'M9 3v15', 'M15 6v15'].map((d) => (
+        <Path
+          key={d}
+          d={d}
+          stroke={colors.accentRamp[700]}
+          strokeWidth={2.75}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      ))}
+    </Svg>
+  );
+}
+
 function RegionTitle({
   region,
   actionLabel,
@@ -880,9 +902,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: space[2],
   },
+  // Matches the search button beside it.
   scopePill: {
-    paddingVertical: 6,
-    paddingHorizontal: space[3],
+    width: 34,
+    height: 34,
+    alignItems: 'center',
+    justifyContent: 'center',
     borderRadius: radius.pill,
     borderWidth: 1.5,
     borderColor: colors.accent,
@@ -925,6 +950,11 @@ const styles = StyleSheet.create({
   },
   mapArea: {
     flex: 1,
+    // Centres the map in the room between the key and the card sheet.
+    justifyContent: 'center',
+  },
+  mapTitle: {
+    textAlign: 'center',
   },
   key: {
     padding: space[3],

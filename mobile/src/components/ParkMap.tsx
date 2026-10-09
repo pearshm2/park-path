@@ -54,10 +54,16 @@ import { featureForPark, FeatureGlyph, type Feature } from './FeatureGlyph';
 import { terrainTone } from './TerrainIcon';
 import { BodyText } from './Typography';
 
-/** d3-geo wants a FeatureCollection to fit the projection against. */
-const STATES_COLLECTION = {
+/**
+ * What the projection is sized to: every state but Alaska. Alaska's inset
+ * trails its Aleutian Islands far to the left, so fitting to it pushed the
+ * lower 48 off-centre and shrank them. Without it the map is about 8%
+ * larger and centred; only the far tip of the Aleutians (no parks there)
+ * runs off the left edge, and Alaska's parks all stay in view.
+ */
+const FIT_COLLECTION = {
   type: 'FeatureCollection' as const,
-  features: US_STATES,
+  features: US_STATES.filter((state) => state.id !== '02'),
 };
 
 /** How each visit status draws as a small dot. Shared with the map key. */
@@ -153,7 +159,7 @@ export function ParkMap({
         [8, 8],
         [size.width - 8, size.height - 8],
       ],
-      STATES_COLLECTION,
+      FIT_COLLECTION,
     );
     const toPath = geoPath(projection);
 
