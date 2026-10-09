@@ -332,13 +332,13 @@ export default function ExploreScreen() {
         <View style={styles.headerText}>
           <Heading size={26}>Explore</Heading>
           <BodyText size={12} color={colors.neutral[600]} style={styles.headerMeta}>
+            {/* The key and the title above the map already say what's shown;
+                this line is the invitation, plus anything the map can't say. */}
             {scope === 'wishlist'
-              ? `Your wishlist · ${wishlist.length} saved`
+              ? `Where to next? Pick from your ${wishlist.length} saved`
               : matchIds.size > 0
-                ? `Your top ${picks.length} · ${matchIds.size} more match your filters`
-                : scope === 'parks'
-                  ? `Your top ${picks.length} of ${parks.length} national parks`
-                  : `Your top ${picks.length}, plus all ${allSites.length} sites`}
+                ? `Where to next? ${matchIds.size} more fit your filters`
+                : 'Where to next?'}
           </BodyText>
         </View>
         <View style={styles.headerActions}>
