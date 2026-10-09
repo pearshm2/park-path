@@ -65,6 +65,9 @@ import {
   ParkCard,
   ParkMap,
   SearchButton,
+  SectionDeck,
+  SECTION_PEEK,
+  type DeckSection,
   SearchPanel,
   SitePeek,
   MATCH_DOT,
@@ -99,13 +102,13 @@ const TEXT_SHARE = 0.7;
  * The deck and sheet heights at the phone's text size. The cards are mostly
  * text, so a fixed height cuts off their bottom row when text is enlarged.
  */
-function useSheetSize() {
+function useSheetSize(extra = 0) {
   const { fontScale } = useWindowDimensions();
   // The phone's text size and the app's own Settings choice multiply.
   const scale = Math.min(Math.max(fontScale * useTextScale(), 1), MAX_DECK_SCALE);
   // About 70% of a card's height is text; the band, padding and gaps stay put.
   const deck = Math.round(DECK_HEIGHT * (1 + (scale - 1) * TEXT_SHARE));
-  return { deck, sheet: SHEET_BAR + deck + space[2] };
+  return { deck: deck + extra, sheet: SHEET_BAR + deck + extra + space[2] };
 }
 const SHEET_MS = 260;
 
@@ -168,7 +171,6 @@ function byRegion(a: DeckItem, b: DeckItem): number {
 export default function ExploreScreen() {
   const insets = useSafeAreaInsets();
   const { width: windowWidth } = useWindowDimensions();
-  const { sheet: sheetHeight } = useSheetSize();
   const textScale = useTextScale();
   const { answers } = useQuiz();
 
@@ -269,6 +271,30 @@ export default function ExploreScreen() {
     return [...top, ...matched, ...rest];
   }, [showingWishlist, wishlist, picks, mapSites, matchById, rankById, matchIds]);
 
+  /**
+   * The full deck split into sections for SectionDeck: each is a page you
+   * swipe sideways to, with its cards running downward. The wishlist stays
+   * one sideways row.
+   */
+  const sections = useMemo<DeckSection<DeckItem>[] | null>(() => {
+    if (showingWishlist) return null;
+    const recommended = baseDeck.filter((item) => item.rank !== undefined);
+    const unranked = baseDeck.filter((item) => item.rank === undefined);
+    return [
+      { key: 'recommended', title: 'Recommended For You', items: recommended },
+      {
+        key: 'filtered',
+        title: 'Filtered For You',
+        items: unranked.filter((item) => matchIds.has(item.site.id)),
+      },
+      {
+        key: 'explore',
+        title: 'Parks to Explore',
+        items: unranked.filter((item) => !matchIds.has(item.site.id)),
+      },
+    ].filter((section) => section.items.length > 0);
+  }, [showingWishlist, baseDeck, matchIds]);
+
   const focusRegion = anchor ? regionForState(anchor.state) : undefined;
 
   /** With a park tapped: every park on the map in its region, best fit first. */
@@ -324,18 +350,26 @@ export default function ExploreScreen() {
    * then everything else. While the sheet is open its title names the
    * section of the card on top, and changes as you scroll past each one.
    */
-  function sectionTitle(item: DeckItem | undefined): string {
-    if (item?.rank !== undefined) return 'Recommended For You';
-    if (item && matchIds.has(item.site.id)) return 'Filtered For You';
-    return 'Parks to Explore';
-  }
+  /** The section the top card is in, and the card's place in it. */
+  const useSections = sections !== null && !anchor;
+  // The sectioned deck needs room for the next card to peek up from below.
+  const { deck: deckHeight, sheet: sheetHeight } = useSheetSize(useSections ? SECTION_PEEK : 0);
+  const inSection = useMemo(() => {
+    if (!useSections || !topCard) return null;
+    const page = sections.findIndex((section) =>
+      section.items.some((item) => item.site.id === topCard.site.id),
+    );
+    if (page < 0) return null;
+    const index = sections[page].items.findIndex((item) => item.site.id === topCard.site.id);
+    return { page, index, section: sections[page] };
+  }, [useSections, sections, topCard]);
 
   const deckTitle = anchor
     ? (focusRegion?.label ?? anchor.name)
     : scope === 'wishlist'
       ? 'Your wishlist'
-      : topCard
-        ? sectionTitle(topCard)
+      : inSection
+        ? inSection.section.title
         : // Closed, there's no card in view: the map's own title says which
           // parks, and the deck is the paths to them.
           'Parks → Paths → Destination';
@@ -453,9 +487,51 @@ export default function ExploreScreen() {
           open={sheetOpen}
           onOpenChange={openSheet}
           title={deckTitle}
-          status={deck.length > 0 ? `${deckIndex + 1} of ${deck.length}` : undefined}
+          status={
+            inSection
+              ? `${inSection.index + 1} of ${inSection.section.items.length}`
+              : deck.length > 0
+                ? `${deckIndex + 1} of ${deck.length}`
+                : undefined
+          }
+          extra={useSections ? SECTION_PEEK : 0}
+          pages={
+            useSections && sections.length > 1 && inSection
+              ? { count: sections.length, active: inSection.page }
+              : undefined
+          }
         >
-          {deck.length > 0 ? (
+          {useSections && deck.length > 0 ? (
+            <SectionDeck
+              // New sections (another view, other filters) start a fresh deck.
+              key={`${scope}:${sections.map((section) => `${section.key}${section.items.length}`).join()}`}
+              sections={sections}
+              activeId={deck[deckIndex]?.site.id}
+              keyOf={(item) => item.site.id}
+              onActiveChange={(item) => setDeckTopId(item.site.id)}
+              height={deckHeight}
+              renderCard={(item, active, bringIntoView) => (
+                <ParkCard
+                  site={item.site}
+                  score={item.score}
+                  reason={item.reason}
+                  rank={item.rank}
+                  markWishlist
+                  onExpand={() => setPeekSite(item.site)}
+                  onPress={() => {
+                    if (!active) {
+                      // The card peeking up from below: bring it into view.
+                      bringIntoView();
+                    } else {
+                      // Zoom onto the card's region.
+                      focusPark(item.site);
+                    }
+                  }}
+                  style={styles.deckCard}
+                />
+              )}
+            />
+          ) : deck.length > 0 ? (
             <CardCarousel
               items={deck}
               index={deckIndex}
@@ -575,15 +651,21 @@ function CardSheet({
   onOpenChange,
   title,
   status,
+  pages,
+  extra = 0,
   children,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   title: string;
   status?: string;
+  /** Dots for the deck's sections, when it has more than one. */
+  pages?: { count: number; active: number };
+  /** Extra deck height, for the sectioned deck's peek. */
+  extra?: number;
   children: ReactNode;
 }) {
-  const { deck: deckHeight, sheet: sheetHeight } = useSheetSize();
+  const { deck: deckHeight, sheet: sheetHeight } = useSheetSize(extra);
   const closedY = sheetHeight - SHEET_BAR;
   const offset = useSharedValue(open ? 0 : closedY);
   const dragStart = useSharedValue(0);
@@ -631,6 +713,16 @@ function CardSheet({
           <View style={styles.sheetHandle} />
           <View style={styles.sheetHead}>
             <SheetTitle title={title} />
+            {open && pages ? (
+              <View style={styles.pageDots} accessibilityLabel={`Section ${pages.active + 1} of ${pages.count}`}>
+                {Array.from({ length: pages.count }, (_, index) => (
+                  <View
+                    key={index}
+                    style={[styles.pageDot, index === pages.active && styles.pageDotActive]}
+                  />
+                ))}
+              </View>
+            ) : null}
             <BodyText size={12} weight="semibold" color={colors.accentRamp[700]}>
               {open ? (status ?? '') : 'Swipe up ▴'}
             </BodyText>
@@ -1176,6 +1268,21 @@ const styles = StyleSheet.create({
     height: SHEET_BAR,
     paddingHorizontal: space[4],
     paddingTop: space[2],
+  },
+  pageDots: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  pageDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: colors.neutral[400],
+  },
+  pageDotActive: {
+    width: 16,
+    backgroundColor: colors.accent,
   },
   sheetTitleRow: {
     flexDirection: 'row',

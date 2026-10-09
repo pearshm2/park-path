@@ -17,6 +17,7 @@ export { ParkCard } from './ParkCard';
 export { MATCH_DOT, ParkMap, PICK_FILL, STATUS_DOT } from './ParkMap';
 export { ProgressBar } from './ProgressBar';
 export { SearchButton, SearchPanel } from './SearchPanel';
+export { SECTION_PEEK, SectionDeck, type DeckSection } from './SectionDeck';
 export { SitePeek } from './SitePeek';
 export { Tag } from './Tag';
 export { TERRAIN_LABEL, TerrainIcon, terrainTone } from './TerrainIcon';
