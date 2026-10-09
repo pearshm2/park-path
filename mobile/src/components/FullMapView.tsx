@@ -27,6 +27,9 @@ import { Button } from './Button';
 import { ParkMap } from './ParkMap';
 import { BodyText, Heading } from './Typography';
 
+/** Room kept for a tapped park's card, which the title sits just above. */
+const CHIP_SLOT = 72;
+
 /** How long the map takes to fade in once the screen has turned. */
 const FADE_MS = 180;
 
@@ -127,8 +130,23 @@ function FullMapBody({
                 onClose();
               }}
             />
+          </View>
+
+          {/* The title sits bottom right, over open ocean, just above where a
+              tapped park's card appears, so it never covers the map. */}
+          <View
+            pointerEvents="none"
+            style={[
+              styles.titleWrap,
+              {
+                bottom: insets.bottom + space[4] + CHIP_SLOT + space[2],
+                // Further out than the park card below, into the margin.
+                right: insets.right + space[1],
+              },
+            ]}
+          >
             <View style={styles.titles}>
-              <Heading size={18} numberOfLines={1}>
+              <Heading size={16} numberOfLines={1}>
                 {title}
               </Heading>
             </View>
@@ -203,6 +221,11 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     gap: space[2],
     maxWidth: '24%',
+  },
+  titleWrap: {
+    position: 'absolute',
+    alignItems: 'flex-end',
+    maxWidth: 360,
   },
   titles: {
     flexShrink: 1,

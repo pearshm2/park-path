@@ -34,7 +34,9 @@ import Animated, {
 import { scheduleOnRN } from 'react-native-worklets';
 
 /** How much of the screen edge each side leaves for the neighbours to peek. */
-const SIDE = 28;
+const DEFAULT_SIDE = 28;
+/** Room under each card for its shadow; the list is this much taller than a card. */
+export const CAROUSEL_SHADOW = 14;
 const GAP = 12;
 /**
  * How long a flick keeps gliding. Android's "normal" is 0.985, which stops
@@ -59,6 +61,8 @@ type CardCarouselProps<T> = {
    * tap handler.
    */
   extraData?: unknown;
+  /** Side margin per card; smaller makes cards wider and neighbours peek less. */
+  side?: number;
   style?: StyleProp<ViewStyle>;
 };
 
@@ -69,10 +73,11 @@ export function CardCarousel<T>({
   keyOf,
   renderCard,
   extraData,
+  side = DEFAULT_SIDE,
   style,
 }: CardCarouselProps<T>) {
   const { width } = useWindowDimensions();
-  const cardWidth = width - SIDE * 2;
+  const cardWidth = width - side * 2;
   const interval = cardWidth + GAP;
   const count = items.length;
 
@@ -152,7 +157,7 @@ export function CardCarousel<T>({
       windowSize={5}
       getItemLayout={(_data, itemIndex) => ({
         length: interval,
-        offset: SIDE + itemIndex * interval,
+        offset: side + itemIndex * interval,
         index: itemIndex,
       })}
       onContentSizeChange={() => {
@@ -162,7 +167,7 @@ export function CardCarousel<T>({
       }}
       onScroll={onScroll}
       scrollEventThrottle={16}
-      contentContainerStyle={styles.content}
+      contentContainerStyle={{ paddingHorizontal: side }}
       ItemSeparatorComponent={Separator}
       renderItem={({ item, index: itemIndex }) => (
         <CarouselCard index={itemIndex} interval={interval} scrollX={scrollX} width={cardWidth}>
@@ -204,15 +209,12 @@ function CarouselCard({
 }
 
 const styles = StyleSheet.create({
-  content: {
-    paddingHorizontal: SIDE,
-  },
   separator: {
     width: GAP,
   },
   card: {
     height: '100%',
     // Room under each card for its shadow.
-    paddingBottom: 14,
+    paddingBottom: CAROUSEL_SHADOW,
   },
 });

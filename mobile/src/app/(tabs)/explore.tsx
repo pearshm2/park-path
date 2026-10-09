@@ -57,6 +57,7 @@ import {
   activeFilterCount,
   BodyText,
   CardCarousel,
+  ExpandIcon,
   CROWD_CEILING,
   FilterButton,
   FilterSheet,
@@ -80,6 +81,7 @@ import {
 } from '../../components';
 import type { Site, SiteStatus } from '../../data/parks';
 import { REGIONS, regionForState, type Region } from '../../data/regions';
+import { RAISE } from '../../components/tabBar';
 import { useQuiz } from '../../quiz/QuizContext';
 import { colors, radius, shadow, space, useTextScale } from '../../theme';
 
@@ -91,6 +93,16 @@ const MAP_ASPECT = 1.5;
 
 /** The sheet's bar, which is all that shows while it is closed. */
 const SHEET_BAR = 50;
+/**
+ * Extra room under the map while the sheet is down. The map is centred in
+ * the space it has, so this lifts it by half, and leaves room below for the
+ * full-screen button.
+ */
+const EXTRA_LIFT = 72;
+/** How far the open sheet sits lower than its deck needs, to give the map room. */
+const SHEET_LOWER = 28;
+/** Breathing room between the sheet's title row and the top card. */
+const DECK_GAP = 8;
 /** The deck's height at normal text size, including the cards peeking out behind the top one. */
 const DECK_HEIGHT = 214;
 /**
@@ -111,7 +123,10 @@ function useSheetSize(extra = 0) {
   const scale = Math.min(Math.max(fontScale * useTextScale(), 1), MAX_DECK_SCALE);
   // About 70% of a card's height is text; the band, padding and gaps stay put.
   const deck = Math.round(DECK_HEIGHT * (1 + (scale - 1) * TEXT_SHARE));
-  return { deck: deck + extra, sheet: SHEET_BAR + deck + extra + space[2] };
+  // The open sheet stops SHEET_LOWER short of holding the whole deck: the
+  // bottom of the deck (the next card's peek) runs on behind the tab bar,
+  // and the map keeps that much more room.
+  return { deck: deck + extra, sheet: SHEET_BAR + deck + extra + space[2] - SHEET_LOWER };
 }
 const SHEET_MS = 260;
 
@@ -355,8 +370,9 @@ export default function ExploreScreen() {
    */
   /** The section the top card is in, and the card's place in it. */
   const useSections = sections !== null && !anchor;
-  // The sectioned deck needs room for the next card to peek up from below.
-  const { deck: deckHeight, sheet: sheetHeight } = useSheetSize(useSections ? SECTION_PEEK : 0);
+  // Sized for the sectioned deck in every view, so the sheet and card keep
+  // their size when tapping a card switches to the region carousel.
+  const { deck: deckHeight, sheet: sheetHeight } = useSheetSize(SECTION_PEEK);
   // The tab bar floats over the bottom of the screen; the sheet runs behind it.
   const tabSpace = useTabBarSpace();
   const inSection = useMemo(() => {
@@ -375,9 +391,8 @@ export default function ExploreScreen() {
       ? 'Your wishlist'
       : inSection
         ? inSection.section.title
-        : // Closed, there's no card in view: the map's own title says which
-          // parks, and the deck is the paths to them.
-          'Parks → Paths → Destination';
+        : // Closed, there's no card in view: an invitation to swipe up.
+          LETS_GO;
 
   return (
     <View style={[styles.screen, { paddingTop: insets.top + space[2] }]}>
@@ -448,7 +463,12 @@ export default function ExploreScreen() {
 
         {/* Deliberately not a layout-animated view: the map has to be told
             its new size when the sheet opens, or it overflows under it. */}
-        <View style={[styles.mapArea, { paddingBottom: (sheetOpen ? sheetHeight : SHEET_BAR) + tabSpace }]}>
+        <View style={[styles.mapArea, {
+              paddingBottom:
+                // With the sheet down there's room to spare: lift the map a
+                // little towards the key rather than centring it.
+                (sheetOpen ? sheetHeight + DECK_GAP : SHEET_BAR + EXTRA_LIFT) + tabSpace,
+            }]}>
           {focusRegion ? (
             <RegionTitle
               region={focusRegion}
@@ -457,8 +477,10 @@ export default function ExploreScreen() {
             />
           ) : (
             // What the map is showing, now that the scope button is an icon.
-            <View style={styles.mapTitle}>
-              <Heading size={16}>
+            // With the sheet down the map sits lower, so lift the title a
+            // touch to keep it close under the key.
+            <View style={[styles.mapTitle, !sheetOpen && styles.mapTitleRaised]}>
+              <Heading size={14}>
                 {scopeLabel.charAt(0).toUpperCase() + scopeLabel.slice(1)}
               </Heading>
             </View>
@@ -472,7 +494,9 @@ export default function ExploreScreen() {
             // the cards leaves the whole map in view.
             focusRegion={focusRegion?.id ?? null}
             featureIcons={scope === 'parks'}
-            onExpand={() => setFullMapOpen(true)}
+            // With the sheet open there's no room under the map, so the
+            // button stays in the map's corner; closed, it sits below.
+            onExpand={sheetOpen ? () => setFullMapOpen(true) : undefined}
             onSelectSite={(site) => {
               if (anchor && site.id === highlightId) {
                 // Tapping the top card's pin again zooms back out.
@@ -486,6 +510,22 @@ export default function ExploreScreen() {
             }}
             style={[styles.map, { maxHeight: windowWidth / MAP_ASPECT }]}
           />
+          {!sheetOpen ? (
+            <Pressable
+              onPress={() => setFullMapOpen(true)}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel="Open the map full screen"
+              style={({ pressed }) => [
+                styles.expandBelow,
+                // Up near the map; the room under it is EXTRA_LIFT's.
+                { bottom: SHEET_BAR + tabSpace + space[8] + space[1] },
+                pressed && styles.suggestionPressed,
+              ]}
+            >
+              <ExpandIcon size={16} color={colors.accentRamp[700]} />
+            </Pressable>
+          ) : null}
         </View>
 
         <CardSheet
@@ -499,7 +539,7 @@ export default function ExploreScreen() {
                 ? `${deckIndex + 1} of ${deck.length}`
                 : undefined
           }
-          extra={useSections ? SECTION_PEEK : 0}
+          extra={SECTION_PEEK}
           below={tabSpace}
           pages={
             useSections && sections.length > 1 && inSection
@@ -571,7 +611,12 @@ export default function ExploreScreen() {
               )}
               // The cards' taps depend on these, so redraw them when either changes.
               extraData={`${deckIndex}:${anchor?.id ?? ''}`}
-              style={{ height: deckHeight }}
+              // No card peeks up below here, so the card runs down into that
+              // room, to just above the tab bar's raised circle. Lists grow to
+              // fill their parent by default, and the sheet runs on behind the
+              // tab bar, so pin the height.
+              side={22}
+              style={{ height: deckHeight + RAISE - 6 - SHEET_LOWER, flexGrow: 0 }}
             />
           ) : (
             <View style={styles.empty}>
@@ -677,7 +722,7 @@ function CardSheet({
   children: ReactNode;
 }) {
   const { deck: deckHeight, sheet: sheetHeight } = useSheetSize(extra);
-  const closedY = sheetHeight - SHEET_BAR;
+  const closedY = sheetHeight + DECK_GAP - SHEET_BAR;
   const offset = useSharedValue(open ? 0 : closedY);
   const dragStart = useSharedValue(0);
 
@@ -717,7 +762,7 @@ function CardSheet({
   }));
 
   return (
-    <Animated.View style={[styles.sheet, { height: sheetHeight + below }, slide]}>
+    <Animated.View style={[styles.sheet, { height: sheetHeight + DECK_GAP + below }, slide]}>
       <GestureDetector gesture={Gesture.Race(drag, tapBar)}>
         <View
           accessible
@@ -745,7 +790,7 @@ function CardSheet({
           </View>
         </View>
       </GestureDetector>
-      <Animated.View style={[{ height: deckHeight + below }, deckFade]}>{children}</Animated.View>
+      <Animated.View style={[{ height: deckHeight + below, marginTop: DECK_GAP }, deckFade]}>{children}</Animated.View>
     </Animated.View>
   );
 }
@@ -887,7 +932,20 @@ function LeafIcon() {
 /** A touch smaller than other headings, so the three-part title fits. */
 const SHEET_TITLE_SIZE = 15;
 
+/** The closed sheet's title, shown with a leaf like "Where to next?". */
+const LETS_GO = "Let's Go!";
+
 function SheetTitle({ title }: { title: string }) {
+  if (title === LETS_GO) {
+    return (
+      <View style={[styles.headerText, styles.sheetTitleRow]}>
+        <Heading size={SHEET_TITLE_SIZE} numberOfLines={1}>
+          {title}
+        </Heading>
+        <LeafIcon />
+      </View>
+    );
+  }
   const parts = title.split(' → ');
   if (parts.length === 1) {
     return (
@@ -1148,12 +1206,14 @@ const styles = StyleSheet.create({
   },
   stage: {
     flex: 1,
-    marginTop: space[3],
+    // A little more air above and below the key.
+    marginTop: space[4],
     // The closed sheet's deck sits below this edge and stays hidden.
     overflow: 'hidden',
   },
   keyWrap: {
     marginHorizontal: space[4],
+    marginBottom: space[2],
     overflow: 'hidden',
   },
   mapArea: {
@@ -1164,18 +1224,40 @@ const styles = StyleSheet.create({
   // A rounded label box, like the key above it.
   mapTitle: {
     alignSelf: 'center',
-    // Clear of the key above, and close to the map it names.
-    marginTop: space[6],
+    // Drawn over the map's top edge, which it now overlaps a little.
+    zIndex: 1,
+    elevation: 1,
+    // Clear of the key above, and close to the map it names; kept small so
+    // the map gets the height.
+    marginTop: space[3],
     marginBottom: -space[2],
-    paddingVertical: 6,
+    paddingVertical: 4,
     paddingHorizontal: space[4],
     borderRadius: radius.pill,
     borderWidth: 1,
     borderColor: colors.neutral[300],
     backgroundColor: colors.neutral[100],
   },
+  // Centred under the map, just above the closed sheet.
+  expandBelow: {
+    position: 'absolute',
+    alignSelf: 'center',
+    width: 34,
+    height: 34,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: radius.pill,
+    backgroundColor: colors.neutral[100],
+    ...shadow.sm,
+  },
+  mapTitleRaised: {
+    // Nudged down towards the map; it's drawn above it (zIndex).
+    transform: [{ translateY: space[1] }],
+  },
   key: {
     padding: space[3],
+    // A little taller than its contents, so the key reads as its own block.
+    paddingVertical: space[4],
     borderRadius: radius.md,
     backgroundColor: colors.neutral[100],
   },

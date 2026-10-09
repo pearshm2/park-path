@@ -34,16 +34,27 @@ import Animated, {
 } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
 
-/** Side margin: sections are whole pages, so cards can run nearly full width. */
-const SIDE = 16;
+import { colors } from '../theme';
+
+/**
+ * Side margins: a touch narrower on the left than the right, which holds
+ * the column of dots for the cards in a section.
+ */
+const SIDE_LEFT = 12;
+const SIDE_RIGHT = 22;
 /** Space between a card and the one waiting below it. */
 const GAP = 10;
 /** How much of the next card shows below the current one. */
-const PEEK = 18;
+const PEEK = 6;
 /** Extra card height in this view, over the sideways carousel's. */
-const TALLER = 44;
+const TALLER = 84;
 /** How much taller the sheet must be than for the carousel. */
 export const SECTION_PEEK = PEEK + GAP + TALLER;
+
+/** A section card's height for a given deck height, so other decks can match it. */
+export function sectionCardHeight(deckHeight: number): number {
+  return Math.max(deckHeight - PEEK - GAP, 80);
+}
 
 /** The card waiting below is drawn this much smaller, as if further back. */
 const WAITING_SCALE = 0.93;
@@ -83,7 +94,7 @@ export function SectionDeck<T>({
 }: SectionDeckProps<T>) {
   const pageHeight = height + extraBelow;
   const { width } = useWindowDimensions();
-  const cardHeight = Math.max(height - PEEK - GAP, 80);
+  const cardHeight = sectionCardHeight(height);
   const interval = cardHeight + GAP;
 
   const pager = useRef<FlatList<DeckSection<T>>>(null);
@@ -245,6 +256,48 @@ function SectionPage<T>({
         )}
         extraData={current}
       />
+      {section.items.length > 1 ? (
+        <View pointerEvents="none" style={[styles.railWrap, { height: cardHeight }]}>
+          <CardRail count={section.items.length} current={current} />
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+/** At most this many dots show in the rail; longer sections slide a window. */
+const RAIL_DOTS = 7;
+
+/**
+ * Vertical dots in the right margin, the up-and-down twin of the section
+ * dots in the sheet's header: the card in view is a long bar, and in a long
+ * section the end dots shrink to say there's more beyond.
+ */
+function CardRail({ count, current }: { count: number; current: number }) {
+  const shown = Math.min(count, RAIL_DOTS);
+  // Keep the current card's dot in the middle of the window where possible.
+  const first = Math.min(Math.max(current - Math.floor(shown / 2), 0), count - shown);
+  return (
+    <View
+      style={styles.rail}
+      accessible
+      accessibilityLabel={`Card ${current + 1} of ${count}, swipe up for the next`}
+    >
+      {Array.from({ length: shown }, (_, slot) => {
+        const index = first + slot;
+        const atEdge =
+          (slot === 0 && first > 0) || (slot === shown - 1 && first + shown < count);
+        return (
+          <View
+            key={index}
+            style={[
+              styles.railDot,
+              atEdge && styles.railDotSmall,
+              index === current && styles.railDotActive,
+            ]}
+          />
+        );
+      })}
     </View>
   );
 }
@@ -297,8 +350,38 @@ function StackCard({
 }
 
 const styles = StyleSheet.create({
+  // The right margin beside the card, the rail centred in it.
+  railWrap: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    width: SIDE_RIGHT,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  rail: {
+    alignItems: 'center',
+    gap: 5,
+  },
+  railDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: colors.neutral[400],
+  },
+  railDotSmall: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+  },
+  railDotActive: {
+    width: 6,
+    height: 16,
+    backgroundColor: colors.accent,
+  },
   slot: {
-    marginHorizontal: SIDE,
+    marginLeft: SIDE_LEFT,
+    marginRight: SIDE_RIGHT,
     marginBottom: GAP,
   },
 });

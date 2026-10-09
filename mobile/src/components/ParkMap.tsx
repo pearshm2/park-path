@@ -32,7 +32,7 @@
  * are absent from the map. The prototype notes the same limitation.
  */
 
-import { geoAlbersUsa, geoPath } from 'd3-geo';
+import { geoAlbersUsa, geoPath, type GeoPath } from 'd3-geo';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Pressable,
@@ -47,7 +47,7 @@ import Svg, { Circle, G, Path, Text as SvgText } from 'react-native-svg';
 
 import type { Site, SiteStatus } from '../data/parks';
 import { REGIONS, regionForState, STATE_REGION, type RegionId } from '../data/regions';
-import { US_STATES } from '../data/usStates';
+import { US_STATES, type StateFeature } from '../data/usStates';
 import { colors, fonts, radius, shadow } from '../theme';
 import { ExpandIcon } from './ExpandIcon';
 import { featureForPark, FeatureGlyph, type Feature } from './FeatureGlyph';
@@ -92,6 +92,7 @@ const HALO = 9;
 
 /** Room left around a zoomed region, and the most it may be magnified. */
 const ZOOM_PADDING = 22;
+const ZOOM_PADDING_X = 40;
 const MAX_ZOOM = 4;
 const ZOOM_MS = 380;
 
@@ -183,12 +184,17 @@ export function ParkMap({
     const region = REGIONS.find((r) => r.id === focusRegion);
     if (!projected || !region) return IDENTITY;
 
-    const [[x0, y0], [x1, y1]] = projected.toPath.bounds({
+    const { toPath } = projected;
+    const [[x0, y0], [x1, y1]] = toPath.bounds({
       type: 'FeatureCollection',
-      features: US_STATES.filter((feature) => region.states.includes(feature.id)),
+      features: US_STATES.filter((feature) => region.states.includes(feature.id)).map(
+        (feature) => mainLand(feature, toPath),
+      ),
     });
     const k = Math.min(
-      (size.width - ZOOM_PADDING * 2) / Math.max(x1 - x0, 1),
+      // Wider at the sides: an edge park's badge (and the expand button in
+      // the corner) needs the room.
+      (size.width - ZOOM_PADDING_X * 2) / Math.max(x1 - x0, 1),
       (size.height - ZOOM_PADDING * 2) / Math.max(y1 - y0, 1),
       MAX_ZOOM,
     );
@@ -261,8 +267,12 @@ export function ParkMap({
   const filtering = (matchIds?.size ?? 0) > 0;
   // A region in focus always gets badges: Alaska & Hawaii spans so much of
   // the map that framing it barely zooms in at all.
+  // On the whole map, badges follow a pinch only (`moved`): while it eases
+  // back out of a region it passes through the same zoom, and every park in
+  // the country would flash up as a badge on the way.
   const showIcons =
-    featureIcons && (iconsAtAnyZoom || focusRegion != null || view.k >= ICON_ZOOM);
+    featureIcons &&
+    (iconsAtAnyZoom || focusRegion != null || (moved && view.k >= ICON_ZOOM));
   /** The park's feature, when badges are showing and it has one. */
   const badgeFor = (site: Site) => (showIcons ? featureForPark(site.id) : undefined);
   /** Where each badge is drawn, nudged apart where parks sit close together. */
@@ -709,6 +719,30 @@ function useMapView(target: View2D, size: { width: number; height: number }) {
 }
 
 type PlacedDot = { site: Site; x: number; y: number };
+
+/** Islands smaller than this share of a state's largest landmass don't count when framing it. */
+const MIN_LAND_SHARE = 0.01;
+
+/**
+ * A state's main landmasses only, for framing a region zoom. Alaska's
+ * outline trails the Aleutian chain far to the west (its tip even wraps
+ * past the date line, drawn out towards Hawaii), which framed Alaska &
+ * Hawaii far too wide. Hawaii's main islands all stay; no park sits on a
+ * dropped island.
+ */
+function mainLand(feature: StateFeature, toPath: GeoPath): StateFeature {
+  if (feature.geometry.type !== 'MultiPolygon') return feature;
+  const polygons = feature.geometry.coordinates;
+  const areas = polygons.map((coordinates) => toPath.area({ type: 'Polygon', coordinates }));
+  const largest = Math.max(...areas);
+  return {
+    ...feature,
+    geometry: {
+      type: 'MultiPolygon',
+      coordinates: polygons.filter((_, index) => areas[index] >= largest * MIN_LAND_SHARE),
+    },
+  };
+}
 
 const styles = StyleSheet.create({
   container: {
