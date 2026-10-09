@@ -110,6 +110,11 @@ type ParkMapProps = {
   featureIcons?: boolean;
   /** Shows a button in the bottom corner that opens the map full screen. */
   onExpand?: () => void;
+  /**
+   * Extra room for the map's own buttons, for a map that runs under the
+   * notch or status bar (the full-screen view).
+   */
+  controlInset?: { top?: number; right?: number; bottom?: number };
   onSelectSite?: (site: Site) => void;
   style?: StyleProp<ViewStyle>;
 };
@@ -122,6 +127,7 @@ export function ParkMap({
   focusRegion,
   featureIcons = false,
   onExpand,
+  controlInset,
   onSelectSite,
   style,
 }: ParkMapProps) {
@@ -432,7 +438,14 @@ export function ParkMap({
           hitSlop={8}
           accessibilityRole="button"
           accessibilityLabel="Open the map full screen"
-          style={({ pressed }) => [styles.expand, pressed && styles.resetPressed]}
+          style={({ pressed }) => [
+            styles.expand,
+            controlInset && {
+              bottom: 8 + (controlInset.bottom ?? 0),
+              right: 12 + (controlInset.right ?? 0),
+            },
+            pressed && styles.resetPressed,
+          ]}
         >
           <ExpandIcon size={16} color={colors.accentRamp[700]} />
         </Pressable>
@@ -444,7 +457,14 @@ export function ParkMap({
           accessibilityRole="button"
           accessibilityLabel="Reset the map zoom"
           hitSlop={8}
-          style={({ pressed }) => [styles.reset, pressed && styles.resetPressed]}
+          style={({ pressed }) => [
+            styles.reset,
+            controlInset && {
+              top: 8 + (controlInset.top ?? 0),
+              right: 12 + (controlInset.right ?? 0),
+            },
+            pressed && styles.resetPressed,
+          ]}
         >
           <BodyText size={12} weight="semibold" color={colors.accentRamp[700]}>
             Reset
