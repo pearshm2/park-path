@@ -169,6 +169,7 @@ export default function ExploreScreen() {
   const insets = useSafeAreaInsets();
   const { width: windowWidth } = useWindowDimensions();
   const { sheet: sheetHeight } = useSheetSize();
+  const textScale = useTextScale();
   const { answers } = useQuiz();
 
   const [scope, setScope] = useState<MapScope>('parks');
@@ -330,8 +331,15 @@ export default function ExploreScreen() {
     <View style={[styles.screen, { paddingTop: insets.top + space[2] }]}>
       <View style={styles.header}>
         <View style={styles.headerText}>
-          <Heading size={26}>Explore</Heading>
-          <View style={styles.headerMetaRow}>
+          <Heading size={TITLE_SIZE}>Explore</Heading>
+          {/* The leaf sits under the middle of the title's "x", which is
+              0.98em in; the indent follows the title as text size changes. */}
+          <View
+            style={[
+              styles.headerMetaRow,
+              { paddingLeft: TITLE_SIZE * textScale * X_CENTRE_EM - LEAF_SIZE / 2 },
+            ]}
+          >
             <LeafIcon />
             <BodyText size={12} color={colors.neutral[600]} style={styles.headerMetaText}>
               {/* The key and the title above the map already say what's shown;
@@ -730,10 +738,15 @@ function ScopeMenu({
 }
 
 /** The region name over a zoomed map, with a way back out of it. */
+/** The Explore title's size, and where its "x" is centred, in ems (measured). */
+const TITLE_SIZE = 26;
+const X_CENTRE_EM = 0.98;
+const LEAF_SIZE = 13;
+
 /** A small filled leaf, for a touch of the second accent beside the subtitle. */
 function LeafIcon() {
   return (
-    <Svg width={13} height={13} viewBox="0 0 24 24">
+    <Svg width={LEAF_SIZE} height={LEAF_SIZE} viewBox="0 0 24 24">
       <Path d="M4 20C4 10 10 4 21 3c0 11-6 17-17 17z" fill={colors.accent2Ramp[700]} />
       <Path
         d="M4 20L14 10"
@@ -913,8 +926,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 5,
     marginTop: 2,
-    // Set in a little from the title, so the leaf reads as a bullet under it.
-    paddingLeft: space[2],
   },
   headerMetaText: {
     flexShrink: 1,
