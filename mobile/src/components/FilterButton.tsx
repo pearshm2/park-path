@@ -9,7 +9,7 @@
 import { Pressable, StyleSheet, View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 
-import { colors, MIN_TAP_TARGET, radius, space } from '../theme';
+import { colors, radius } from '../theme';
 import { BodyText } from './Typography';
 
 export function FilterButton({
@@ -39,17 +39,14 @@ export function FilterButton({
         disabled && styles.disabled,
       ]}
     >
-      <Svg width={17} height={17} viewBox="0 0 24 24" fill="none">
+      <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
         <Path
           d="M4 6h16M7 12h10M10 18h4"
-          stroke={active ? colors.bg : colors.neutral[800]}
+          stroke={active ? colors.bg : colors.accentRamp[700]}
           strokeWidth={2.75}
           strokeLinecap="round"
         />
       </Svg>
-      <BodyText size={12.5} weight="semibold" color={active ? colors.bg : colors.neutral[800]}>
-        Filter
-      </BodyText>
       {active ? (
         <View style={styles.badge}>
           <BodyText size={10} weight="bold" color={colors.accent}>
@@ -62,19 +59,18 @@ export function FilterButton({
 }
 
 const styles = StyleSheet.create({
+  // A round icon button, matching search and the map scope beside it.
   button: {
-    flexDirection: 'row',
+    width: 34,
+    height: 34,
     alignItems: 'center',
-    gap: 7,
-    minHeight: MIN_TAP_TARGET,
-    paddingVertical: space[2],
-    paddingHorizontal: space[3],
+    justifyContent: 'center',
     borderRadius: radius.pill,
     borderWidth: 1.5,
   },
   resting: {
-    backgroundColor: colors.neutral[100],
-    borderColor: colors.divider,
+    backgroundColor: colors.accentRamp[100],
+    borderColor: colors.accent,
   },
   active: {
     backgroundColor: colors.accent,
@@ -86,13 +82,19 @@ const styles = StyleSheet.create({
   disabled: {
     opacity: 0.4,
   },
+  // The active count, as a bubble on the button's corner.
   badge: {
+    position: 'absolute',
+    top: -6,
+    right: -6,
     minWidth: 18,
     height: 18,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 5,
     borderRadius: radius.pill,
+    borderWidth: 1.5,
+    borderColor: colors.accent,
     backgroundColor: colors.bg,
   },
 });

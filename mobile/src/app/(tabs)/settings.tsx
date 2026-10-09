@@ -33,7 +33,7 @@ export default function SettingsScreen() {
       style={styles.screen}
       contentContainerStyle={[
         styles.content,
-        { paddingTop: insets.top + space[6], paddingBottom: space[8] },
+        { paddingTop: insets.top + space[2], paddingBottom: space[8] },
       ]}
     >
       <Heading size={26}>Settings</Heading>

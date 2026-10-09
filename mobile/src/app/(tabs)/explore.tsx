@@ -327,7 +327,7 @@ export default function ExploreScreen() {
         : `All ${allSites.length} sites`;
 
   return (
-    <View style={[styles.screen, { paddingTop: insets.top + space[6] }]}>
+    <View style={[styles.screen, { paddingTop: insets.top + space[2] }]}>
       <View style={styles.header}>
         <View style={styles.headerText}>
           <Heading size={26}>Explore</Heading>
@@ -342,14 +342,14 @@ export default function ExploreScreen() {
           </BodyText>
         </View>
         <View style={styles.headerActions}>
-          <FilterButton
-            count={filtersApply ? filterCount : 0}
-            onPress={() => setFilterOpen(true)}
-            // Filters highlight parks beyond the top 10; the wishlist view
-            // has none to highlight.
-            disabled={!filtersApply}
-          />
           <View style={styles.headerRow}>
+            <FilterButton
+              count={filtersApply ? filterCount : 0}
+              onPress={() => setFilterOpen(true)}
+              // Filters highlight parks beyond the top 10; the wishlist view
+              // has none to highlight.
+              disabled={!filtersApply}
+            />
             <SearchButton onPress={() => setSearchOpen(true)} />
             <ScopeMenu
               value={scope}
@@ -882,7 +882,7 @@ const styles = StyleSheet.create({
   },
   header: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     justifyContent: 'space-between',
     gap: space[3],
     paddingHorizontal: space[4],
