@@ -1,8 +1,9 @@
 /**
- * The Explore map on its own, full screen, opened from the map's expand
- * button. This is the one place the app turns sideways: everything else
- * is laid out for a tall phone, so the app is locked to portrait (see the
- * root layout) and only unlocked while this view is open.
+ * The Explore map on its own, full screen and sideways, opened from the
+ * map's expand button. Like a video player's full screen, it switches to
+ * landscape the moment it opens, however the phone is held, and back to
+ * portrait when it closes. Everything else is laid out for a tall phone,
+ * so the rest of the app is locked to portrait (see the root layout).
  *
  * The map runs edge to edge; only the controls floating over it keep
  * clear of the notch and home bar. Sideways the map is limited by the
@@ -14,7 +15,7 @@
 
 import * as ScreenOrientation from 'expo-screen-orientation';
 import { useEffect, useState } from 'react';
-import { Modal, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { Modal, StyleSheet, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -40,10 +41,11 @@ type FullMapViewProps = {
 export function FullMapView(props: FullMapViewProps) {
   const { visible, onClose } = props;
 
-  // Let the phone turn sideways only while this view is open.
+  // Sideways as soon as it opens (either way round, following the phone),
+  // upright again when it closes.
   useEffect(() => {
     if (!visible) return;
-    ScreenOrientation.unlockAsync().catch(() => {});
+    ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE).catch(() => {});
     return () => {
       ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP).catch(() => {});
     };
@@ -55,7 +57,7 @@ export function FullMapView(props: FullMapViewProps) {
       animationType="fade"
       onRequestClose={onClose}
       // iOS keeps a modal portrait unless it's told otherwise.
-      supportedOrientations={['portrait', 'landscape-left', 'landscape-right']}
+      supportedOrientations={['landscape-left', 'landscape-right']}
     >
       {/* Its own safe-area provider: the app's one, outside the modal, keeps
           the upright insets after the phone turns, which cut the map short. */}
@@ -76,7 +78,6 @@ function FullMapBody({
   onView,
 }: FullMapViewProps) {
   const insets = useSafeAreaInsets();
-  const { width, height } = useWindowDimensions();
   const [selected, setSelected] = useState<Site | null>(null);
 
   return (
@@ -112,11 +113,6 @@ function FullMapBody({
           <Heading size={18} numberOfLines={1}>
             {title}
           </Heading>
-          {height > width ? (
-            <BodyText size={12} color={colors.neutral[600]}>
-              Turn your phone sideways for a wider map
-            </BodyText>
-          ) : null}
         </View>
       </View>
 
@@ -181,8 +177,8 @@ const styles = StyleSheet.create({
     // Readable over the map without hiding it.
     backgroundColor: 'rgba(249, 244, 237, 0.9)',
   },
-  // Bottom right and narrow, so a sideways phone keeps the tapped park in
-  // view: that corner is open ocean on the map. Full width when upright.
+  // Bottom right and narrow, so the tapped park stays in view: that corner
+  // is open ocean on the map.
   chipWrap: {
     position: 'absolute',
     alignItems: 'flex-end',
