@@ -913,6 +913,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 5,
     marginTop: 2,
+    // Set in a little from the title, so the leaf reads as a bullet under it.
+    paddingLeft: space[2],
   },
   headerMetaText: {
     flexShrink: 1,
