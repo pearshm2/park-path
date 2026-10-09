@@ -319,12 +319,26 @@ export default function ExploreScreen() {
         ? `${parks.length} national parks`
         : `all ${allSites.length} sites`;
 
+  /**
+   * The full deck is dealt in sections: the top 10, then filter matches,
+   * then everything else. While the sheet is open its title names the
+   * section of the card on top, and changes as you scroll past each one.
+   */
+  function sectionTitle(item: DeckItem | undefined): string {
+    if (item?.rank !== undefined) return 'Recommended For You';
+    if (item && matchIds.has(item.site.id)) return 'Filtered For You';
+    return 'Parks to Explore';
+  }
+
   const deckTitle = anchor
     ? (focusRegion?.label ?? anchor.name)
     : scope === 'wishlist'
       ? 'Your wishlist'
-      : // The map's own title says which parks; the deck is the paths to them.
-        'Parks → Paths → Destination';
+      : topCard
+        ? sectionTitle(topCard)
+        : // Closed, there's no card in view: the map's own title says which
+          // parks, and the deck is the paths to them.
+          'Parks → Paths → Destination';
 
   return (
     <View style={[styles.screen, { paddingTop: insets.top + space[2] }]}>
