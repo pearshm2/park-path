@@ -331,15 +331,18 @@ export default function ExploreScreen() {
       <View style={styles.header}>
         <View style={styles.headerText}>
           <Heading size={26}>Explore</Heading>
-          <BodyText size={12} color={colors.neutral[600]} style={styles.headerMeta}>
-            {/* The key and the title above the map already say what's shown;
-                this line is the invitation, plus anything the map can't say. */}
-            {scope === 'wishlist'
-              ? `Where to next? Pick from your ${wishlist.length} saved`
-              : matchIds.size > 0
-                ? `Where to next? ${matchIds.size} more fit your filters`
-                : 'Where to next?'}
-          </BodyText>
+          <View style={styles.headerMetaRow}>
+            <LeafIcon />
+            <BodyText size={12} color={colors.neutral[600]} style={styles.headerMetaText}>
+              {/* The key and the title above the map already say what's shown;
+                  this line is the invitation, plus anything the map can't say. */}
+              {scope === 'wishlist'
+                ? `Where to next? Pick from your ${wishlist.length} saved`
+                : matchIds.size > 0
+                  ? `Where to next? ${matchIds.size} more fit your filters`
+                  : 'Where to next?'}
+            </BodyText>
+          </View>
         </View>
         <View style={styles.headerActions}>
           <View style={styles.headerRow}>
@@ -727,6 +730,21 @@ function ScopeMenu({
 }
 
 /** The region name over a zoomed map, with a way back out of it. */
+/** A small filled leaf, for a touch of the second accent beside the subtitle. */
+function LeafIcon() {
+  return (
+    <Svg width={13} height={13} viewBox="0 0 24 24">
+      <Path d="M4 20C4 10 10 4 21 3c0 11-6 17-17 17z" fill={colors.accent2Ramp[700]} />
+      <Path
+        d="M4 20L14 10"
+        stroke={colors.accent2Ramp[200]}
+        strokeWidth={2}
+        strokeLinecap="round"
+      />
+    </Svg>
+  );
+}
+
 /** A folded map: the scope button's icon. */
 function MapIcon() {
   return (
@@ -890,8 +908,14 @@ const styles = StyleSheet.create({
   headerText: {
     flex: 1,
   },
-  headerMeta: {
+  headerMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
     marginTop: 2,
+  },
+  headerMetaText: {
+    flexShrink: 1,
   },
   headerActions: {
     alignItems: 'flex-end',
