@@ -77,117 +77,122 @@ export function ParkCard({
         .join('. ')}
       style={({ pressed }) => [styles.card, style, pressed && onPress && styles.pressed]}
     >
-      {/* Terrain band — the card's visual anchor, and what makes the
-          deck scannable without reading every name. */}
-      <View style={[styles.band, { backgroundColor: tone.band }]}>
-        {site.group ? <TerrainIcon group={site.group} size={26} /> : null}
-        <BodyText size={10} weight="semibold" color={tone.ink} style={styles.bandLabel}>
-          {site.group
-            ? (TERRAIN_LABEL[site.group]?.toUpperCase() ?? site.group.toUpperCase())
-            : site.kind.toUpperCase()}
-        </BodyText>
-        {markWishlist && site.status === 'wishlist' ? (
-          <View style={styles.wishlistBadge}>
-            {/* The map's wishlist pin, so the badge reads like the key. */}
-            <View style={styles.wishlistRing} />
-            <BodyText size={11} weight="semibold" color={colors.accent2Ramp[800]}>
-              Wishlist
-            </BodyText>
-          </View>
-        ) : null}
-        {rank !== undefined ? (
-          <View style={styles.rankBadge}>
-            <BodyText size={11} weight="bold" color={colors.bg}>
-              {`#${rank}`}
-            </BodyText>
-          </View>
-        ) : null}
-      </View>
-
-      <View style={styles.body}>
-        <View style={styles.nameRow}>
-          <Heading size={18} numberOfLines={1} style={styles.name}>
-            {site.name}
-          </Heading>
-          {onExpand ? (
-            // Its own target, so the card's tap (zoom to region) is untouched.
-            <Pressable
-              onPress={onExpand}
-              hitSlop={10}
-              accessibilityRole="button"
-              accessibilityLabel={`Details for ${site.name}`}
-              style={({ pressed }) => [styles.expand, pressed && styles.expandPressed]}
-            >
-              <Svg width={14} height={14} viewBox="0 0 24 24" fill="none">
-                {EXPAND_PATHS.map((d) => (
-                  <Path
-                    key={d}
-                    d={d}
-                    stroke={colors.neutral[800]}
-                    strokeWidth={2.75}
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                ))}
-              </Svg>
-            </Pressable>
-          ) : null}
-        </View>
-        <View style={styles.meta}>
-          {region ? <View style={[styles.regionSwatch, { backgroundColor: region.fill }]} /> : null}
-          <BodyText size={12} color={colors.neutral[600]} numberOfLines={1} style={styles.metaText}>
-            {region ? (
-              <BodyText size={12} weight="semibold" color={colors.neutral[800]}>
-                {`${region.label} · `}
+      {/* Two layers on purpose: on iOS, clipping a view to its corners
+          (overflow: hidden) also clips its shadow, so the outer layer
+          carries the shadow and border and this inner one does the clipping. */}
+      <View style={styles.clip}>
+        {/* Terrain band — the card's visual anchor, and what makes the
+            deck scannable without reading every name. */}
+        <View style={[styles.band, { backgroundColor: tone.band }]}>
+          {site.group ? <TerrainIcon group={site.group} size={26} /> : null}
+          <BodyText size={10} weight="semibold" color={tone.ink} style={styles.bandLabel}>
+            {site.group
+              ? (TERRAIN_LABEL[site.group]?.toUpperCase() ?? site.group.toUpperCase())
+              : site.kind.toUpperCase()}
+          </BodyText>
+          {markWishlist && site.status === 'wishlist' ? (
+            <View style={styles.wishlistBadge}>
+              {/* The map's wishlist pin, so the badge reads like the key. */}
+              <View style={styles.wishlistRing} />
+              <BodyText size={11} weight="semibold" color={colors.accent2Ramp[800]}>
+                Wishlist
               </BodyText>
-            ) : null}
-            {`${site.kind} · ${site.state}`}
-          </BodyText>
-        </View>
-
-        {reason ? (
-          <BodyText
-            size={12.5}
-            weight="medium"
-            lineHeightRatio={1.4}
-            color={colors.accentRamp[800]}
-            style={styles.reason}
-            numberOfLines={1}
-          >
-            {reason}
-          </BodyText>
-        ) : null}
-
-        {/* One row only; anything that does not fit is clipped. */}
-        <View style={styles.tags}>
-          {site.permit ? <Tag tone="accent" label="Permit needed" /> : null}
-          {site.vis !== null ? <Tag tone="accent2" label={crowdLabel(site.vis)} /> : null}
-          {site.feature ? <Tag tone="outline" label={site.feature} /> : null}
-          {site.effort !== null ? (
-            <Tag tone="neutral" label={EFFORT_LABEL[site.effort] ?? `Effort ${site.effort}`} />
+            </View>
+          ) : null}
+          {rank !== undefined ? (
+            <View style={styles.rankBadge}>
+              <BodyText size={11} weight="bold" color={colors.bg}>
+                {`#${rank}`}
+              </BodyText>
+            </View>
           ) : null}
         </View>
 
-        {/* Match strength on one line — the point of the deck is why this
-            park and not another. Pinned to the bottom of the card. */}
-        {percent !== null ? (
-          <View style={styles.matchRow}>
-            <BodyText
-              size={10}
-              weight="semibold"
-              color={colors.neutral[600]}
-              style={styles.matchLabel}
-            >
-              MATCH
-            </BodyText>
-            <View style={styles.matchTrack}>
-              <View style={[styles.matchFill, { width: `${Math.max(percent, 3)}%` }]} />
-            </View>
-            <BodyText size={14} weight="bold" color={colors.accentRamp[700]}>
-              {`${percent}%`}
+        <View style={styles.body}>
+          <View style={styles.nameRow}>
+            <Heading size={18} numberOfLines={1} style={styles.name}>
+              {site.name}
+            </Heading>
+            {onExpand ? (
+              // Its own target, so the card's tap (zoom to region) is untouched.
+              <Pressable
+                onPress={onExpand}
+                hitSlop={10}
+                accessibilityRole="button"
+                accessibilityLabel={`Details for ${site.name}`}
+                style={({ pressed }) => [styles.expand, pressed && styles.expandPressed]}
+              >
+                <Svg width={14} height={14} viewBox="0 0 24 24" fill="none">
+                  {EXPAND_PATHS.map((d) => (
+                    <Path
+                      key={d}
+                      d={d}
+                      stroke={colors.neutral[800]}
+                      strokeWidth={2.75}
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  ))}
+                </Svg>
+              </Pressable>
+            ) : null}
+          </View>
+          <View style={styles.meta}>
+            {region ? <View style={[styles.regionSwatch, { backgroundColor: region.fill }]} /> : null}
+            <BodyText size={12} color={colors.neutral[600]} numberOfLines={1} style={styles.metaText}>
+              {region ? (
+                <BodyText size={12} weight="semibold" color={colors.neutral[800]}>
+                  {`${region.label} · `}
+                </BodyText>
+              ) : null}
+              {`${site.kind} · ${site.state}`}
             </BodyText>
           </View>
-        ) : null}
+
+          {reason ? (
+            <BodyText
+              size={12.5}
+              weight="medium"
+              lineHeightRatio={1.4}
+              color={colors.accentRamp[800]}
+              style={styles.reason}
+              numberOfLines={1}
+            >
+              {reason}
+            </BodyText>
+          ) : null}
+
+          {/* One row only; anything that does not fit is clipped. */}
+          <View style={styles.tags}>
+            {site.permit ? <Tag tone="accent" label="Permit needed" /> : null}
+            {site.vis !== null ? <Tag tone="accent2" label={crowdLabel(site.vis)} /> : null}
+            {site.feature ? <Tag tone="outline" label={site.feature} /> : null}
+            {site.effort !== null ? (
+              <Tag tone="neutral" label={EFFORT_LABEL[site.effort] ?? `Effort ${site.effort}`} />
+            ) : null}
+          </View>
+
+          {/* Match strength on one line — the point of the deck is why this
+              park and not another. Pinned to the bottom of the card. */}
+          {percent !== null ? (
+            <View style={styles.matchRow}>
+              <BodyText
+                size={10}
+                weight="semibold"
+                color={colors.neutral[600]}
+                style={styles.matchLabel}
+              >
+                MATCH
+              </BodyText>
+              <View style={styles.matchTrack}>
+                <View style={[styles.matchFill, { width: `${Math.max(percent, 3)}%` }]} />
+              </View>
+              <BodyText size={14} weight="bold" color={colors.accentRamp[700]}>
+                {`${percent}%`}
+              </BodyText>
+            </View>
+          ) : null}
+        </View>
       </View>
     </Pressable>
   );
@@ -197,8 +202,16 @@ const styles = StyleSheet.create({
   card: {
     borderRadius: radius.card,
     backgroundColor: colors.neutral[100],
-    overflow: 'hidden',
+    // The card sits on a sheet of the same colour, so the edge needs both a
+    // line and a shadow to read on a phone.
+    borderWidth: 1,
+    borderColor: colors.neutral[300],
     ...shadow.md,
+  },
+  clip: {
+    flex: 1,
+    borderRadius: radius.card - 1,
+    overflow: 'hidden',
   },
   pressed: {
     opacity: 0.92,

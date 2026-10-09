@@ -83,9 +83,27 @@ const MAP_ASPECT = 1.5;
 
 /** The sheet's bar, which is all that shows while it is closed. */
 const SHEET_BAR = 50;
-/** The deck's height, including the cards peeking out behind the top one. */
+/** The deck's height at normal text size, including the cards peeking out behind the top one. */
 const DECK_HEIGHT = 214;
-const SHEET_HEIGHT = SHEET_BAR + DECK_HEIGHT + space[2];
+/**
+ * How far the deck grows with the phone's text-size setting. Past this the
+ * map would be squeezed out, so the very largest sizes still clip a little.
+ */
+const MAX_DECK_SCALE = 1.5;
+/** The part of a card's height that is text and so grows with it. */
+const TEXT_SHARE = 0.7;
+
+/**
+ * The deck and sheet heights at the phone's text size. The cards are mostly
+ * text, so a fixed height cuts off their bottom row when text is enlarged.
+ */
+function useSheetSize() {
+  const { fontScale } = useWindowDimensions();
+  const scale = Math.min(Math.max(fontScale, 1), MAX_DECK_SCALE);
+  // About 70% of a card's height is text; the band, padding and gaps stay put.
+  const deck = Math.round(DECK_HEIGHT * (1 + (scale - 1) * TEXT_SHARE));
+  return { deck, sheet: SHEET_BAR + deck + space[2] };
+}
 const SHEET_MS = 260;
 
 /** How many search suggestions to list under the search bar. */
@@ -159,6 +177,7 @@ function byRegion(a: DeckItem, b: DeckItem): number {
 export default function ExploreScreen() {
   const insets = useSafeAreaInsets();
   const { width: windowWidth } = useWindowDimensions();
+  const { sheet: sheetHeight } = useSheetSize();
   const { answers } = useQuiz();
 
   const [scope, setScope] = useState<MapScope>('parks');
@@ -448,7 +467,7 @@ export default function ExploreScreen() {
 
         {/* Deliberately not a layout-animated view: the map has to be told
             its new size when the sheet opens, or it overflows under it. */}
-        <View style={[styles.mapArea, { paddingBottom: sheetOpen ? SHEET_HEIGHT : SHEET_BAR }]}>
+        <View style={[styles.mapArea, { paddingBottom: sheetOpen ? sheetHeight : SHEET_BAR }]}>
           {focusRegion ? (
             <RegionTitle
               region={focusRegion}
@@ -589,7 +608,8 @@ function CardSheet({
   status?: string;
   children: ReactNode;
 }) {
-  const closedY = SHEET_HEIGHT - SHEET_BAR;
+  const { deck: deckHeight, sheet: sheetHeight } = useSheetSize();
+  const closedY = sheetHeight - SHEET_BAR;
   const offset = useSharedValue(open ? 0 : closedY);
   const dragStart = useSharedValue(0);
 
@@ -624,7 +644,7 @@ function CardSheet({
   const slide = useAnimatedStyle(() => ({ transform: [{ translateY: offset.get() }] }));
 
   return (
-    <Animated.View style={[styles.sheet, slide]}>
+    <Animated.View style={[styles.sheet, { height: sheetHeight }, slide]}>
       <GestureDetector gesture={Gesture.Race(drag, tapBar)}>
         <View
           accessible
@@ -644,7 +664,7 @@ function CardSheet({
           </View>
         </View>
       </GestureDetector>
-      <View style={styles.sheetBody}>{children}</View>
+      <View style={{ height: deckHeight }}>{children}</View>
     </Animated.View>
   );
 }
@@ -1111,7 +1131,6 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    height: SHEET_HEIGHT,
     borderTopLeftRadius: radius.lg,
     borderTopRightRadius: radius.lg,
     backgroundColor: colors.neutral[100],
@@ -1134,10 +1153,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: space[3],
     marginTop: space[2],
-  },
-  // Full width, so the carousel's neighbouring cards can peek in at the edges.
-  sheetBody: {
-    height: DECK_HEIGHT,
   },
   deck: {
     flex: 1,

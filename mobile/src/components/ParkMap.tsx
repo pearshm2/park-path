@@ -80,6 +80,8 @@ const ICON_ZOOM = 1.6;
 /** A feature badge's radius, and its glyph's width. */
 const BADGE_R = 12;
 const GLYPH_SIZE = 15;
+/** How far the selected badge's glow reaches past its ring. */
+const HALO = 9;
 
 /** Room left around a zoomed region, and the most it may be magnified. */
 const ZOOM_PADDING = 22;
@@ -249,10 +251,17 @@ export function ParkMap({
         visible.flatMap((dot) =>
           featureForPark(dot.site.id) ? [{ id: dot.site.id, ...place(dot) }] : [],
         ),
+        selectedId,
       )
     : new Map<string, Point>();
   // Draw #1 last so it sits on top where pins overlap.
   picks.sort((a, b) => rankById!.get(b.site.id)! - rankById!.get(a.site.id)!);
+  // The selected park goes on top of its own group, glow and all.
+  const selectedLast = (a: PlacedDot, b: PlacedDot) =>
+    Number(a.site.id === selectedId) - Number(b.site.id === selectedId);
+  others.sort(selectedLast);
+  matched.sort(selectedLast);
+  picks.sort(selectedLast);
 
   return (
     <View style={[styles.container, style]} onLayout={onLayout}>
@@ -440,14 +449,18 @@ type Point = { x: number; y: number };
 
 /**
  * Pushes overlapping badges apart so each one can be read and tapped.
- * Utah's five parks overlap even at region zoom without this. A few
- * rounds of pairwise nudging is plenty for the dozen or so badges a
- * region shows, and cheap enough to rerun on every frame of a zoom.
+ * Utah's five parks overlap even at region zoom without this, and more
+ * so when large text shrinks the map. Thirty rounds of pairwise nudging
+ * settle the dozen or so badges a region shows, cheaply enough to rerun
+ * on every frame of a zoom.
  */
-function spreadBadges(points: (Point & { id: string })[]): Map<string, Point> {
+function spreadBadges(
+  points: (Point & { id: string })[],
+  selectedId?: string | null,
+): Map<string, Point> {
   const spots = points.map(({ x, y }) => ({ x, y }));
-  const gap = BADGE_R * 2 + 2;
-  for (let round = 0; round < 12; round++) {
+  const baseGap = BADGE_R * 2 + 2;
+  for (let round = 0; round < 30; round++) {
     let moved = false;
     for (let i = 0; i < spots.length; i++) {
       for (let j = i + 1; j < spots.length; j++) {
@@ -456,6 +469,9 @@ function spreadBadges(points: (Point & { id: string })[]): Map<string, Point> {
         let dx = b.x - a.x;
         let dy = b.y - a.y;
         let d = Math.hypot(dx, dy);
+        // The selected badge's glow needs room too, so neighbours don't cover it.
+        const gap =
+          baseGap + (points[i].id === selectedId || points[j].id === selectedId ? HALO : 0);
         if (d >= gap) continue;
         if (d < 0.01) {
           // Same spot: split them along a fixed angle so it's stable.
@@ -509,6 +525,14 @@ function FeatureBadge({
         <>
           <Path d={`M${x} ${y}L${bx} ${by}`} stroke={tone.ink} strokeWidth={1.25} opacity={0.6} />
           <Circle cx={x} cy={y} r={2.25} fill={tone.ink} />
+        </>
+      ) : null}
+      {selected ? (
+        // A soft glow and a thin accent ring outside the black one, so the
+        // selected park stands out from its neighbours.
+        <>
+          <Circle cx={bx} cy={by} r={r + HALO} fill={colors.accent} opacity={0.2} />
+          <Circle cx={bx} cy={by} r={r + 4.5} fill="none" stroke={colors.accent} strokeWidth={2} />
         </>
       ) : null}
       <Circle
