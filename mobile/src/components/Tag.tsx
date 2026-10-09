@@ -6,7 +6,7 @@
 
 import { StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 
-import { colors, fonts, radius } from '../theme';
+import { colors, fonts, radius, scaleType, useTextScale } from '../theme';
 
 type TagTone = 'accent' | 'accent2' | 'neutral' | 'outline';
 
@@ -19,9 +19,10 @@ export function Tag({
   tone?: TagTone;
   style?: StyleProp<ViewStyle>;
 }) {
+  const scale = useTextScale();
   return (
     <View style={[styles.base, toneContainer[tone], style]}>
-      <Text style={[styles.label, toneLabel[tone]]} numberOfLines={1}>
+      <Text style={[styles.label, scaleType(styles.label, scale), toneLabel[tone]]} numberOfLines={1}>
         {label}
       </Text>
     </View>

@@ -16,7 +16,7 @@ import {
   type ViewStyle,
 } from 'react-native';
 
-import { colors, fonts, MIN_TAP_TARGET, radius, space } from '../theme';
+import { colors, fonts, MIN_TAP_TARGET, radius, scaleType, space, useTextScale } from '../theme';
 
 type ButtonVariant = 'primary' | 'secondary' | 'ghost';
 
@@ -42,6 +42,7 @@ export function Button({
   style,
 }: ButtonProps) {
   const inert = disabled || loading;
+  const scale = useTextScale();
 
   return (
     <Pressable
@@ -70,7 +71,7 @@ export function Button({
           />
         </View>
       ) : (
-        <Text style={[styles.label, labelStyles[variant]]} numberOfLines={1}>
+        <Text style={[styles.label, scaleType(styles.label, scale), labelStyles[variant]]} numberOfLines={1}>
           {label}
         </Text>
       )}

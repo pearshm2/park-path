@@ -11,7 +11,7 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 
-import { colors, fonts, MIN_TAP_TARGET, radius, space } from '../theme';
+import { colors, fonts, MIN_TAP_TARGET, radius, scaleType, space, useTextScale } from '../theme';
 
 /** The four-colour Google "G", unmodified, as the brand rules require. */
 function GoogleMark({ size = 18 }: { size?: number }) {
@@ -46,6 +46,7 @@ export function GoogleButton({
   onPress: () => void;
   disabled?: boolean;
 }) {
+  const scale = useTextScale();
   return (
     <Pressable
       onPress={onPress}
@@ -60,7 +61,7 @@ export function GoogleButton({
       ]}
     >
       <GoogleMark />
-      <Text style={styles.label} numberOfLines={1}>
+      <Text style={[styles.label, scaleType(styles.label, scale)]} numberOfLines={1}>
         {label}
       </Text>
     </Pressable>
@@ -74,10 +75,11 @@ export function GoogleButton({
  * doing the same thing, which whitespace alone reads as ambiguous.
  */
 export function OrDivider({ label = 'or' }: { label?: string }) {
+  const scale = useTextScale();
   return (
     <View style={styles.dividerRow}>
       <View style={styles.dividerLine} />
-      <Text style={styles.dividerLabel}>{label}</Text>
+      <Text style={[styles.dividerLabel, scaleType(styles.dividerLabel, scale)]}>{label}</Text>
       <View style={styles.dividerLine} />
     </View>
   );

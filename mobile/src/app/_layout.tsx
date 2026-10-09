@@ -24,7 +24,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { AuthProvider, useAuth } from '../auth/AuthContext';
 import { QuizProvider, useQuiz } from '../quiz/QuizContext';
-import { colors, useAppFonts } from '../theme';
+import { colors, TextSizeProvider, useAppFonts } from '../theme';
 
 SplashScreen.preventAutoHideAsync().catch(() => {
   // Already hidden, or unsupported on this platform (web). Not fatal.
@@ -53,8 +53,10 @@ export default function RootLayout() {
         <QueryClientProvider client={queryClient}>
           <AuthProvider>
             <QuizProvider>
-              <StatusBar style="dark" />
-              <SessionGate />
+              <TextSizeProvider>
+                <StatusBar style="dark" />
+                <SessionGate />
+              </TextSizeProvider>
             </QuizProvider>
           </AuthProvider>
         </QueryClientProvider>

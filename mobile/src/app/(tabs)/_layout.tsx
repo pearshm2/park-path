@@ -16,7 +16,7 @@ import Svg, { Circle, Path } from 'react-native-svg';
 
 import { useAuth } from '../../auth/AuthContext';
 import { useQuiz } from '../../quiz/QuizContext';
-import { colors, fonts, radius, shadow, space } from '../../theme';
+import { colors, fonts, radius, scaleType, shadow, space, useTextScale } from '../../theme';
 
 const ICON_SIZE = 23;
 const STROKE = 2.75;
@@ -181,6 +181,7 @@ function FloatingTabBar({ state, descriptors, navigation, insets }: TabBarProps)
   const centerIndex = state.routes.findIndex((route) => route.name === CENTER_ROUTE);
   const centerFocused = state.index === centerIndex;
 
+  const scale = useTextScale();
   return (
     <View style={[styles.barWrap, { paddingBottom: Math.max(insets.bottom, space[2]) }]}>
       <View style={styles.bar}>
@@ -207,7 +208,7 @@ function FloatingTabBar({ state, descriptors, navigation, insets }: TabBarProps)
               ) : (
                 <>
                   {options.tabBarIcon?.({ focused, color, size: 23 })}
-                  <Text style={[styles.label, { color }]} numberOfLines={1}>
+                  <Text style={[styles.label, scaleType(styles.label, scale), { color }]} numberOfLines={1}>
                     {options.title ?? route.name}
                   </Text>
                 </>

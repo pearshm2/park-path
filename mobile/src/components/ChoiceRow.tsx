@@ -11,7 +11,7 @@
 
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { colors, fonts, radius, shadow, space } from '../theme';
+import { colors, fonts, radius, scaleType, shadow, space, useTextScale } from '../theme';
 
 export function ChoiceRow({
   label,
@@ -27,6 +27,7 @@ export function ChoiceRow({
   onPress: () => void;
   multi?: boolean;
 }) {
+  const scale = useTextScale();
   return (
     <Pressable
       onPress={onPress}
@@ -41,8 +42,8 @@ export function ChoiceRow({
     >
       <View style={[styles.dot, selected ? styles.dotSelected : styles.dotIdle]} />
       <View style={styles.text}>
-        <Text style={styles.label}>{label}</Text>
-        {sub ? <Text style={styles.sub}>{sub}</Text> : null}
+        <Text style={[styles.label, scaleType(styles.label, scale)]}>{label}</Text>
+        {sub ? <Text style={[styles.sub, scaleType(styles.sub, scale)]}>{sub}</Text> : null}
       </View>
     </Pressable>
   );

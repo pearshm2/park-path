@@ -31,11 +31,9 @@ import { useQuery } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
-  Keyboard,
   Modal,
   Pressable,
   StyleSheet,
-  TextInput,
   View,
   useWindowDimensions,
 } from 'react-native';
@@ -64,6 +62,8 @@ import {
   NO_FILTERS,
   ParkCard,
   ParkMap,
+  SearchButton,
+  SearchPanel,
   SitePeek,
   MATCH_DOT,
   PICK_FILL,
@@ -73,7 +73,7 @@ import {
 import type { Site, SiteStatus } from '../../data/parks';
 import { REGIONS, regionForState, type Region } from '../../data/regions';
 import { useQuiz } from '../../quiz/QuizContext';
-import { colors, fonts, radius, shadow, space } from '../../theme';
+import { colors, radius, shadow, space, useTextScale } from '../../theme';
 
 /** How many recommendations get a numbered pin and a card. */
 const TOP_N = 10;
@@ -99,15 +99,14 @@ const TEXT_SHARE = 0.7;
  */
 function useSheetSize() {
   const { fontScale } = useWindowDimensions();
-  const scale = Math.min(Math.max(fontScale, 1), MAX_DECK_SCALE);
+  // The phone's text size and the app's own Settings choice multiply.
+  const scale = Math.min(Math.max(fontScale * useTextScale(), 1), MAX_DECK_SCALE);
   // About 70% of a card's height is text; the band, padding and gaps stay put.
   const deck = Math.round(DECK_HEIGHT * (1 + (scale - 1) * TEXT_SHARE));
   return { deck, sheet: SHEET_BAR + deck + space[2] };
 }
 const SHEET_MS = 260;
 
-/** How many search suggestions to list under the search bar. */
-const MAX_SUGGESTIONS = 5;
 
 /** What the map shows. */
 type MapScope = 'parks' | 'all' | 'wishlist';
@@ -127,16 +126,6 @@ function applyFilters<T extends { site: Site }>(rows: T[], filters: FeedFilters)
     if (ceiling !== null && (site.vis === null || site.vis > ceiling)) return false;
     return true;
   });
-}
-
-/** Name matches for the search bar, names that start with the query first. */
-function searchSites(sites: Site[], query: string): Site[] {
-  const q = query.trim().toLowerCase();
-  if (!q) return [];
-
-  const hits = sites.filter((site) => site.name.toLowerCase().includes(q));
-  const starts = (site: Site) => (site.name.toLowerCase().startsWith(q) ? 0 : 1);
-  return hits.sort((a, b) => starts(a) - starts(b) || a.name.localeCompare(b.name));
 }
 
 /** A card in the deck: a park, plus its match and rank when it has them. */
@@ -191,8 +180,7 @@ export default function ExploreScreen() {
   const [deckTopId, setDeckTopId] = useState<string | null>(null);
   /** Lets the user reopen the key while the sheet is open. */
   const [keyOpen, setKeyOpen] = useState(false);
-  const [query, setQuery] = useState('');
-  const [searchMiss, setSearchMiss] = useState<string | null>(null);
+  const [searchOpen, setSearchOpen] = useState(false);
   const [filters, setFilters] = useState<FeedFilters>(NO_FILTERS);
   const [filterOpen, setFilterOpen] = useState(false);
   /** The site whose detail sheet is open, from a card's expand button. */
@@ -298,11 +286,6 @@ export default function ExploreScreen() {
   const topCard = sheetOpen ? deck[deckIndex] : undefined;
   const highlightId = topCard?.site.id ?? null;
 
-  const suggestions = useMemo(
-    () => searchSites(allSites, query).slice(0, MAX_SUGGESTIONS),
-    [allSites, query],
-  );
-
   function openSheet(open: boolean) {
     setSheetOpen(open);
     setKeyOpen(false);
@@ -324,18 +307,13 @@ export default function ExploreScreen() {
     openSheet(true);
   }
 
-  function pickResult(site: Site) {
-    setQuery('');
-    setSearchMiss(null);
-    Keyboard.dismiss();
-    focusPark(site);
-  }
-
-  function submitSearch() {
-    const [best] = searchSites(allSites, query);
-    if (best) pickResult(best);
-    else if (query.trim()) setSearchMiss(query.trim());
-  }
+  /** What the search panel searches, in words: the parks the map shows. */
+  const scopeLabel =
+    scope === 'wishlist'
+      ? `your ${wishlist.length} saved parks`
+      : scope === 'parks'
+        ? `${parks.length} national parks`
+        : `all ${allSites.length} sites`;
 
   const deckTitle = anchor
     ? (focusRegion?.label ?? anchor.name)
@@ -368,84 +346,21 @@ export default function ExploreScreen() {
             // has none to highlight.
             disabled={!filtersApply}
           />
-          <ScopeMenu
-            value={scope}
-            parkCount={parks.length}
-            siteCount={allSites.length}
-            wishlistCount={wishlist.length}
-            onChange={(next) => {
-              setScope(next);
-              setAnchor(null);
-              setDeckTopId(null);
-            }}
-          />
-        </View>
-      </View>
-
-      {/* Suggestions float over the map rather than pushing it down. */}
-      <View style={styles.searchWrap}>
-        <View style={styles.search}>
-          <TextInput
-            value={query}
-            onChangeText={(text) => {
-              setQuery(text);
-              setSearchMiss(null);
-            }}
-            onSubmitEditing={submitSearch}
-            placeholder={`Search ${allSites.length} parks and sites`}
-            placeholderTextColor={colors.neutral[600]}
-            returnKeyType="search"
-            autoCorrect={false}
-            accessibilityLabel="Search parks"
-            style={styles.searchInput}
-          />
-          {query ? (
-            <Pressable
-              onPress={() => {
-                setQuery('');
-                setSearchMiss(null);
+          <View style={styles.headerRow}>
+            <SearchButton onPress={() => setSearchOpen(true)} />
+            <ScopeMenu
+              value={scope}
+              parkCount={parks.length}
+              siteCount={allSites.length}
+              wishlistCount={wishlist.length}
+              onChange={(next) => {
+                setScope(next);
+                setAnchor(null);
+                setDeckTopId(null);
               }}
-              accessibilityRole="button"
-              accessibilityLabel="Clear search"
-              hitSlop={10}
-              style={styles.searchClear}
-            >
-              <BodyText size={15} weight="semibold" color={colors.neutral[700]}>
-                ×
-              </BodyText>
-            </Pressable>
-          ) : null}
+            />
+          </View>
         </View>
-
-        {suggestions.length > 0 ? (
-          <View style={styles.suggestions}>
-            {suggestions.map((site, index) => (
-              <Pressable
-                key={site.id}
-                onPress={() => pickResult(site)}
-                accessibilityRole="button"
-                style={({ pressed }) => [
-                  styles.suggestion,
-                  index > 0 && styles.suggestionDivider,
-                  pressed && styles.suggestionPressed,
-                ]}
-              >
-                <BodyText size={13.5} weight="medium" color={colors.text}>
-                  {site.name}
-                </BodyText>
-                <BodyText size={11.5} color={colors.neutral[600]}>
-                  {`${site.kind} · ${site.state}`}
-                </BodyText>
-              </Pressable>
-            ))}
-          </View>
-        ) : searchMiss ? (
-          <View style={styles.suggestions}>
-            <BodyText size={12} color={colors.neutral[700]} style={styles.searchMiss}>
-              {`Nothing called "${searchMiss}". Try part of the name.`}
-            </BodyText>
-          </View>
-        ) : null}
       </View>
 
       {/* The stage: key and map, with the card sheet over its bottom edge. */}
@@ -558,6 +473,17 @@ export default function ExploreScreen() {
           )}
         </CardSheet>
       </View>
+
+      <SearchPanel
+        visible={searchOpen}
+        sites={mapSites}
+        scopeLabel={scopeLabel}
+        onPick={(site) => {
+          setSearchOpen(false);
+          focusPark(site);
+        }}
+        onClose={() => setSearchOpen(false)}
+      />
 
       <SitePeek
         site={peekSite}
@@ -932,6 +858,11 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     gap: space[2],
   },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space[2],
+  },
   scopePill: {
     paddingVertical: 6,
     paddingHorizontal: space[3],
@@ -961,55 +892,6 @@ const styles = StyleSheet.create({
   },
   scopeOptionActive: {
     backgroundColor: colors.accentRamp[100],
-  },
-  searchWrap: {
-    // Above the stage, so the suggestions can hang over the map.
-    zIndex: 10,
-    elevation: 10,
-  },
-  search: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: space[3],
-    marginHorizontal: space[4],
-    paddingHorizontal: space[4],
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    borderColor: colors.divider,
-    backgroundColor: colors.surface,
-  },
-  searchInput: {
-    flex: 1,
-    paddingVertical: 11,
-    fontFamily: fonts.body,
-    fontSize: 15,
-    color: colors.text,
-  },
-  searchClear: {
-    paddingLeft: space[2],
-  },
-  searchMiss: {
-    padding: space[3],
-  },
-  suggestions: {
-    position: 'absolute',
-    top: '100%',
-    left: space[4],
-    right: space[4],
-    marginTop: space[2],
-    borderRadius: radius.md,
-    backgroundColor: colors.neutral[100],
-    overflow: 'hidden',
-    ...shadow.sm,
-  },
-  suggestion: {
-    paddingVertical: space[2],
-    paddingHorizontal: space[4],
-    gap: 1,
-  },
-  suggestionDivider: {
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.divider,
   },
   suggestionPressed: {
     backgroundColor: colors.tintText07,
