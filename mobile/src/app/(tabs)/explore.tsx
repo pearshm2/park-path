@@ -343,13 +343,6 @@ export default function ExploreScreen() {
         </View>
         <View style={styles.headerActions}>
           <View style={styles.headerRow}>
-            <FilterButton
-              count={filtersApply ? filterCount : 0}
-              onPress={() => setFilterOpen(true)}
-              // Filters highlight parks beyond the top 10; the wishlist view
-              // has none to highlight.
-              disabled={!filtersApply}
-            />
             <SearchButton onPress={() => setSearchOpen(true)} />
             <ScopeMenu
               value={scope}
@@ -361,6 +354,13 @@ export default function ExploreScreen() {
                 setAnchor(null);
                 setDeckTopId(null);
               }}
+            />
+            <FilterButton
+              count={filtersApply ? filterCount : 0}
+              onPress={() => setFilterOpen(true)}
+              // Filters highlight parks beyond the top 10; the wishlist view
+              // has none to highlight.
+              disabled={!filtersApply}
             />
           </View>
         </View>
