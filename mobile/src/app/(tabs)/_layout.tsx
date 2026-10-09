@@ -15,6 +15,7 @@ import { Pressable, StyleSheet, Text, View, type ColorValue } from 'react-native
 import Svg, { Circle, Path } from 'react-native-svg';
 
 import { useAuth } from '../../auth/AuthContext';
+import { BAR_HEIGHT, RAISE, tabBarBottom } from '../../components/tabBar';
 import { useQuiz } from '../../quiz/QuizContext';
 import { colors, fonts, radius, scaleType, shadow, space, useTextScale } from '../../theme';
 
@@ -156,12 +157,9 @@ type TabBarProps = Parameters<NonNullable<ComponentProps<typeof Tabs>['tabBar']>
 /** The tab drawn as the raised circle. */
 const CENTER_ROUTE = 'explore';
 
-const BAR_HEIGHT = 66;
 const CIRCLE = 54;
 /** A ring in the page colour around the circle, which reads as a notch in the bar. */
 const RING = 6;
-/** How far the circle (with its ring) rises above the bar's top edge. */
-const RAISE = 26;
 const LABEL_LINE = 13;
 
 /**
@@ -183,7 +181,12 @@ function FloatingTabBar({ state, descriptors, navigation, insets }: TabBarProps)
 
   const scale = useTextScale();
   return (
-    <View style={[styles.barWrap, { paddingBottom: Math.max(insets.bottom, space[2]) }]}>
+    // Floats over the screen, see-through, so the Explore sheet shows around
+    // it; touches on its empty margins pass through to what's underneath.
+    <View
+      pointerEvents="box-none"
+      style={[styles.barWrap, { paddingBottom: tabBarBottom(insets.bottom) }]}
+    >
       <View style={styles.bar}>
         {state.routes.map((route, index) => {
           const { options } = descriptors[route.key];
@@ -247,11 +250,13 @@ function FloatingTabBar({ state, descriptors, navigation, insets }: TabBarProps)
 
 const styles = StyleSheet.create({
   barWrap: {
-    // Leaves room above the bar for the raised circle, so it never
-    // overlaps the screen above.
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    // Room above the bar for the raised circle.
     paddingTop: RAISE,
     paddingHorizontal: space[4],
-    backgroundColor: colors.bg,
   },
   bar: {
     flexDirection: 'row',

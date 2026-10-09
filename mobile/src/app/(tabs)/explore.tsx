@@ -39,6 +39,8 @@ import {
 } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
+  Extrapolation,
+  interpolate,
   LinearTransition,
   useAnimatedStyle,
   useSharedValue,
@@ -65,6 +67,7 @@ import {
   ParkCard,
   ParkMap,
   SearchButton,
+  useTabBarSpace,
   SectionDeck,
   SECTION_PEEK,
   type DeckSection,
@@ -354,6 +357,8 @@ export default function ExploreScreen() {
   const useSections = sections !== null && !anchor;
   // The sectioned deck needs room for the next card to peek up from below.
   const { deck: deckHeight, sheet: sheetHeight } = useSheetSize(useSections ? SECTION_PEEK : 0);
+  // The tab bar floats over the bottom of the screen; the sheet runs behind it.
+  const tabSpace = useTabBarSpace();
   const inSection = useMemo(() => {
     if (!useSections || !topCard) return null;
     const page = sections.findIndex((section) =>
@@ -443,7 +448,7 @@ export default function ExploreScreen() {
 
         {/* Deliberately not a layout-animated view: the map has to be told
             its new size when the sheet opens, or it overflows under it. */}
-        <View style={[styles.mapArea, { paddingBottom: sheetOpen ? sheetHeight : SHEET_BAR }]}>
+        <View style={[styles.mapArea, { paddingBottom: (sheetOpen ? sheetHeight : SHEET_BAR) + tabSpace }]}>
           {focusRegion ? (
             <RegionTitle
               region={focusRegion}
@@ -495,6 +500,7 @@ export default function ExploreScreen() {
                 : undefined
           }
           extra={useSections ? SECTION_PEEK : 0}
+          below={tabSpace}
           pages={
             useSections && sections.length > 1 && inSection
               ? { count: sections.length, active: inSection.page }
@@ -510,6 +516,8 @@ export default function ExploreScreen() {
               keyOf={(item) => item.site.id}
               onActiveChange={(item) => setDeckTopId(item.site.id)}
               height={deckHeight}
+              // The next card carries on down behind the tab bar.
+              extraBelow={tabSpace}
               renderCard={(item, active, bringIntoView) => (
                 <ParkCard
                   site={item.site}
@@ -563,7 +571,7 @@ export default function ExploreScreen() {
               )}
               // The cards' taps depend on these, so redraw them when either changes.
               extraData={`${deckIndex}:${anchor?.id ?? ''}`}
-              style={styles.deck}
+              style={{ height: deckHeight }}
             />
           ) : (
             <View style={styles.empty}>
@@ -653,6 +661,7 @@ function CardSheet({
   status,
   pages,
   extra = 0,
+  below = 0,
   children,
 }: {
   open: boolean;
@@ -663,6 +672,8 @@ function CardSheet({
   pages?: { count: number; active: number };
   /** Extra deck height, for the sectioned deck's peek. */
   extra?: number;
+  /** Room under the deck, behind the floating tab bar. */
+  below?: number;
   children: ReactNode;
 }) {
   const { deck: deckHeight, sheet: sheetHeight } = useSheetSize(extra);
@@ -699,9 +710,14 @@ function CardSheet({
     });
 
   const slide = useAnimatedStyle(() => ({ transform: [{ translateY: offset.get() }] }));
+  // The cards fade out as the sheet closes: closed, the top of the deck
+  // would otherwise sit behind the see-through tab bar.
+  const deckFade = useAnimatedStyle(() => ({
+    opacity: interpolate(offset.get(), [0, closedY * 0.6], [1, 0], Extrapolation.CLAMP),
+  }));
 
   return (
-    <Animated.View style={[styles.sheet, { height: sheetHeight }, slide]}>
+    <Animated.View style={[styles.sheet, { height: sheetHeight + below }, slide]}>
       <GestureDetector gesture={Gesture.Race(drag, tapBar)}>
         <View
           accessible
@@ -729,7 +745,7 @@ function CardSheet({
           </View>
         </View>
       </GestureDetector>
-      <View style={{ height: deckHeight }}>{children}</View>
+      <Animated.View style={[{ height: deckHeight + below }, deckFade]}>{children}</Animated.View>
     </Animated.View>
   );
 }
@@ -1148,8 +1164,9 @@ const styles = StyleSheet.create({
   // A rounded label box, like the key above it.
   mapTitle: {
     alignSelf: 'center',
-    // Clear of the key above when the open sheet squeezes the map.
-    marginTop: space[3],
+    // Clear of the key above, and close to the map it names.
+    marginTop: space[6],
+    marginBottom: -space[2],
     paddingVertical: 6,
     paddingHorizontal: space[4],
     borderRadius: radius.pill,

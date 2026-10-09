@@ -20,6 +20,7 @@ export { SearchButton, SearchPanel } from './SearchPanel';
 export { SECTION_PEEK, SectionDeck, type DeckSection } from './SectionDeck';
 export { SitePeek } from './SitePeek';
 export { Tag } from './Tag';
+export { useTabBarSpace } from './tabBar';
 export { TERRAIN_LABEL, TerrainIcon, terrainTone } from './TerrainIcon';
 export { TextField } from './TextField';
 export { Toast } from './Toast';

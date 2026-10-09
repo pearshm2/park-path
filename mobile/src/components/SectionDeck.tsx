@@ -13,7 +13,7 @@
  * the same card.
  */
 
-import { useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import {
   FlatList,
   StyleSheet,
@@ -41,7 +41,7 @@ const GAP = 10;
 /** How much of the next card shows below the current one. */
 const PEEK = 18;
 /** Extra card height in this view, over the sideways carousel's. */
-const TALLER = 26;
+const TALLER = 44;
 /** How much taller the sheet must be than for the carousel. */
 export const SECTION_PEEK = PEEK + GAP + TALLER;
 
@@ -66,6 +66,8 @@ type SectionDeckProps<T> = {
   renderCard: (item: T, active: boolean, bringIntoView: () => void) => ReactNode;
   /** The deck's height; the card fills it, less the gap and the peek. */
   height: number;
+  /** Room below the deck (behind the tab bar) that the next card runs into. */
+  extraBelow?: number;
   style?: StyleProp<ViewStyle>;
 };
 
@@ -76,8 +78,10 @@ export function SectionDeck<T>({
   onActiveChange,
   renderCard,
   height,
+  extraBelow = 0,
   style,
 }: SectionDeckProps<T>) {
+  const pageHeight = height + extraBelow;
   const { width } = useWindowDimensions();
   const cardHeight = Math.max(height - PEEK - GAP, 80);
   const interval = cardHeight + GAP;
@@ -130,13 +134,13 @@ export function SectionDeck<T>({
       initialScrollIndex={start.page}
       getItemLayout={(_data, page) => ({ length: width, offset: width * page, index: page })}
       onMomentumScrollEnd={onPageSettled}
-      style={[{ height }, style]}
+      style={[{ height: pageHeight }, style]}
       renderItem={({ item: section }) => (
         <SectionPage
           section={section}
           current={positions[section.key] ?? 0}
           width={width}
-          height={height}
+          height={pageHeight}
           cardHeight={cardHeight}
           interval={interval}
           keyOf={keyOf}
@@ -185,10 +189,20 @@ function SectionPage<T>({
 }) {
   const scrollY = useSharedValue(current * interval);
   const last = section.items.length - 1;
+  const list = useRef<FlatList<T> | null>(null);
+
+  // If the card size changes while open (text size, a taller sheet), the
+  // old scroll offset no longer lands on a card: snap back onto this one.
+  useEffect(() => {
+    list.current?.scrollToOffset({ offset: current * interval, animated: false });
+    scrollY.set(current * interval);
+    // Only a new size should trigger this, not scrolling to another card.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [interval]);
 
   const onScroll = useAnimatedScrollHandler({
     onScroll: (event) => {
-      scrollY.value = event.contentOffset.y;
+      scrollY.set(event.contentOffset.y);
     },
     onMomentumEnd: (event) => {
       const index = Math.min(Math.max(Math.round(event.contentOffset.y / interval), 0), last);
@@ -206,7 +220,10 @@ function SectionPage<T>({
   return (
     <View style={{ width, height }}>
       <Animated.FlatList
-        ref={registerList}
+        ref={(ref) => {
+          list.current = ref;
+          registerList(ref);
+        }}
         data={section.items}
         keyExtractor={keyOf}
         showsVerticalScrollIndicator={false}
@@ -215,7 +232,7 @@ function SectionPage<T>({
         onScroll={onScroll}
         scrollEventThrottle={16}
         // Room after the last card so it can scroll up into place.
-        contentContainerStyle={{ paddingBottom: PEEK }}
+        contentContainerStyle={{ paddingBottom: height - interval }}
         initialScrollIndex={current}
         getItemLayout={(_data, index) => ({ length: interval, offset: interval * index, index })}
         // Only a few cards are ever on screen.
@@ -251,7 +268,7 @@ function StackCard({
   children: ReactNode;
 }) {
   const motion = useAnimatedStyle(() => {
-    const progress = scrollY.value / interval - index;
+    const progress = scrollY.get() / interval - index;
 
     if (progress <= 0) {
       // Waiting below, then rising into place at full size.

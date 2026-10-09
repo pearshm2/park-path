@@ -12,7 +12,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { API_BASE_URL } from '../../api/client';
 import { useAuth } from '../../auth/AuthContext';
-import { BodyText, Button, Heading } from '../../components';
+import { BodyText, Button, Heading, useTabBarSpace } from '../../components';
 import { QUIZ_STEPS } from '../../data/quizSpec';
 import { useQuiz } from '../../quiz/QuizContext';
 import { colors, radius, shadow, space, TEXT_SIZES, useTextSize } from '../../theme';
@@ -23,6 +23,7 @@ export default function SettingsScreen() {
   const { user, signOut } = useAuth();
   const { answers } = useQuiz();
   const { size: textSize, setSize: setTextSize } = useTextSize();
+  const tabSpace = useTabBarSpace();
 
   const terrainSummary = answers.terrains.length
     ? answers.terrains.join(', ')
@@ -33,7 +34,8 @@ export default function SettingsScreen() {
       style={styles.screen}
       contentContainerStyle={[
         styles.content,
-        { paddingTop: insets.top + space[2], paddingBottom: space[8] },
+        // Clear of the floating tab bar, which covers the bottom of the screen.
+        { paddingTop: insets.top + space[2], paddingBottom: tabSpace + space[6] },
       ]}
     >
       <Heading size={26}>Settings</Heading>
