@@ -1148,6 +1148,8 @@ const styles = StyleSheet.create({
   // A rounded label box, like the key above it.
   mapTitle: {
     alignSelf: 'center',
+    // Clear of the key above when the open sheet squeezes the map.
+    marginTop: space[3],
     paddingVertical: 6,
     paddingHorizontal: space[4],
     borderRadius: radius.pill,
