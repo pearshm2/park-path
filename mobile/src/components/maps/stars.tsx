@@ -1,7 +1,7 @@
 /**
  * The stars on a park's map: green for a visitor center, red for "you are
- * here", like the star on the map board at a visitor center. Shared by the
- * drawn map (inside its SVG) and the real map (as marker views).
+ * here", like the star on the map board at a visitor center. Used as the
+ * real map's markers and in the legend.
  */
 
 import Svg, { Path, type NumberProp } from 'react-native-svg';

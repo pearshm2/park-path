@@ -15,7 +15,7 @@ import MapView, { Marker, Polyline, type LatLng, type MapType } from 'react-nati
 import type { ParkMap } from '../../api/parkMaps';
 import { colors } from '../../theme';
 import { BodyText } from '../Typography';
-import { TRAIL_INK, TRAIL_SELECTED, type MapSelection } from './DrawnParkMap';
+import { TRAIL_INK, TRAIL_SELECTED, type MapSelection } from './shared';
 import { StarIcon, VISITOR_CENTER_STAR, YOU_STAR } from './stars';
 
 export type RealMapStyle = 'standard' | 'terrain' | 'satellite';

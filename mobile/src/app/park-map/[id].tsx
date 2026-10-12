@@ -1,13 +1,11 @@
 /**
- * A national park's maps, three ways, switched at the top:
+ * A national park's maps, two ways, switched at the top:
  *
- *   - Trail map: drawn in the app's style from the NPS's trails, roads and
- *     boundary.
  *   - Real map: Apple Maps / Google Maps (map, terrain or satellite) with
- *     the same trails on top.
+ *     the NPS's trails drawn on top.
  *   - Park brochure: the official NPS printed map.
  *
- * All three pinch to zoom, and the expand button turns the phone sideways
+ * Both pinch to zoom, and the expand button turns the phone sideways
  * into a full-screen view, like Explore's map. Visitor centers are green
  * stars; where you are is a red "you are here" star, once location is
  * allowed and you're in the park. Tapping a trail (on the map or in the
@@ -36,16 +34,10 @@ import Svg, { Path } from 'react-native-svg';
 import { fetchParkMap, officialMapUrl, type ParkMap, type TrailUse } from '../../api/parkMaps';
 import { listSites } from '../../api/parks';
 import { BodyText, Button, ExpandIcon, Heading, Kicker } from '../../components';
-import {
-  isOnMap,
-  ROAD_INK,
-  TRAIL_INK,
-  type MapSelection,
-} from '../../components/maps/DrawnParkMap';
 import { ParkMapCanvas, type MapKind } from '../../components/maps/ParkMapCanvas';
 import type { RealMapStyle } from '../../components/maps/RealParkMap';
+import { isOnMap, TRAIL_INK, type MapSelection } from '../../components/maps/shared';
 import { StarIcon, VISITOR_CENTER_STAR, YOU_STAR } from '../../components/maps/stars';
-import { regionForState } from '../../data/regions';
 import { useYouAreHere } from '../../location/useYouAreHere';
 import { colors, radius, shadow, space } from '../../theme';
 
@@ -57,7 +49,6 @@ const USE_LABEL: Record<TrailUse, string> = {
 };
 
 const KINDS: { value: MapKind; label: string }[] = [
-  { value: 'drawn', label: 'Trail map' },
   { value: 'real', label: 'Real map' },
   { value: 'brochure', label: 'Park brochure' },
 ];
@@ -104,7 +95,7 @@ export default function ParkMapScreen() {
   const { width: windowWidth } = useWindowDimensions();
   const scrollRef = useRef<ScrollView>(null);
 
-  const [kind, setKind] = useState<MapKind>('drawn');
+  const [kind, setKind] = useState<MapKind>('real');
   const [realStyle, setRealStyle] = useState<RealMapStyle>('terrain');
   const [brochureIndex, setBrochureIndex] = useState(0);
   const [selection, setSelection] = useState<MapSelection>(null);
@@ -130,7 +121,6 @@ export default function ParkMapScreen() {
   });
 
   const trails = useMemo(() => (parkMap ? summarise(parkMap) : []), [parkMap]);
-  const tint = (site && regionForState(site.state)?.fill) ?? colors.accent2Ramp[100];
   const mapsPage = parkMap?.officialMapUrl ?? officialMapUrl(id);
   const kinds = KINDS.filter((k) => k.value !== 'brochure' || (parkMap?.brochures.length ?? 0) > 0);
   const inPark = parkMap ? isOnMap(parkMap, you.point) : false;
@@ -142,7 +132,6 @@ export default function ParkMapScreen() {
     ? {
         kind,
         map: parkMap,
-        tint,
         you: you.point,
         realStyle,
         brochureIndex,
@@ -177,7 +166,9 @@ export default function ParkMapScreen() {
 
       {parkMap && canvasProps ? (
         <>
-          <Segmented options={kinds} value={kind} onChange={setKind} style={styles.kinds} />
+          {kinds.length > 1 ? (
+            <Segmented options={kinds} value={kind} onChange={setKind} style={styles.kinds} />
+          ) : null}
           <MapOptions
             kind={kind}
             map={parkMap}
@@ -202,11 +193,11 @@ export default function ParkMapScreen() {
 
           <BodyText size={11.5} color={colors.textMuted} style={styles.hint}>
             {kind === 'real'
-              ? 'Pinch and drag to explore. Tap a trail or a star for details.'
+              ? 'Pinch and drag to explore. Tap a trail or a star for details, or expand to turn it sideways.'
               : 'Pinch or double-tap to zoom. Tap the expand button to turn it sideways.'}
           </BodyText>
 
-          {kind !== 'brochure' ? <Legend kind={kind} /> : null}
+          {kind !== 'brochure' ? <Legend /> : null}
           <LocationNote kind={kind} status={you.status} hasFix={you.point !== null} inPark={inPark} />
           <SelectionCard selection={selection} trails={trails} />
         </>
@@ -376,7 +367,9 @@ function FullScreenBody({
             {title}
           </BodyText>
         </View>
-        <Segmented options={kinds} value={canvasProps.kind} onChange={onKind} compact />
+        {kinds.length > 1 ? (
+          <Segmented options={kinds} value={canvasProps.kind} onChange={onKind} compact />
+        ) : null}
       </View>
 
       <View
@@ -519,12 +512,11 @@ function Chips<T extends string | number>({
   );
 }
 
-function Legend({ kind }: { kind: MapKind }) {
+function Legend() {
   return (
     <View style={styles.legend}>
       <LegendLine color={TRAIL_INK} label="Trail" />
       <LegendLine color={TRAIL_INK} dashed label="Temporarily closed" />
-      {kind === 'drawn' ? <LegendLine color={ROAD_INK} label="Road" /> : null}
       <View style={styles.legendItem}>
         <StarIcon color={VISITOR_CENTER_STAR} size={13} />
         <BodyText size={11.5} color={colors.neutral[700]}>
@@ -574,7 +566,8 @@ function LocationNote({
 }) {
   let note: string | null = null;
   if (kind === 'brochure') {
-    note = 'The brochure is the printed map, so it has no "you are here" star. Switch to the trail or real map for that.';
+    note =
+      'The brochure is the printed map, so it has no "you are here" star. Switch to the real map for that.';
   } else if (status === 'denied') {
     note = 'Allow location for ParkPath in your phone\'s settings to see a "you are here" star.';
   } else if (status === 'granted' && hasFix && !inPark) {

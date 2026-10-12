@@ -831,7 +831,7 @@ export default function ExploreScreen() {
         onToggleSave={(site) => toggleWishlist(site.id)}
         onOpenMap={(site) => {
           setPeekSite(null);
-          router.push(`/park-map/${site.id}`);
+          router.push({ pathname: '/park-map/[id]', params: { id: site.id } });
         }}
         onDismiss={() => setPeekSite(null)}
         onOpen={(site) => {

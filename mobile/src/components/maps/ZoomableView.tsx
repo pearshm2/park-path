@@ -1,17 +1,15 @@
 /**
  * Pinch to zoom, drag to pan, double-tap to zoom in (or back out) — for a
- * park map that's bigger than the screen can show at once.
+ * park's brochure map, which is bigger than the screen can show at once.
  *
  * The content is laid out at its own, larger size (contentWidth x
  * contentHeight) and starts scaled down to fit the frame. Zooming in only
- * ever scales it back up towards its real size, so a brochure map or a
- * finely drawn trail map stays sharp instead of turning into stretched
- * pixels.
+ * ever scales it back up towards its real size, so the map stays sharp
+ * instead of turning into stretched pixels.
  *
  * Runs on the UI thread (Reanimated), so it stays smooth on a large image.
  * A one-finger drag only pans once zoomed in; at the fitted size it's left
- * alone so the page around the map can still scroll. Single taps pass
- * through to the content (a trail on the drawn map stays tappable).
+ * alone so the page around the map can still scroll.
  */
 
 import { type ReactNode } from 'react';
