@@ -33,7 +33,13 @@
           "imageWidth": 76
         }
       ],
-      "expo-secure-store"
+      "expo-secure-store",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "ParkPath shows where you are on a park's map, like the \"you are here\" star at a visitor center."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

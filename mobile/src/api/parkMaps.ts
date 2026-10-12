@@ -1,10 +1,11 @@
 /**
- * A national park's own map — boundary, roads and trails — from
- * GET /sites/{code}/map, which the backend fills from the NPS's public GIS
- * data (api/app/park_map_sync.py). Coordinates are [longitude, latitude].
+ * A national park's own map — boundary, roads, trails and visitor centers,
+ * plus its official brochure maps — from GET /sites/{code}/map, which the
+ * backend fills from the NPS's public GIS data and map collection
+ * (api/app/park_map_sync.py). Coordinates are [longitude, latitude].
  */
 
-import { ApiError, request } from './client';
+import { API_BASE_URL, ApiError, request } from './client';
 
 /** A line or ring: [longitude, latitude] points. */
 export type MapPath = [number, number][];
@@ -28,11 +29,20 @@ export type Road = {
   paths: MapPath[];
 };
 
+export type Place = { name: string; kind: 'visitor_center'; point: [number, number] };
+
+/** One of the park's official NPS brochure maps, as an image. */
+export type BrochureMap = { title: string; uri: string; width: number; height: number };
+
 export type ParkMap = {
   /** Rings, drawn with the even-odd fill rule. */
   boundary: MapPath[];
   roads: Road[];
   trails: Trail[];
+  /** Visitor centers. */
+  places: Place[];
+  /** Main map first; parks in separate units have one per unit. */
+  brochures: BrochureMap[];
   /** The park's maps page on nps.gov, with the official brochure map. */
   officialMapUrl: string;
 };
@@ -42,6 +52,8 @@ type ParkMapOut = {
   boundary: MapPath[];
   roads: Road[];
   trails: TrailOut[];
+  places: Place[];
+  brochures: { title: string; url: string; width: number; height: number }[];
   official_map_url: string;
 };
 
@@ -53,6 +65,11 @@ export async function fetchParkMap(siteId: string): Promise<ParkMap | null> {
       boundary: raw.boundary,
       roads: raw.roads,
       trails: raw.trails.map(({ length_miles, ...trail }) => ({ ...trail, lengthMiles: length_miles })),
+      places: raw.places,
+      brochures: raw.brochures.map(({ url, ...brochure }) => ({
+        ...brochure,
+        uri: `${API_BASE_URL}${url}`,
+      })),
       officialMapUrl: raw.official_map_url,
     };
   } catch (error) {

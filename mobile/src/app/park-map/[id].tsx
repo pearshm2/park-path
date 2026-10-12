@@ -1,41 +1,52 @@
 /**
- * A national park's own trail map, drawn in the app's style: the park's
- * boundary in its region's tint, roads in grey, trails on top. Tapping a
- * trail (on the map or in the list under it) highlights it and shows its
- * length, who can use it and its surface.
+ * A national park's maps, three ways, switched at the top:
  *
- * The data is the NPS's public GIS trails, roads and boundaries, synced
- * into our API (GET /sites/{code}/map). Where the NPS has no trail data
- * (Gates of the Arctic has no maintained trails; Sequoia & Kings Canyon
- * isn't in the dataset) the screen says so, and the official park map on
- * nps.gov is always one tap away.
+ *   - Trail map: drawn in the app's style from the NPS's trails, roads and
+ *     boundary.
+ *   - Real map: Apple Maps / Google Maps (map, terrain or satellite) with
+ *     the same trails on top.
+ *   - Park brochure: the official NPS printed map.
+ *
+ * All three pinch to zoom, and the expand button turns the phone sideways
+ * into a full-screen view, like Explore's map. Visitor centers are green
+ * stars; where you are is a red "you are here" star, once location is
+ * allowed and you're in the park. Tapping a trail (on the map or in the
+ * list) highlights it and shows its length, uses and surface.
+ *
+ * Gaps in the NPS data: Gates of the Arctic has no maintained trails and
+ * Sequoia & Kings Canyon's aren't published; both still have the brochure.
  */
 
 import { useQuery } from '@tanstack/react-query';
-import { geoMercator } from 'd3-geo';
+import * as ScreenOrientation from 'expo-screen-orientation';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Linking,
+  Modal,
   Pressable,
   ScrollView,
   StyleSheet,
   View,
   useWindowDimensions,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
 
-import {
-  fetchParkMap,
-  officialMapUrl,
-  type MapPath,
-  type ParkMap,
-  type TrailUse,
-} from '../../api/parkMaps';
+import { fetchParkMap, officialMapUrl, type ParkMap, type TrailUse } from '../../api/parkMaps';
 import { listSites } from '../../api/parks';
-import { BodyText, Button, Heading, Kicker } from '../../components';
+import { BodyText, Button, ExpandIcon, Heading, Kicker } from '../../components';
+import {
+  isOnMap,
+  ROAD_INK,
+  TRAIL_INK,
+  type MapSelection,
+} from '../../components/maps/DrawnParkMap';
+import { ParkMapCanvas, type MapKind } from '../../components/maps/ParkMapCanvas';
+import type { RealMapStyle } from '../../components/maps/RealParkMap';
+import { StarIcon, VISITOR_CENTER_STAR, YOU_STAR } from '../../components/maps/stars';
 import { regionForState } from '../../data/regions';
+import { useYouAreHere } from '../../location/useYouAreHere';
 import { colors, radius, shadow, space } from '../../theme';
 
 const USE_LABEL: Record<TrailUse, string> = {
@@ -45,10 +56,17 @@ const USE_LABEL: Record<TrailUse, string> = {
   motorized: 'Motorized',
 };
 
-const TRAIL_INK = colors.accentRamp[800];
-const TRAIL_SELECTED = colors.accent;
-const ROAD_INK = colors.neutral[500];
-const PAD = 12;
+const KINDS: { value: MapKind; label: string }[] = [
+  { value: 'drawn', label: 'Trail map' },
+  { value: 'real', label: 'Real map' },
+  { value: 'brochure', label: 'Park brochure' },
+];
+
+const REAL_STYLES: { value: RealMapStyle; label: string }[] = [
+  { value: 'standard', label: 'Map' },
+  { value: 'terrain', label: 'Terrain' },
+  { value: 'satellite', label: 'Satellite' },
+];
 
 /** One named trail as the list shows it: all its NPS entries merged. */
 type TrailSummary = {
@@ -79,55 +97,19 @@ function summarise(map: ParkMap): TrailSummary[] {
   return [...byName.values()].sort((a, b) => a.name.localeCompare(b.name));
 }
 
-/** SVG path data for the map at a given size, or null if there is nothing to draw. */
-function draw(map: ParkMap, width: number, height: number) {
-  const fitTo = map.boundary.length
-    ? map.boundary.flat()
-    : [...map.trails, ...map.roads].flatMap((line) => line.paths.flat());
-  if (fitTo.length === 0) return null;
-
-  // Projected point by point rather than through geoPath: the NPS rings
-  // wind the way GeoJSON specifies, which d3's spherical polygons read as
-  // "everything but the park".
-  const projection = geoMercator().fitExtent(
-    [
-      [PAD, PAD],
-      [width - PAD, height - PAD],
-    ],
-    { type: 'MultiPoint', coordinates: fitTo },
-  );
-  const toD = (paths: MapPath[], close = false) =>
-    paths
-      .map(
-        (path) =>
-          path
-            .map((point, i) => {
-              const [x, y] = projection(point) ?? [0, 0];
-              return `${i === 0 ? 'M' : 'L'}${x.toFixed(1)},${y.toFixed(1)}`;
-            })
-            .join('') + (close ? 'Z' : ''),
-      )
-      .join('');
-
-  return {
-    boundary: toD(map.boundary, true),
-    roads: map.roads.map((road, i) => ({ key: i, kind: road.kind, d: toD(road.paths) })),
-    trails: map.trails.map((trail, i) => ({
-      key: i,
-      name: trail.name,
-      closed: trail.closed,
-      d: toD(trail.paths),
-    })),
-  };
-}
-
 export default function ParkMapScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { width: windowWidth } = useWindowDimensions();
   const scrollRef = useRef<ScrollView>(null);
-  const [selected, setSelected] = useState<string | null>(null);
+
+  const [kind, setKind] = useState<MapKind>('drawn');
+  const [realStyle, setRealStyle] = useState<RealMapStyle>('terrain');
+  const [brochureIndex, setBrochureIndex] = useState(0);
+  const [selection, setSelection] = useState<MapSelection>(null);
+  const [fullScreen, setFullScreen] = useState(false);
+  const you = useYouAreHere();
 
   // Same query key as Explore, so this is already cached.
   const { data: sites } = useQuery({
@@ -147,20 +129,27 @@ export default function ParkMapScreen() {
     staleTime: Infinity,
   });
 
+  const trails = useMemo(() => (parkMap ? summarise(parkMap) : []), [parkMap]);
+  const tint = (site && regionForState(site.state)?.fill) ?? colors.accent2Ramp[100];
+  const mapsPage = parkMap?.officialMapUrl ?? officialMapUrl(id);
+  const kinds = KINDS.filter((k) => k.value !== 'brochure' || (parkMap?.brochures.length ?? 0) > 0);
+  const inPark = parkMap ? isOnMap(parkMap, you.point) : false;
+
   const mapWidth = windowWidth - space[4] * 2;
   const mapHeight = Math.min(Math.round(mapWidth * 1.05), 520);
-  const drawn = useMemo(
-    () => (parkMap ? draw(parkMap, mapWidth, mapHeight) : null),
-    [parkMap, mapWidth, mapHeight],
-  );
-  const trails = useMemo(() => (parkMap ? summarise(parkMap) : []), [parkMap]);
-  const chosen = trails.find((trail) => trail.name === selected);
-  const tint = site ? regionForState(site.state) : undefined;
-  const mapsPage = parkMap?.officialMapUrl ?? officialMapUrl(id);
 
-  function choose(name: string | null) {
-    setSelected((current) => (current === name ? null : name));
-  }
+  const canvasProps = parkMap
+    ? {
+        kind,
+        map: parkMap,
+        tint,
+        you: you.point,
+        realStyle,
+        brochureIndex,
+        selection,
+        onSelect: setSelection,
+      }
+    : null;
 
   return (
     <ScrollView
@@ -183,150 +172,82 @@ export default function ParkMapScreen() {
         </BodyText>
       </Pressable>
 
-      <Kicker style={styles.kicker}>Trail map</Kicker>
+      <Kicker style={styles.kicker}>Park maps</Kicker>
       <Heading size={26}>{site?.name ?? 'Park map'}</Heading>
 
-      {drawn ? (
+      {parkMap && canvasProps ? (
         <>
+          <Segmented options={kinds} value={kind} onChange={setKind} style={styles.kinds} />
+          <MapOptions
+            kind={kind}
+            map={parkMap}
+            realStyle={realStyle}
+            onRealStyle={setRealStyle}
+            brochureIndex={brochureIndex}
+            onBrochure={setBrochureIndex}
+          />
+
           <View style={[styles.map, { height: mapHeight }]}>
-            <Svg width={mapWidth} height={mapHeight}>
-              {drawn.boundary ? (
-                <Path
-                  d={drawn.boundary}
-                  fill={tint?.fill ?? colors.accent2Ramp[100]}
-                  fillRule="evenodd"
-                  stroke={colors.neutral[600]}
-                  strokeWidth={1}
-                  strokeLinejoin="round"
-                />
-              ) : null}
-              {drawn.roads.map((road) => (
-                <Path
-                  key={`road-${road.key}`}
-                  d={road.d}
-                  fill="none"
-                  stroke={ROAD_INK}
-                  strokeWidth={road.kind === 'primary' ? 2.2 : road.kind === 'secondary' ? 1.6 : 1}
-                  strokeDasharray={road.kind === '4wd' ? '3 3' : undefined}
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              ))}
-              {drawn.trails.map((trail) => (
-                <Path
-                  key={`trail-${trail.key}`}
-                  d={trail.d}
-                  fill="none"
-                  stroke={TRAIL_INK}
-                  strokeOpacity={selected && trail.name !== selected ? 0.45 : 1}
-                  strokeWidth={1.4}
-                  strokeDasharray={trail.closed ? '2 3' : undefined}
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              ))}
-              {/* The selected trail again, on top of everything else. */}
-              {drawn.trails
-                .filter((trail) => trail.name !== null && trail.name === selected)
-                .map((trail) => (
-                  <Path
-                    key={`selected-${trail.key}`}
-                    d={trail.d}
-                    fill="none"
-                    stroke={TRAIL_SELECTED}
-                    strokeWidth={3.5}
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                ))}
-              {/* Wide, nearly invisible copies of the named trails, so a
-                  thin line is still easy to tap. */}
-              {drawn.trails
-                .filter((trail) => trail.name !== null)
-                .map((trail) => (
-                  <Path
-                    key={`hit-${trail.key}`}
-                    d={trail.d}
-                    fill="none"
-                    stroke="#000"
-                    strokeOpacity={0.01}
-                    strokeWidth={14}
-                    onPress={() => choose(trail.name)}
-                  />
-                ))}
-            </Svg>
+            <ParkMapCanvas {...canvasProps} width={mapWidth} height={mapHeight} />
+            <Pressable
+              onPress={() => setFullScreen(true)}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel="Full screen, sideways"
+              style={({ pressed }) => [styles.expand, pressed && styles.expandPressed]}
+            >
+              <ExpandIcon color={colors.neutral[800]} />
+            </Pressable>
           </View>
 
-          <View style={styles.legend}>
-            <LegendLine color={TRAIL_INK} label="Trail" />
-            <LegendLine color={TRAIL_INK} dashed label="Temporarily closed" />
-            <LegendLine color={ROAD_INK} label="Road" />
-          </View>
+          <BodyText size={11.5} color={colors.textMuted} style={styles.hint}>
+            {kind === 'real'
+              ? 'Pinch and drag to explore. Tap a trail or a star for details.'
+              : 'Pinch or double-tap to zoom. Tap the expand button to turn it sideways.'}
+          </BodyText>
 
-          {chosen ? (
-            <View style={styles.selectedCard}>
-              <BodyText size={15} weight="semibold">
-                {chosen.name}
-              </BodyText>
-              <BodyText size={12.5} color={colors.neutral[700]}>
-                {[
-                  `${chosen.miles.toFixed(1)} mi`,
-                  chosen.uses.map((use) => USE_LABEL[use]).join(', '),
-                  chosen.surfaces.join(', '),
-                ]
-                  .filter(Boolean)
-                  .join(' · ')}
-              </BodyText>
-              {chosen.closed ? (
-                <BodyText size={12.5} weight="semibold" color={colors.accentRamp[800]}>
-                  Part of this trail is temporarily closed.
-                </BodyText>
-              ) : null}
-            </View>
-          ) : trails.length > 0 ? (
-            <BodyText size={12.5} color={colors.textMuted} style={styles.hint}>
-              Tap a trail on the map or in the list for its details.
-            </BodyText>
-          ) : null}
+          {kind !== 'brochure' ? <Legend kind={kind} /> : null}
+          <LocationNote kind={kind} status={you.status} hasFix={you.point !== null} inPark={inPark} />
+          <SelectionCard selection={selection} trails={trails} />
         </>
       ) : (
         <View style={styles.notice}>
           <BodyText size={13.5} lineHeightRatio={1.5} color={colors.neutral[700]}>
             {isPending
-              ? 'Loading the trail map…'
+              ? 'Loading the park maps…'
               : isError
-                ? "Couldn't load the trail map. Check your connection and try again."
-                : "We don't have a trail map for this park yet."}
+                ? "Couldn't load the park maps. Check your connection and try again."
+                : "We don't have maps for this park yet."}
           </BodyText>
         </View>
       )}
 
-      {parkMap && trails.length === 0 ? (
+      {parkMap && trails.length === 0 && kind !== 'brochure' ? (
         <BodyText size={12.5} lineHeightRatio={1.5} color={colors.textMuted} style={styles.hint}>
-          The National Park Service doesn&apos;t publish trail data for this park. The official
-          park map has what&apos;s there.
+          The National Park Service doesn&apos;t publish trail data for this park. The park
+          brochure map has what&apos;s there.
         </BodyText>
       ) : null}
 
       <Button
-        label="Official park map (nps.gov)"
+        label="Official park maps (nps.gov)"
         variant="ghost"
         onPress={() => Linking.openURL(mapsPage)}
         style={styles.official}
       />
 
-      {trails.length > 0 ? (
+      {trails.length > 0 && kind !== 'brochure' ? (
         <View style={styles.list}>
           <BodyText size={10} weight="semibold" color={colors.neutral[600]} style={styles.listTitle}>
             {`${trails.length} ${trails.length === 1 ? 'TRAIL' : 'TRAILS'}`}
           </BodyText>
           {trails.map((trail) => {
-            const active = trail.name === selected;
+            const active = selection !== null && 'trail' in selection && selection.trail === trail.name;
             return (
               <Pressable
                 key={trail.name}
                 onPress={() => {
-                  choose(trail.name);
+                  setSelection(active ? null : { trail: trail.name });
                   // Back up to the map so the highlight is in view.
                   if (!active) scrollRef.current?.scrollTo({ y: 0, animated: true });
                 }}
@@ -351,9 +272,272 @@ export default function ParkMapScreen() {
       ) : null}
 
       <BodyText size={11} color={colors.textMuted} style={styles.credit}>
-        Trails, roads and boundary: National Park Service.
+        Trails, roads, boundaries, visitor centers and brochure maps: National Park Service.
       </BodyText>
+
+      {parkMap && canvasProps ? (
+        <FullScreenMap
+          visible={fullScreen}
+          onClose={() => setFullScreen(false)}
+          title={site?.name ?? 'Park map'}
+          kinds={kinds}
+          onKind={setKind}
+          canvasProps={canvasProps}
+          trails={trails}
+          onRealStyle={setRealStyle}
+          onBrochure={setBrochureIndex}
+        />
+      ) : null}
     </ScrollView>
+  );
+}
+
+type CanvasProps = Omit<Parameters<typeof ParkMapCanvas>[0], 'width' | 'height'>;
+
+/**
+ * The chosen map, full screen and sideways — as soon as it opens, either
+ * way round, upright again when it closes. Same approach as Explore's
+ * FullMapView.
+ */
+function FullScreenMap({
+  visible,
+  onClose,
+  ...props
+}: {
+  visible: boolean;
+  onClose: () => void;
+  title: string;
+  kinds: { value: MapKind; label: string }[];
+  onKind: (kind: MapKind) => void;
+  canvasProps: CanvasProps;
+  trails: TrailSummary[];
+  onRealStyle: (style: RealMapStyle) => void;
+  onBrochure: (index: number) => void;
+}) {
+  useEffect(() => {
+    if (!visible) return;
+    ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE).catch(() => {});
+    return () => {
+      ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP).catch(() => {});
+    };
+  }, [visible]);
+
+  return (
+    <Modal
+      visible={visible}
+      animationType="fade"
+      onRequestClose={onClose}
+      // iOS keeps a modal portrait unless it's told otherwise.
+      supportedOrientations={['landscape-left', 'landscape-right']}
+    >
+      {/* Its own safe-area provider: the app's one keeps the upright insets
+          after the phone turns. */}
+      <SafeAreaProvider>
+        <FullScreenBody onClose={onClose} {...props} />
+      </SafeAreaProvider>
+    </Modal>
+  );
+}
+
+function FullScreenBody({
+  onClose,
+  title,
+  kinds,
+  onKind,
+  canvasProps,
+  trails,
+  onRealStyle,
+  onBrochure,
+}: Omit<Parameters<typeof FullScreenMap>[0], 'visible'>) {
+  const { width, height } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
+
+  return (
+    <View style={styles.full}>
+      <ParkMapCanvas {...canvasProps} width={width} height={height} />
+
+      <View
+        style={[styles.fullTop, { top: insets.top + space[2], left: insets.left + space[3], right: insets.right + space[3] }]}
+        pointerEvents="box-none"
+      >
+        <Pressable
+          onPress={onClose}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel="Close full screen"
+          style={({ pressed }) => [styles.fullButton, pressed && styles.expandPressed]}
+        >
+          <BodyText size={18} weight="semibold" color={colors.neutral[800]}>
+            ✕
+          </BodyText>
+        </Pressable>
+        <View style={styles.fullTitle}>
+          <BodyText size={13} weight="semibold" numberOfLines={1}>
+            {title}
+          </BodyText>
+        </View>
+        <Segmented options={kinds} value={canvasProps.kind} onChange={onKind} compact />
+      </View>
+
+      <View
+        style={[styles.fullBottom, { bottom: insets.bottom + space[2], left: insets.left + space[3], right: insets.right + space[3] }]}
+        pointerEvents="box-none"
+      >
+        <MapOptions
+          kind={canvasProps.kind}
+          map={canvasProps.map}
+          realStyle={canvasProps.realStyle}
+          onRealStyle={onRealStyle}
+          brochureIndex={canvasProps.brochureIndex}
+          onBrochure={onBrochure}
+          floating
+        />
+        {canvasProps.kind !== 'brochure' ? (
+          <SelectionCard selection={canvasProps.selection} trails={trails} floating />
+        ) : null}
+      </View>
+    </View>
+  );
+}
+
+/** The real map's style, or which brochure, depending on the map shown. */
+function MapOptions({
+  kind,
+  map,
+  realStyle,
+  onRealStyle,
+  brochureIndex,
+  onBrochure,
+  floating = false,
+}: {
+  kind: MapKind;
+  map: ParkMap;
+  realStyle: RealMapStyle;
+  onRealStyle: (style: RealMapStyle) => void;
+  brochureIndex: number;
+  onBrochure: (index: number) => void;
+  floating?: boolean;
+}) {
+  if (kind === 'real') {
+    return (
+      <Chips
+        options={REAL_STYLES}
+        value={realStyle}
+        onChange={onRealStyle}
+        floating={floating}
+      />
+    );
+  }
+  if (kind === 'brochure' && map.brochures.length > 1) {
+    return (
+      <Chips
+        options={map.brochures.map((b, i) => ({ value: i, label: b.title }))}
+        value={brochureIndex}
+        onChange={onBrochure}
+        floating={floating}
+      />
+    );
+  }
+  return null;
+}
+
+function Segmented<T extends string>({
+  options,
+  value,
+  onChange,
+  compact = false,
+  style,
+}: {
+  options: { value: T; label: string }[];
+  value: T;
+  onChange: (value: T) => void;
+  compact?: boolean;
+  style?: object;
+}) {
+  return (
+    <View style={[styles.switch, compact && styles.switchCompact, style]} accessibilityRole="tablist">
+      {options.map((option) => {
+        const active = option.value === value;
+        return (
+          <Pressable
+            key={option.value}
+            onPress={() => onChange(option.value)}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: active }}
+            style={[styles.switchOption, compact && styles.switchOptionCompact, active && styles.switchActive]}
+          >
+            <BodyText
+              size={compact ? 11.5 : 12.5}
+              weight="semibold"
+              color={active ? colors.neutral[100] : colors.neutral[700]}
+              numberOfLines={1}
+            >
+              {option.label}
+            </BodyText>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
+function Chips<T extends string | number>({
+  options,
+  value,
+  onChange,
+  floating,
+}: {
+  options: { value: T; label: string }[];
+  value: T;
+  onChange: (value: T) => void;
+  floating: boolean;
+}) {
+  return (
+    <View style={[styles.chips, floating && styles.chipsFloating]}>
+      {options.map((option) => {
+        const active = option.value === value;
+        return (
+          <Pressable
+            key={String(option.value)}
+            onPress={() => onChange(option.value)}
+            accessibilityRole="button"
+            accessibilityState={{ selected: active }}
+            style={[styles.chip, active && styles.chipActive]}
+          >
+            <BodyText
+              size={11.5}
+              weight="semibold"
+              color={active ? colors.neutral[100] : colors.neutral[800]}
+              numberOfLines={1}
+            >
+              {option.label}
+            </BodyText>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
+function Legend({ kind }: { kind: MapKind }) {
+  return (
+    <View style={styles.legend}>
+      <LegendLine color={TRAIL_INK} label="Trail" />
+      <LegendLine color={TRAIL_INK} dashed label="Temporarily closed" />
+      {kind === 'drawn' ? <LegendLine color={ROAD_INK} label="Road" /> : null}
+      <View style={styles.legendItem}>
+        <StarIcon color={VISITOR_CENTER_STAR} size={13} />
+        <BodyText size={11.5} color={colors.neutral[700]}>
+          Visitor center
+        </BodyText>
+      </View>
+      <View style={styles.legendItem}>
+        <StarIcon color={YOU_STAR} size={13} />
+        <BodyText size={11.5} color={colors.neutral[700]}>
+          You are here
+        </BodyText>
+      </View>
+    </View>
   );
 }
 
@@ -372,6 +556,83 @@ function LegendLine({ color, label, dashed }: { color: string; label: string; da
       <BodyText size={11.5} color={colors.neutral[700]}>
         {label}
       </BodyText>
+    </View>
+  );
+}
+
+/** Why there's no red star, when there isn't one. */
+function LocationNote({
+  kind,
+  status,
+  hasFix,
+  inPark,
+}: {
+  kind: MapKind;
+  status: 'asking' | 'granted' | 'denied';
+  hasFix: boolean;
+  inPark: boolean;
+}) {
+  let note: string | null = null;
+  if (kind === 'brochure') {
+    note = 'The brochure is the printed map, so it has no "you are here" star. Switch to the trail or real map for that.';
+  } else if (status === 'denied') {
+    note = 'Allow location for ParkPath in your phone\'s settings to see a "you are here" star.';
+  } else if (status === 'granted' && hasFix && !inPark) {
+    note = "You're not in the park right now. The red star shows where you are once you're here.";
+  }
+  return note ? (
+    <BodyText size={12} lineHeightRatio={1.45} color={colors.textMuted} style={styles.hint}>
+      {note}
+    </BodyText>
+  ) : null;
+}
+
+function SelectionCard({
+  selection,
+  trails,
+  floating = false,
+}: {
+  selection: MapSelection;
+  trails: TrailSummary[];
+  floating?: boolean;
+}) {
+  if (!selection) return null;
+  if ('place' in selection) {
+    return (
+      <View style={[styles.selectedCard, floating && styles.selectedFloating]}>
+        <View style={styles.legendItem}>
+          <StarIcon color={VISITOR_CENTER_STAR} size={15} />
+          <BodyText size={15} weight="semibold">
+            {selection.place.name}
+          </BodyText>
+        </View>
+        <BodyText size={12.5} color={colors.neutral[700]}>
+          Visitor center
+        </BodyText>
+      </View>
+    );
+  }
+  const trail = trails.find((t) => t.name === selection.trail);
+  if (!trail) return null;
+  return (
+    <View style={[styles.selectedCard, floating && styles.selectedFloating]}>
+      <BodyText size={15} weight="semibold">
+        {trail.name}
+      </BodyText>
+      <BodyText size={12.5} color={colors.neutral[700]}>
+        {[
+          `${trail.miles.toFixed(1)} mi`,
+          trail.uses.map((use) => USE_LABEL[use]).join(', '),
+          trail.surfaces.join(', '),
+        ]
+          .filter(Boolean)
+          .join(' · ')}
+      </BodyText>
+      {trail.closed ? (
+        <BodyText size={12.5} weight="semibold" color={colors.accentRamp[800]}>
+          Part of this trail is temporarily closed.
+        </BodyText>
+      ) : null}
     </View>
   );
 }
@@ -396,17 +657,82 @@ const styles = StyleSheet.create({
   kicker: {
     marginBottom: 4,
   },
-  map: {
+  kinds: {
     marginTop: space[4],
+  },
+  switch: {
+    flexDirection: 'row',
+    gap: 4,
+    padding: 4,
+    borderRadius: radius.pill,
+    backgroundColor: colors.neutral[200],
+  },
+  switchCompact: {
+    ...shadow.sm,
+  },
+  switchOption: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 6,
+    borderRadius: radius.pill,
+  },
+  switchOptionCompact: {
+    flex: 0,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+  },
+  switchActive: {
+    backgroundColor: colors.accent,
+  },
+  chips: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: space[2],
+  },
+  chipsFloating: {
+    marginTop: 0,
+  },
+  chip: {
+    paddingVertical: 5,
+    paddingHorizontal: 12,
+    borderRadius: radius.pill,
+    backgroundColor: colors.neutral[100],
+    borderWidth: 1,
+    borderColor: colors.neutral[300],
+  },
+  chipActive: {
+    backgroundColor: colors.neutral[800],
+    borderColor: colors.neutral[800],
+  },
+  map: {
+    marginTop: space[3],
     borderRadius: radius.card,
     backgroundColor: colors.neutral[100],
     overflow: 'hidden',
     ...shadow.sm,
   },
+  expand: {
+    position: 'absolute',
+    top: space[2],
+    right: space[2],
+    width: 32,
+    height: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: radius.pill,
+    backgroundColor: colors.neutral[100],
+    ...shadow.sm,
+  },
+  expandPressed: {
+    backgroundColor: colors.neutral[300],
+  },
   legend: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: space[4],
+    columnGap: space[4],
+    rowGap: space[1],
     marginTop: space[2],
   },
   legendItem: {
@@ -421,8 +747,13 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     backgroundColor: colors.accentRamp[100],
   },
+  selectedFloating: {
+    marginTop: 0,
+    maxWidth: 360,
+    ...shadow.md,
+  },
   hint: {
-    marginTop: space[3],
+    marginTop: space[2],
   },
   notice: {
     marginTop: space[4],
@@ -461,5 +792,38 @@ const styles = StyleSheet.create({
   },
   credit: {
     marginTop: space[6],
+  },
+  full: {
+    flex: 1,
+    backgroundColor: colors.neutral[100],
+  },
+  fullTop: {
+    position: 'absolute',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space[2],
+  },
+  fullButton: {
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: radius.pill,
+    backgroundColor: colors.neutral[100],
+    ...shadow.sm,
+  },
+  fullTitle: {
+    flexShrink: 1,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: radius.pill,
+    backgroundColor: colors.neutral[100],
+    marginRight: 'auto',
+    ...shadow.sm,
+  },
+  fullBottom: {
+    position: 'absolute',
+    alignItems: 'flex-start',
+    gap: space[2],
   },
 });
