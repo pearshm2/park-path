@@ -1,9 +1,10 @@
 /**
  * A national park's maps, two ways, switched at the top:
  *
+ *   - Park brochure: the official NPS printed map. Shown first; parks
+ *     without one open on the real map.
  *   - Real map: Apple Maps / Google Maps (map, terrain or satellite) with
  *     the NPS's trails drawn on top.
- *   - Park brochure: the official NPS printed map.
  *
  * Both pinch to zoom, and the expand button opens the map full screen:
  * turned sideways for the real map and for wide brochures, upright for tall
@@ -51,8 +52,8 @@ const USE_LABEL: Record<TrailUse, string> = {
 };
 
 const KINDS: { value: MapKind; label: string }[] = [
-  { value: 'real', label: 'Real map' },
   { value: 'brochure', label: 'Park brochure' },
+  { value: 'real', label: 'Real map' },
 ];
 
 const REAL_STYLES: { value: RealMapStyle; label: string }[] = [
@@ -107,12 +108,15 @@ export default function ParkMapScreen() {
   const insets = useSafeAreaInsets();
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const scrollRef = useRef<ScrollView>(null);
-  // Where the person last scrolled the page to. On Android the Google map
-  // takes focus as it loads, and the page jumps to it; this is where to
-  // put the page back. Only the person's own scrolling updates it.
+  // On Android the page can scroll by itself as it opens: the Google map
+  // takes focus as it loads and the page jumps to it, and the brochure
+  // view has been seen to do the same. Until the person touches the page,
+  // any scroll is one of those and is undone; after that, the map loading
+  // again (switching views) puts the page back where they left it.
+  const touched = useRef(false);
   const userScrollY = useRef(0);
 
-  const [kind, setKind] = useState<MapKind>('real');
+  const [chosenKind, setKind] = useState<MapKind>('brochure');
   const [realStyle, setRealStyle] = useState<RealMapStyle>('terrain');
   const [brochureIndex, setBrochureIndex] = useState(0);
   const [selection, setSelection] = useState<MapSelection>(null);
@@ -140,6 +144,8 @@ export default function ParkMapScreen() {
   const trails = useMemo(() => (parkMap ? summarise(parkMap) : []), [parkMap]);
   const mapsPage = parkMap?.officialMapUrl ?? officialMapUrl(id);
   const kinds = KINDS.filter((k) => k.value !== 'brochure' || (parkMap?.brochures.length ?? 0) > 0);
+  // The brochure comes first, but not every park has one.
+  const kind: MapKind = kinds.some((k) => k.value === chosenKind) ? chosenKind : 'real';
   const inPark = parkMap ? isOnMap(parkMap, you.point) : false;
 
   const mapWidth = windowWidth - space[4] * 2;
@@ -172,6 +178,15 @@ export default function ParkMapScreen() {
   return (
     <ScrollView
       ref={scrollRef}
+      onTouchStart={() => {
+        touched.current = true;
+      }}
+      scrollEventThrottle={32}
+      onScroll={(event) => {
+        if (!touched.current && event.nativeEvent.contentOffset.y > 0) {
+          scrollRef.current?.scrollTo({ y: 0, animated: false });
+        }
+      }}
       onScrollEndDrag={(event) => {
         userScrollY.current = event.nativeEvent.contentOffset.y;
       }}
@@ -375,6 +390,11 @@ function FullScreenMap({
       onRequestClose={onClose}
       // iOS keeps a modal portrait unless it's told otherwise.
       supportedOrientations={sideways ? ['landscape-left', 'landscape-right'] : ['portrait']}
+      // Edge to edge on Android, so the page doesn't show through beside
+      // the camera cutout or under the status and navigation bars. The
+      // buttons are placed inside the safe-area insets.
+      statusBarTranslucent
+      navigationBarTranslucent
     >
       {/* Its own safe-area provider: the app's one keeps the upright insets
           after the phone turns. */}
