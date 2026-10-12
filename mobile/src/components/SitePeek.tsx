@@ -99,8 +99,8 @@ type PeekProps = {
   saved?: boolean;
   /** Shows the Save action, which adds the site to or removes it from the wishlist. */
   onToggleSave?: (site: Site) => void;
-  /** Shows the Map action, which shows the site on Explore's map. */
-  onShowOnMap?: (site: Site) => void;
+  /** Shows the Map action on national parks, which opens the park's trail map. */
+  onOpenMap?: (site: Site) => void;
   onDismiss: () => void;
   onOpen: (site: Site) => void;
 };
@@ -125,7 +125,7 @@ function PeekCard({
   referenceVisits,
   saved = false,
   onToggleSave,
-  onShowOnMap,
+  onOpenMap,
   onDismiss,
   onOpen,
 }: PeekProps & { site: Site }) {
@@ -204,12 +204,13 @@ function PeekCard({
             icon={<DirectionsIcon />}
             onPress={() => openDirections(site)}
           />
-          {onShowOnMap ? (
+          {/* The trail maps cover the national parks. */}
+          {onOpenMap && site.isNamedPark ? (
             <QuickAction
               label="Map"
-              accessibilityLabel={`Show ${site.name} on the map`}
+              accessibilityLabel={`Trail map of ${site.name}`}
               icon={<MapIcon />}
-              onPress={() => onShowOnMap(site)}
+              onPress={() => onOpenMap(site)}
             />
           ) : null}
           {onToggleSave ? (

@@ -829,10 +829,9 @@ export default function ExploreScreen() {
         referenceVisits={allSites.find((site) => site.id === 'grsm')?.vis ?? undefined}
         saved={peekSite !== null && wishlistIds.has(peekSite.id)}
         onToggleSave={(site) => toggleWishlist(site.id)}
-        onShowOnMap={(site) => {
-          // The same zoom as tapping the park's card or pin.
+        onOpenMap={(site) => {
           setPeekSite(null);
-          focusPark(site);
+          router.push(`/park-map/${site.id}`);
         }}
         onDismiss={() => setPeekSite(null)}
         onOpen={(site) => {
