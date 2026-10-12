@@ -9,7 +9,7 @@ of accidental data leaks.
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, EmailStr
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 
 class UserCreate(BaseModel):
@@ -85,3 +85,57 @@ class FriendOut(BaseModel):
     friendship_id: int
     user: UserOut
     since: datetime | None
+
+
+# --- Recommendations (POST /recommendations) --------------------------------
+
+QuizTerrain = Literal["mountain", "canyon", "desert", "forest", "coast", "water"]
+Season = Literal["winter", "spring", "summer", "fall"]
+
+
+class QuizAnswers(BaseModel):
+    """The onboarding quiz, as the app sends it. Every question is required."""
+
+    terrains: list[QuizTerrain] = Field(min_length=1)
+    # Ranked, favourite first. An empty list means "Any season works for me".
+    seasons: list[Season] = Field(max_length=4)
+    crowds: Literal["icons", "either", "quiet"]
+
+    @field_validator("terrains", "seasons")
+    @classmethod
+    def no_repeats(cls, value: list[str]) -> list[str]:
+        if len(value) != len(set(value)):
+            raise ValueError("each answer can only be picked once")
+        return value
+
+
+class Location(BaseModel):
+    """Where the person starts, already converted from their zip code by the app."""
+
+    lat: float = Field(ge=-90, le=90)
+    lon: float = Field(ge=-180, le=180)
+
+
+class RecommendationRequest(BaseModel):
+    answers: QuizAnswers
+    # The quiz requires a zip code, but the API accepts a request without
+    # one, so the app can integrate before its zip lookup exists. Without
+    # it, distance just isn't scored.
+    location: Location | None = None
+
+
+class SignalScores(BaseModel):
+    """Each signal's match from 0 to 1, or null when it isn't in use."""
+
+    distance: float | None
+    terrain: float | None
+    season: float | None
+    crowds: float | None
+
+
+class RecommendationOut(BaseModel):
+    park_code: str
+    # 0 to 1. Null for sites with no curated data yet.
+    score: float | None
+    reason: str | None
+    signals: SignalScores
