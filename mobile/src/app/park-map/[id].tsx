@@ -1,27 +1,20 @@
 /**
- * A national park's maps, two ways, switched at the top:
+ * A national park's official NPS brochure map, pinch-to-zoom, with a
+ * switch between maps for parks that have more than one (Saguaro's East
+ * and West units, say).
  *
- *   - Park brochure: the official NPS printed map. Shown first; parks
- *     without one open on the real map.
- *   - Real map: Apple Maps / Google Maps (map, terrain or satellite) with
- *     the NPS's trails drawn on top.
+ * Under the map, the visitor centers labelled on it. Tapping one opens the
+ * map full screen, zooms to its label and rings it, so it's easy to find.
  *
- * Both pinch to zoom, and the expand button opens the map full screen:
- * turned sideways for the real map and for wide brochures, upright for tall
- * ones (New River Gorge's runs north-south), so a map is never shrunk to
- * fit the wrong way round. Visitor centers are green
- * stars; where you are is a red "you are here" star, once location is
- * allowed and you're in the park. Tapping a trail (on the map or in the
- * list) highlights it and shows its length, uses and surface.
- *
- * Gaps in the NPS data: Gates of the Arctic has no maintained trails and
- * Sequoia & Kings Canyon's aren't published; both still have the brochure.
+ * The expand button opens the map full screen: turned sideways for wide
+ * brochures, upright for tall ones (New River Gorge's runs north-south),
+ * so a map is never shrunk to fit the wrong way round.
  */
 
 import { useQuery } from '@tanstack/react-query';
 import * as ScreenOrientation from 'expo-screen-orientation';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   Linking,
   Modal,
@@ -32,74 +25,32 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
-import Svg, { Path } from 'react-native-svg';
 
-import { fetchParkMap, officialMapUrl, type ParkMap, type TrailUse } from '../../api/parkMaps';
+import {
+  fetchParkMap,
+  officialMapUrl,
+  type BrochureMap,
+  type MapLabel,
+} from '../../api/parkMaps';
 import { listSites } from '../../api/parks';
 import { BodyText, Button, ExpandIcon, Heading, Kicker } from '../../components';
-import { ParkMapCanvas, type MapKind } from '../../components/maps/ParkMapCanvas';
-import type { RealMapStyle } from '../../components/maps/RealParkMap';
-import { isOnMap, TRAIL_INK, type MapSelection } from '../../components/maps/shared';
-import { StarIcon, VISITOR_CENTER_STAR, YOU_STAR } from '../../components/maps/stars';
-import { useYouAreHere } from '../../location/useYouAreHere';
+import { BrochureMapView } from '../../components/maps/BrochureMapView';
 import { colors, radius, shadow, space } from '../../theme';
 
-const USE_LABEL: Record<TrailUse, string> = {
-  hike: 'Hiking',
-  horse: 'Horses',
-  bike: 'Bikes',
-  motorized: 'Motorized',
-};
-
-const KINDS: { value: MapKind; label: string }[] = [
-  { value: 'brochure', label: 'Park brochure' },
-  { value: 'real', label: 'Real map' },
-];
-
-const REAL_STYLES: { value: RealMapStyle; label: string }[] = [
-  { value: 'standard', label: 'Map' },
-  { value: 'terrain', label: 'Terrain' },
-  { value: 'satellite', label: 'Satellite' },
-];
-
-/** One named trail as the list shows it: all its NPS entries merged. */
-type TrailSummary = {
-  name: string;
-  miles: number;
-  uses: TrailUse[];
-  surfaces: string[];
-  closed: boolean;
-};
-
 /**
- * Whether full screen should turn the phone sideways: yes for the real map
- * (it pans anywhere) and for brochures wider than tall; a tall brochure
- * stays upright, where it fills the screen.
+ * The names to show for a map's visitor centers. Some maps print just
+ * "Visitor Center" more than once (Big Bend), so repeats are numbered.
  */
-function fullScreenSideways(kind: MapKind, map: ParkMap, brochureIndex: number): boolean {
-  if (kind !== 'brochure') return true;
-  const brochure = map.brochures[brochureIndex] ?? map.brochures[0];
-  return !brochure || brochure.width >= brochure.height;
-}
-
-function summarise(map: ParkMap): TrailSummary[] {
-  const byName = new Map<string, TrailSummary>();
-  for (const trail of map.trails) {
-    if (!trail.name) continue;
-    const entry = byName.get(trail.name) ?? {
-      name: trail.name,
-      miles: 0,
-      uses: [],
-      surfaces: [],
-      closed: false,
-    };
-    entry.miles += trail.lengthMiles;
-    for (const use of trail.uses) if (!entry.uses.includes(use)) entry.uses.push(use);
-    if (trail.surface && !entry.surfaces.includes(trail.surface)) entry.surfaces.push(trail.surface);
-    entry.closed ||= trail.closed;
-    byName.set(trail.name, entry);
-  }
-  return [...byName.values()].sort((a, b) => a.name.localeCompare(b.name));
+function displayNames(labels: MapLabel[]): string[] {
+  const totals = new Map<string, number>();
+  for (const label of labels) totals.set(label.name, (totals.get(label.name) ?? 0) + 1);
+  const seen = new Map<string, number>();
+  return labels.map((label) => {
+    if ((totals.get(label.name) ?? 0) < 2) return label.name;
+    const n = (seen.get(label.name) ?? 0) + 1;
+    seen.set(label.name, n);
+    return `${label.name} ${n}`;
+  });
 }
 
 export default function ParkMapScreen() {
@@ -108,20 +59,13 @@ export default function ParkMapScreen() {
   const insets = useSafeAreaInsets();
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const scrollRef = useRef<ScrollView>(null);
-  // On Android the page can scroll by itself as it opens: the Google map
-  // takes focus as it loads and the page jumps to it, and the brochure
-  // view has been seen to do the same. Until the person touches the page,
-  // any scroll is one of those and is undone; after that, the map loading
-  // again (switching views) puts the page back where they left it.
+  // On Android the page can scroll itself as it opens. Until the person
+  // touches the page, any scroll is one of those and is undone.
   const touched = useRef(false);
-  const userScrollY = useRef(0);
 
-  const [chosenKind, setKind] = useState<MapKind>('brochure');
-  const [realStyle, setRealStyle] = useState<RealMapStyle>('terrain');
   const [brochureIndex, setBrochureIndex] = useState(0);
-  const [selection, setSelection] = useState<MapSelection>(null);
+  const [highlight, setHighlight] = useState<MapLabel | null>(null);
   const [fullScreen, setFullScreen] = useState(false);
-  const you = useYouAreHere();
 
   // Same query key as Explore, so this is already cached.
   const { data: sites } = useQuery({
@@ -137,43 +81,38 @@ export default function ParkMapScreen() {
   } = useQuery({
     queryKey: ['parkMap', id],
     queryFn: () => fetchParkMap(id),
-    // Trails don't change between visits to the screen.
+    // The maps don't change between visits to the screen.
     staleTime: Infinity,
   });
 
-  const trails = useMemo(() => (parkMap ? summarise(parkMap) : []), [parkMap]);
+  const brochures = parkMap?.brochures ?? [];
+  const brochure = brochures[brochureIndex] ?? brochures[0];
   const mapsPage = parkMap?.officialMapUrl ?? officialMapUrl(id);
-  const kinds = KINDS.filter((k) => k.value !== 'brochure' || (parkMap?.brochures.length ?? 0) > 0);
-  // The brochure comes first, but not every park has one.
-  const kind: MapKind = kinds.some((k) => k.value === chosenKind) ? chosenKind : 'real';
-  const inPark = parkMap ? isOnMap(parkMap, you.point) : false;
+  const centerNames = brochure ? displayNames(brochure.visitorCenters) : [];
+  const highlightName = highlight
+    ? centerNames[brochure?.visitorCenters.indexOf(highlight) ?? -1] ?? highlight.name
+    : null;
 
   const mapWidth = windowWidth - space[4] * 2;
-  // A brochure's box takes the brochure's shape, so a tall map isn't
+  // The map's box takes the brochure's shape, so a tall map isn't
   // squeezed into a square; within reason either way.
-  const brochure = parkMap?.brochures[brochureIndex] ?? parkMap?.brochures[0];
-  const mapHeight =
-    kind === 'brochure' && brochure
-      ? Math.round(
-          Math.min(
-            Math.max((mapWidth * brochure.height) / brochure.width, 260),
-            windowHeight * 0.72,
-          ),
-        )
-      : Math.min(Math.round(mapWidth * 1.05), 520);
-  const sideways = parkMap ? fullScreenSideways(kind, parkMap, brochureIndex) : true;
+  const mapHeight = brochure
+    ? Math.round(
+        Math.min(Math.max((mapWidth * brochure.height) / brochure.width, 260), windowHeight * 0.72),
+      )
+    : 0;
+  // Full screen turns sideways only for maps wider than tall.
+  const sideways = brochure ? brochure.width >= brochure.height : true;
 
-  const canvasProps = parkMap
-    ? {
-        kind,
-        map: parkMap,
-        you: you.point,
-        realStyle,
-        brochureIndex,
-        selection,
-        onSelect: setSelection,
-      }
-    : null;
+  function chooseBrochure(index: number) {
+    setBrochureIndex(index);
+    setHighlight(null);
+  }
+
+  function showVisitorCenter(label: MapLabel) {
+    setHighlight(label);
+    setFullScreen(true);
+  }
 
   return (
     <ScrollView
@@ -186,12 +125,6 @@ export default function ParkMapScreen() {
         if (!touched.current && event.nativeEvent.contentOffset.y > 0) {
           scrollRef.current?.scrollTo({ y: 0, animated: false });
         }
-      }}
-      onScrollEndDrag={(event) => {
-        userScrollY.current = event.nativeEvent.contentOffset.y;
-      }}
-      onMomentumScrollEnd={(event) => {
-        userScrollY.current = event.nativeEvent.contentOffset.y;
       }}
       style={styles.screen}
       contentContainerStyle={[
@@ -211,34 +144,19 @@ export default function ParkMapScreen() {
         </BodyText>
       </Pressable>
 
-      <Kicker style={styles.kicker}>Park maps</Kicker>
+      <Kicker style={styles.kicker}>Park map</Kicker>
       <Heading size={26}>{site?.name ?? 'Park map'}</Heading>
 
-      {parkMap && canvasProps ? (
+      {brochure ? (
         <>
-          {kinds.length > 1 ? (
-            <Segmented options={kinds} value={kind} onChange={setKind} style={styles.kinds} />
-          ) : null}
-          <MapOptions
-            kind={kind}
-            map={parkMap}
-            realStyle={realStyle}
-            onRealStyle={setRealStyle}
-            brochureIndex={brochureIndex}
-            onBrochure={setBrochureIndex}
-          />
+          <BrochureChoice brochures={brochures} index={brochureIndex} onChoose={chooseBrochure} />
 
           <View style={[styles.map, { height: mapHeight }]}>
-            <ParkMapCanvas
-              {...canvasProps}
+            <BrochureMapView
+              brochure={brochure}
               width={mapWidth}
               height={mapHeight}
-              // Undo the page's jump to the map as it takes focus (Android).
-              onMapReady={() => {
-                const y = userScrollY.current;
-                scrollRef.current?.scrollTo({ y, animated: false });
-                requestAnimationFrame(() => scrollRef.current?.scrollTo({ y, animated: false }));
-              }}
+              highlight={highlight}
             />
             <Pressable
               onPress={() => setFullScreen(true)}
@@ -252,35 +170,29 @@ export default function ParkMapScreen() {
           </View>
 
           <BodyText size={11.5} color={colors.textMuted} style={styles.hint}>
-            {kind === 'real'
-              ? 'Pinch and drag to explore. Tap a trail or a star for details, or expand to turn it sideways.'
-              : sideways
-                ? 'Pinch or double-tap to zoom. Tap the expand button to turn it sideways.'
-                : 'Pinch or double-tap to zoom. Tap the expand button for full screen.'}
+            {sideways
+              ? 'Pinch or double-tap to zoom. Tap the expand button to turn it sideways.'
+              : 'Pinch or double-tap to zoom. Tap the expand button for full screen.'}
           </BodyText>
 
-          {kind !== 'brochure' ? <Legend /> : null}
-          <LocationNote kind={kind} status={you.status} hasFix={you.point !== null} inPark={inPark} />
-          <SelectionCard selection={selection} trails={trails} />
+          <VisitorCenters
+            labels={brochure.visitorCenters}
+            names={centerNames}
+            selected={highlight}
+            onSelect={showVisitorCenter}
+          />
         </>
       ) : (
         <View style={styles.notice}>
           <BodyText size={13.5} lineHeightRatio={1.5} color={colors.neutral[700]}>
             {isPending
-              ? 'Loading the park maps…'
+              ? 'Loading the park map…'
               : isError
-                ? "Couldn't load the park maps. Check your connection and try again."
-                : "We don't have maps for this park yet."}
+                ? "Couldn't load the park map. Check your connection and try again."
+                : "We don't have a map for this park yet. The park's own maps page has one."}
           </BodyText>
         </View>
       )}
-
-      {parkMap && trails.length === 0 && kind !== 'brochure' ? (
-        <BodyText size={12.5} lineHeightRatio={1.5} color={colors.textMuted} style={styles.hint}>
-          The National Park Service doesn&apos;t publish trail data for this park. The park
-          brochure map has what&apos;s there.
-        </BodyText>
-      ) : null}
 
       <Button
         label="Official park maps (nps.gov)"
@@ -289,70 +201,116 @@ export default function ParkMapScreen() {
         style={styles.official}
       />
 
-      {trails.length > 0 && kind !== 'brochure' ? (
-        <View style={styles.list}>
-          <BodyText size={10} weight="semibold" color={colors.neutral[600]} style={styles.listTitle}>
-            {`${trails.length} ${trails.length === 1 ? 'TRAIL' : 'TRAILS'}`}
-          </BodyText>
-          {trails.map((trail) => {
-            const active = selection !== null && 'trail' in selection && selection.trail === trail.name;
-            return (
-              <Pressable
-                key={trail.name}
-                onPress={() => {
-                  setSelection(active ? null : { trail: trail.name });
-                  // Back up to the map so the highlight is in view.
-                  if (!active) scrollRef.current?.scrollTo({ y: 0, animated: true });
-                }}
-                accessibilityRole="button"
-                accessibilityState={{ selected: active }}
-                style={({ pressed }) => [
-                  styles.row,
-                  active && styles.rowActive,
-                  pressed && styles.rowPressed,
-                ]}
-              >
-                <BodyText size={13.5} weight="semibold" style={styles.rowName} numberOfLines={1}>
-                  {trail.name}
-                </BodyText>
-                <BodyText size={12.5} color={colors.neutral[600]}>
-                  {`${trail.miles.toFixed(1)} mi`}
-                </BodyText>
-              </Pressable>
-            );
-          })}
-        </View>
-      ) : null}
-
       <BodyText size={11} color={colors.textMuted} style={styles.credit}>
-        Trails, roads, boundaries, visitor centers and brochure maps: National Park Service.
+        Map: National Park Service.
       </BodyText>
 
-      {parkMap && canvasProps ? (
+      {brochure ? (
         <FullScreenMap
           visible={fullScreen}
           sideways={sideways}
           onClose={() => setFullScreen(false)}
           title={site?.name ?? 'Park map'}
-          kinds={kinds}
-          onKind={setKind}
-          canvasProps={canvasProps}
-          trails={trails}
-          onRealStyle={setRealStyle}
-          onBrochure={setBrochureIndex}
+          brochures={brochures}
+          brochureIndex={brochureIndex}
+          onChooseBrochure={chooseBrochure}
+          highlight={highlight}
+          highlightName={highlightName}
         />
       ) : null}
     </ScrollView>
   );
 }
 
-type CanvasProps = Omit<Parameters<typeof ParkMapCanvas>[0], 'width' | 'height'>;
+/** The visitor centers labelled on the map; tapping one shows it. */
+function VisitorCenters({
+  labels,
+  names,
+  selected,
+  onSelect,
+}: {
+  labels: MapLabel[];
+  names: string[];
+  selected: MapLabel | null;
+  onSelect: (label: MapLabel) => void;
+}) {
+  if (labels.length === 0) return null;
+  return (
+    <View style={styles.list}>
+      <BodyText size={10} weight="semibold" color={colors.neutral[600]} style={styles.listTitle}>
+        VISITOR CENTERS
+      </BodyText>
+      {labels.map((label, i) => {
+        const active = selected === label;
+        return (
+          <Pressable
+            key={`${label.name}-${label.x}-${label.y}`}
+            onPress={() => onSelect(label)}
+            accessibilityRole="button"
+            accessibilityHint="Opens the map full screen, zoomed to it"
+            style={({ pressed }) => [
+              styles.row,
+              active && styles.rowActive,
+              pressed && styles.rowPressed,
+            ]}
+          >
+            <BodyText size={13.5} weight="semibold" style={styles.rowName} numberOfLines={1}>
+              {names[i]}
+            </BodyText>
+            <BodyText size={12.5} weight="semibold" color={colors.accentRamp[700]}>
+              Show on map ›
+            </BodyText>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
+/** A switch between a park's maps, when it has more than one. */
+function BrochureChoice({
+  brochures,
+  index,
+  onChoose,
+  floating = false,
+}: {
+  brochures: BrochureMap[];
+  index: number;
+  onChoose: (index: number) => void;
+  floating?: boolean;
+}) {
+  if (brochures.length < 2) return null;
+  return (
+    <View style={[styles.chips, floating && styles.chipsFloating]}>
+      {brochures.map((b, i) => {
+        const active = i === index;
+        return (
+          <Pressable
+            key={b.uri}
+            onPress={() => onChoose(i)}
+            accessibilityRole="button"
+            accessibilityState={{ selected: active }}
+            style={[styles.chip, active && styles.chipActive]}
+          >
+            <BodyText
+              size={11.5}
+              weight="semibold"
+              color={active ? colors.neutral[100] : colors.neutral[800]}
+              numberOfLines={1}
+            >
+              {b.title}
+            </BodyText>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
 
 /**
- * The chosen map, full screen: sideways (either way round) when that suits
- * the map, upright when it doesn't, and upright again when it closes. Same
- * approach as Explore's FullMapView. Switching maps while it's open turns
- * the phone to suit the new one.
+ * The map full screen: sideways (either way round) for a wide map, upright
+ * for a tall one, and upright again when it closes. Same approach as
+ * Explore's FullMapView.
  */
 function FullScreenMap({
   visible,
@@ -364,12 +322,11 @@ function FullScreenMap({
   sideways: boolean;
   onClose: () => void;
   title: string;
-  kinds: { value: MapKind; label: string }[];
-  onKind: (kind: MapKind) => void;
-  canvasProps: CanvasProps;
-  trails: TrailSummary[];
-  onRealStyle: (style: RealMapStyle) => void;
-  onBrochure: (index: number) => void;
+  brochures: BrochureMap[];
+  brochureIndex: number;
+  onChooseBrochure: (index: number) => void;
+  highlight: MapLabel | null;
+  highlightName: string | null;
 }) {
   useEffect(() => {
     if (!visible) return;
@@ -408,22 +365,25 @@ function FullScreenMap({
 function FullScreenBody({
   onClose,
   title,
-  kinds,
-  onKind,
-  canvasProps,
-  trails,
-  onRealStyle,
-  onBrochure,
+  brochures,
+  brochureIndex,
+  onChooseBrochure,
+  highlight,
+  highlightName,
 }: Omit<Parameters<typeof FullScreenMap>[0], 'visible' | 'sideways'>) {
   const { width, height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
+  const brochure = brochures[brochureIndex] ?? brochures[0];
 
   return (
     <View style={styles.full}>
-      <ParkMapCanvas {...canvasProps} width={width} height={height} />
+      <BrochureMapView brochure={brochure} width={width} height={height} highlight={highlight} />
 
       <View
-        style={[styles.fullTop, { top: insets.top + space[2], left: insets.left + space[3], right: insets.right + space[3] }]}
+        style={[
+          styles.fullTop,
+          { top: insets.top + space[2], left: insets.left + space[3], right: insets.right + space[3] },
+        ]}
         pointerEvents="box-none"
       >
         <Pressable
@@ -439,268 +399,29 @@ function FullScreenBody({
         </Pressable>
         <View style={styles.fullTitle}>
           <BodyText size={13} weight="semibold" numberOfLines={1}>
-            {title}
+            {highlightName ?? title}
           </BodyText>
         </View>
-        {kinds.length > 1 ? (
-          <Segmented options={kinds} value={canvasProps.kind} onChange={onKind} compact />
-        ) : null}
       </View>
 
       <View
-        style={[styles.fullBottom, { bottom: insets.bottom + space[2], left: insets.left + space[3], right: insets.right + space[3] }]}
+        style={[
+          styles.fullBottom,
+          {
+            bottom: insets.bottom + space[2],
+            left: insets.left + space[3],
+            right: insets.right + space[3],
+          },
+        ]}
         pointerEvents="box-none"
       >
-        <MapOptions
-          kind={canvasProps.kind}
-          map={canvasProps.map}
-          realStyle={canvasProps.realStyle}
-          onRealStyle={onRealStyle}
-          brochureIndex={canvasProps.brochureIndex}
-          onBrochure={onBrochure}
+        <BrochureChoice
+          brochures={brochures}
+          index={brochureIndex}
+          onChoose={onChooseBrochure}
           floating
         />
-        {canvasProps.kind !== 'brochure' ? (
-          <SelectionCard selection={canvasProps.selection} trails={trails} floating />
-        ) : null}
       </View>
-    </View>
-  );
-}
-
-/** The real map's style, or which brochure, depending on the map shown. */
-function MapOptions({
-  kind,
-  map,
-  realStyle,
-  onRealStyle,
-  brochureIndex,
-  onBrochure,
-  floating = false,
-}: {
-  kind: MapKind;
-  map: ParkMap;
-  realStyle: RealMapStyle;
-  onRealStyle: (style: RealMapStyle) => void;
-  brochureIndex: number;
-  onBrochure: (index: number) => void;
-  floating?: boolean;
-}) {
-  if (kind === 'real') {
-    return (
-      <Chips
-        options={REAL_STYLES}
-        value={realStyle}
-        onChange={onRealStyle}
-        floating={floating}
-      />
-    );
-  }
-  if (kind === 'brochure' && map.brochures.length > 1) {
-    return (
-      <Chips
-        options={map.brochures.map((b, i) => ({ value: i, label: b.title }))}
-        value={brochureIndex}
-        onChange={onBrochure}
-        floating={floating}
-      />
-    );
-  }
-  return null;
-}
-
-function Segmented<T extends string>({
-  options,
-  value,
-  onChange,
-  compact = false,
-  style,
-}: {
-  options: { value: T; label: string }[];
-  value: T;
-  onChange: (value: T) => void;
-  compact?: boolean;
-  style?: object;
-}) {
-  return (
-    <View style={[styles.switch, compact && styles.switchCompact, style]} accessibilityRole="tablist">
-      {options.map((option) => {
-        const active = option.value === value;
-        return (
-          <Pressable
-            key={option.value}
-            onPress={() => onChange(option.value)}
-            accessibilityRole="tab"
-            accessibilityState={{ selected: active }}
-            style={[styles.switchOption, compact && styles.switchOptionCompact, active && styles.switchActive]}
-          >
-            <BodyText
-              size={compact ? 11.5 : 12.5}
-              weight="semibold"
-              color={active ? colors.neutral[100] : colors.neutral[700]}
-              numberOfLines={1}
-            >
-              {option.label}
-            </BodyText>
-          </Pressable>
-        );
-      })}
-    </View>
-  );
-}
-
-function Chips<T extends string | number>({
-  options,
-  value,
-  onChange,
-  floating,
-}: {
-  options: { value: T; label: string }[];
-  value: T;
-  onChange: (value: T) => void;
-  floating: boolean;
-}) {
-  return (
-    <View style={[styles.chips, floating && styles.chipsFloating]}>
-      {options.map((option) => {
-        const active = option.value === value;
-        return (
-          <Pressable
-            key={String(option.value)}
-            onPress={() => onChange(option.value)}
-            accessibilityRole="button"
-            accessibilityState={{ selected: active }}
-            style={[styles.chip, active && styles.chipActive]}
-          >
-            <BodyText
-              size={11.5}
-              weight="semibold"
-              color={active ? colors.neutral[100] : colors.neutral[800]}
-              numberOfLines={1}
-            >
-              {option.label}
-            </BodyText>
-          </Pressable>
-        );
-      })}
-    </View>
-  );
-}
-
-function Legend() {
-  return (
-    <View style={styles.legend}>
-      <LegendLine color={TRAIL_INK} label="Trail" />
-      <LegendLine color={TRAIL_INK} dashed label="Temporarily closed" />
-      <View style={styles.legendItem}>
-        <StarIcon color={VISITOR_CENTER_STAR} size={13} />
-        <BodyText size={11.5} color={colors.neutral[700]}>
-          Visitor center
-        </BodyText>
-      </View>
-      <View style={styles.legendItem}>
-        <StarIcon color={YOU_STAR} size={13} />
-        <BodyText size={11.5} color={colors.neutral[700]}>
-          You are here
-        </BodyText>
-      </View>
-    </View>
-  );
-}
-
-function LegendLine({ color, label, dashed }: { color: string; label: string; dashed?: boolean }) {
-  return (
-    <View style={styles.legendItem}>
-      <Svg width={22} height={6}>
-        <Path
-          d="M1,3L21,3"
-          stroke={color}
-          strokeWidth={2}
-          strokeDasharray={dashed ? '2 3' : undefined}
-          strokeLinecap="round"
-        />
-      </Svg>
-      <BodyText size={11.5} color={colors.neutral[700]}>
-        {label}
-      </BodyText>
-    </View>
-  );
-}
-
-/** Why there's no red star, when there isn't one. */
-function LocationNote({
-  kind,
-  status,
-  hasFix,
-  inPark,
-}: {
-  kind: MapKind;
-  status: 'asking' | 'granted' | 'denied';
-  hasFix: boolean;
-  inPark: boolean;
-}) {
-  let note: string | null = null;
-  if (kind === 'brochure') {
-    note =
-      'The brochure is the printed map, so it has no "you are here" star. Switch to the real map for that.';
-  } else if (status === 'denied') {
-    note = 'Allow location for ParkPath in your phone\'s settings to see a "you are here" star.';
-  } else if (status === 'granted' && hasFix && !inPark) {
-    note = "You're not in the park right now. The red star shows where you are once you're here.";
-  }
-  return note ? (
-    <BodyText size={12} lineHeightRatio={1.45} color={colors.textMuted} style={styles.hint}>
-      {note}
-    </BodyText>
-  ) : null;
-}
-
-function SelectionCard({
-  selection,
-  trails,
-  floating = false,
-}: {
-  selection: MapSelection;
-  trails: TrailSummary[];
-  floating?: boolean;
-}) {
-  if (!selection) return null;
-  if ('place' in selection) {
-    return (
-      <View style={[styles.selectedCard, floating && styles.selectedFloating]}>
-        <View style={styles.legendItem}>
-          <StarIcon color={VISITOR_CENTER_STAR} size={15} />
-          <BodyText size={15} weight="semibold">
-            {selection.place.name}
-          </BodyText>
-        </View>
-        <BodyText size={12.5} color={colors.neutral[700]}>
-          Visitor center
-        </BodyText>
-      </View>
-    );
-  }
-  const trail = trails.find((t) => t.name === selection.trail);
-  if (!trail) return null;
-  return (
-    <View style={[styles.selectedCard, floating && styles.selectedFloating]}>
-      <BodyText size={15} weight="semibold">
-        {trail.name}
-      </BodyText>
-      <BodyText size={12.5} color={colors.neutral[700]}>
-        {[
-          `${trail.miles.toFixed(1)} mi`,
-          trail.uses.map((use) => USE_LABEL[use]).join(', '),
-          trail.surfaces.join(', '),
-        ]
-          .filter(Boolean)
-          .join(' · ')}
-      </BodyText>
-      {trail.closed ? (
-        <BodyText size={12.5} weight="semibold" color={colors.accentRamp[800]}>
-          Part of this trail is temporarily closed.
-        </BodyText>
-      ) : null}
     </View>
   );
 }
@@ -725,39 +446,11 @@ const styles = StyleSheet.create({
   kicker: {
     marginBottom: 4,
   },
-  kinds: {
-    marginTop: space[4],
-  },
-  switch: {
-    flexDirection: 'row',
-    gap: 4,
-    padding: 4,
-    borderRadius: radius.pill,
-    backgroundColor: colors.neutral[200],
-  },
-  switchCompact: {
-    ...shadow.sm,
-  },
-  switchOption: {
-    flex: 1,
-    alignItems: 'center',
-    paddingVertical: 8,
-    paddingHorizontal: 6,
-    borderRadius: radius.pill,
-  },
-  switchOptionCompact: {
-    flex: 0,
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-  },
-  switchActive: {
-    backgroundColor: colors.accent,
-  },
   chips: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 6,
-    marginTop: space[2],
+    marginTop: space[3],
   },
   chipsFloating: {
     marginTop: 0,
@@ -795,30 +488,6 @@ const styles = StyleSheet.create({
   },
   expandPressed: {
     backgroundColor: colors.neutral[300],
-  },
-  legend: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    columnGap: space[4],
-    rowGap: space[1],
-    marginTop: space[2],
-  },
-  legendItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  selectedCard: {
-    gap: 3,
-    marginTop: space[3],
-    padding: space[3],
-    borderRadius: radius.md,
-    backgroundColor: colors.accentRamp[100],
-  },
-  selectedFloating: {
-    marginTop: 0,
-    maxWidth: 360,
-    ...shadow.md,
   },
   hint: {
     marginTop: space[2],
@@ -886,12 +555,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     borderRadius: radius.pill,
     backgroundColor: colors.neutral[100],
-    marginRight: 'auto',
     ...shadow.sm,
   },
   fullBottom: {
     position: 'absolute',
     alignItems: 'flex-start',
-    gap: space[2],
   },
 });

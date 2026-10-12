@@ -10,9 +10,12 @@
  * Runs on the UI thread (Reanimated), so it stays smooth on a large image.
  * A one-finger drag only pans once zoomed in; at the fitted size it's left
  * alone so the page around the map can still scroll.
+ *
+ * `focus` zooms to a spot in the content (a visitor center's label): set it
+ * and the view glides there, with some of the map around it in view.
  */
 
-import { type ReactNode } from 'react';
+import { useEffect, type ReactNode } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
@@ -26,6 +29,7 @@ export function ZoomableView({
   contentWidth,
   contentHeight,
   maxZoom,
+  focus,
   children,
 }: {
   /** The frame on screen. */
@@ -36,6 +40,8 @@ export function ZoomableView({
   contentHeight: number;
   /** Most zoom from the fitted size; defaults to the content's real size. */
   maxZoom?: number;
+  /** A box in content pixels to zoom to; changing it moves the view again. */
+  focus?: { x: number; y: number; width: number; height: number } | null;
   children: ReactNode;
 }) {
   // Scale that fits the content in the frame, and the most it can grow to.
@@ -117,6 +123,22 @@ export function ZoomableView({
       tx.value = withTiming(next.x);
       ty.value = withTiming(next.y);
     });
+
+  // Zoom to the focus box: close enough to read it, with its surroundings
+  // in view (about twice its width across the frame), centred.
+  useEffect(() => {
+    if (!focus) return;
+    const s = Math.min(
+      max,
+      Math.max(fit * 2, Math.min(width / (focus.width * 2.2), height / (focus.height * 8))),
+    );
+    const dx = focus.x + focus.width / 2 - contentWidth / 2;
+    const dy = focus.y + focus.height / 2 - contentHeight / 2;
+    scale.value = withTiming(s, { duration: 450 });
+    tx.value = withTiming(clamp(-dx * s, s, contentWidth, width), { duration: 450 });
+    ty.value = withTiming(clamp(-dy * s, s, contentHeight, height), { duration: 450 });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- shared values and helpers are stable
+  }, [focus, width, height, contentWidth, contentHeight, fit, max]);
 
   const transform = useAnimatedStyle(() => ({
     transform: [{ translateX: tx.value }, { translateY: ty.value }, { scale: scale.value }],
