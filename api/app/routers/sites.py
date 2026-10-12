@@ -2,8 +2,8 @@
 Site routes: GET /sites, GET /sites/{park_code}.
 
 Public on purpose: park data isn't tied to an account, and the map should
-load before anyone signs in. Per-user data (visited, wishlist) will live
-in its own table and routes, behind get_current_user.
+load before anyone signs in. Per-user data lives in its own tables and
+routes behind get_current_user (the wishlist is app/routers/wishlist.py).
 """
 
 from typing import Literal

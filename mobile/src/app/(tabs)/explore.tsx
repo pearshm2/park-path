@@ -30,7 +30,7 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   Modal,
   Pressable,
@@ -90,6 +90,7 @@ import {
 } from '../../data/regions';
 import { RAISE } from '../../components/tabBar';
 import { useQuiz } from '../../quiz/QuizContext';
+import { useWishlist } from '../../wishlist/useWishlist';
 import { colors, radius, shadow, space, useTextScale } from '../../theme';
 
 /** How many recommendations get a numbered pin and a card. */
@@ -232,22 +233,41 @@ export default function ExploreScreen() {
   const [peekSite, setPeekSite] = useState<Site | null>(null);
   const router = useRouter();
 
-  const { data: parks = [] } = useQuery({
+  const { data: sharedParks = [] } = useQuery({
     queryKey: ['sites', 'parks'],
     queryFn: () => listSites('parks'),
   });
 
-  const { data: allSites = [] } = useQuery({
+  const { data: sharedSites = [] } = useQuery({
     queryKey: ['sites', 'all'],
     queryFn: () => listSites('all'),
   });
 
   // Scored across every site so wishlist cards and search results have
   // a match too; the picks themselves are drawn from the parks only.
-  const { data: matches = [] } = useQuery({
+  const { data: sharedMatches = [] } = useQuery({
     queryKey: ['recommendations', answers, 'all'],
     queryFn: () => recommendations(answers, 'all'),
   });
+
+  // The site list is shared and carries no per-person status, so your
+  // wishlist is applied here, once, and everything below (map pins, cards,
+  // the wishlist view) reads it from site.status. Visited outranks it.
+  const { ids: wishlistIds, toggle: toggleWishlist } = useWishlist();
+  const withStatus = useCallback(
+    (site: Site): Site => {
+      if (site.status === 'visited') return site;
+      const status: SiteStatus = wishlistIds.has(site.id) ? 'wishlist' : 'new';
+      return status === site.status ? site : { ...site, status };
+    },
+    [wishlistIds],
+  );
+  const parks = useMemo(() => sharedParks.map(withStatus), [sharedParks, withStatus]);
+  const allSites = useMemo(() => sharedSites.map(withStatus), [sharedSites, withStatus]);
+  const matches = useMemo(
+    () => sharedMatches.map((match) => ({ ...match, site: withStatus(match.site) })),
+    [sharedMatches, withStatus],
+  );
 
   const parkIds = useMemo(() => new Set(parks.map((site) => site.id)), [parks]);
   // Completed regions, marked on the map. The all-sites map counts every
@@ -686,6 +706,8 @@ export default function ExploreScreen() {
                   rank={item.rank}
                   markWishlist
                   onOpenTrip={openTrip}
+                  saved={wishlistIds.has(item.site.id)}
+                  onToggleSave={() => toggleWishlist(item.site.id)}
                   onExpand={() => setPeekSite(item.site)}
                   onPress={() => {
                     if (!active) {
@@ -715,6 +737,8 @@ export default function ExploreScreen() {
                   // The full decks mix saved parks in with everything else.
                   markWishlist={scope === 'parks' || scope === 'all'}
                   onOpenTrip={openTrip}
+                  saved={wishlistIds.has(item.site.id)}
+                  onToggleSave={() => toggleWishlist(item.site.id)}
                   onExpand={() => setPeekSite(item.site)}
                   onPress={() => {
                     if (index !== deckIndex) {
@@ -800,7 +824,7 @@ export default function ExploreScreen() {
       />
 
       <SitePeek
-        site={peekSite}
+        site={peekSite && withStatus(peekSite)}
         // Great Smoky Mountains, the busiest park, is the crowding yardstick.
         referenceVisits={allSites.find((site) => site.id === 'grsm')?.vis ?? undefined}
         onDismiss={() => setPeekSite(null)}
