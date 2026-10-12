@@ -40,14 +40,15 @@ type SiteOut = {
 
 /**
  * PLACEHOLDER: visited and wishlist are per-person, and the API has no
- * table for them yet. These are the statuses the old bundled fixtures
- * carried, kept so the map key and the wishlist view still have something
- * to show. Delete once GET /me/sites (or similar) exists.
+ * table for them yet. These are the wishlist statuses the old bundled
+ * fixtures carried, kept so the wishlist view still has something to show.
+ * Delete once GET /me/sites (or similar) exists.
+ *
+ * Nothing is marked visited here on purpose: a park only counts as
+ * visited once you have actually been, which will come from logging a
+ * visit in Trips (week 6), not from demo data.
  */
 const DEMO_STATUS: Record<string, SiteStatus> = {
-  grca: 'visited',
-  romo: 'visited',
-  yose: 'visited',
   zion: 'wishlist',
   yell: 'wishlist',
   olym: 'wishlist',

@@ -21,7 +21,7 @@ import Animated, { FadeIn } from 'react-native-reanimated';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import type { Site } from '../data/parks';
-import { regionForState } from '../data/regions';
+import { regionForState, type RegionId } from '../data/regions';
 import { colors, radius, shadow, space } from '../theme';
 import { Button } from './Button';
 import { ParkMap } from './ParkMap';
@@ -41,6 +41,10 @@ type FullMapViewProps = {
   rankById?: ReadonlyMap<string, number>;
   matchIds?: ReadonlySet<string>;
   featureIcons?: boolean;
+  /** Regions to mark as completed (every national park visited). */
+  completedRegions?: ReadonlySet<RegionId>;
+  /** Tuck completed regions' pins behind their stamps (see ParkMap). */
+  tuckCompleted?: boolean;
   onClose: () => void;
   /** Opens a park's card back in Explore. */
   onView: (site: Site) => void;
@@ -82,6 +86,8 @@ function FullMapBody({
   rankById,
   matchIds,
   featureIcons,
+  completedRegions,
+  tuckCompleted = true,
   onClose,
   onView,
 }: FullMapViewProps) {
@@ -89,7 +95,13 @@ function FullMapBody({
   const { width, height } = useWindowDimensions();
   const landscape = width > height;
   const [selected, setSelected] = useState<Site | null>(null);
+  /** A completed region whose pins were tapped back into view. */
+  const [revealed, setRevealed] = useState<RegionId | null>(null);
   const region = selected ? regionForState(selected.state) : undefined;
+  // The title and the park card sit far right, in the margin beside the
+  // map. On a notched iPhone part of the side inset is just the rounded
+  // corner, so they can go a little into it; never quite on the edge.
+  const edgeRight = Math.max(insets.right - space[4], 2);
 
   return (
     // Gestures inside a modal need their own root on Android.
@@ -105,6 +117,16 @@ function FullMapBody({
             rankById={rankById}
             matchIds={matchIds}
             featureIcons={featureIcons}
+            completedRegions={completedRegions}
+            // A completed region's pins are tucked away; tapping it shows
+            // them, and tapping it again tucks them back.
+            revealedRegion={revealed}
+            tuckCompleted={tuckCompleted}
+            onSelectRegion={
+              tuckCompleted
+                ? (id) => setRevealed((current) => (current === id ? null : id))
+                : undefined
+            }
             // The full-screen map has room for the badges without zooming.
             iconsAtAnyZoom
             selectedId={selected?.id ?? null}
@@ -140,8 +162,7 @@ function FullMapBody({
               styles.titleWrap,
               {
                 bottom: insets.bottom + space[4] + CHIP_SLOT + space[2],
-                // Further out than the park card below, into the margin.
-                right: insets.right + space[1],
+                right: edgeRight,
               },
             ]}
           >
@@ -159,7 +180,7 @@ function FullMapBody({
                 {
                   bottom: insets.bottom + space[4],
                   left: insets.left + space[4],
-                  right: insets.right + space[4],
+                  right: edgeRight,
                 },
               ]}
             >
