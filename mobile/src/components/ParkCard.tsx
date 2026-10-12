@@ -273,10 +273,10 @@ function CheckIcon() {
 }
 
 /** A bookmark: outlined when unsaved, filled in the wishlist pin's colour when saved. */
-function BookmarkIcon({ filled }: { filled: boolean }) {
+export function BookmarkIcon({ filled, size = 14 }: { filled: boolean; size?: number }) {
   const ink = filled ? STATUS_DOT.wishlist.stroke : colors.neutral[800];
   return (
-    <Svg width={14} height={14} viewBox="0 0 24 24">
+    <Svg width={size} height={size} viewBox="0 0 24 24">
       <Path
         d="M6.5 3.5h11a1 1 0 0 1 1 1v16l-6.5-4.5-6.5 4.5v-16a1 1 0 0 1 1-1z"
         fill={filled ? ink : 'none'}

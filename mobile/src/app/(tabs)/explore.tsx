@@ -827,6 +827,13 @@ export default function ExploreScreen() {
         site={peekSite && withStatus(peekSite)}
         // Great Smoky Mountains, the busiest park, is the crowding yardstick.
         referenceVisits={allSites.find((site) => site.id === 'grsm')?.vis ?? undefined}
+        saved={peekSite !== null && wishlistIds.has(peekSite.id)}
+        onToggleSave={(site) => toggleWishlist(site.id)}
+        onShowOnMap={(site) => {
+          // The same zoom as tapping the park's card or pin.
+          setPeekSite(null);
+          focusPark(site);
+        }}
         onDismiss={() => setPeekSite(null)}
         onOpen={(site) => {
           setPeekSite(null);
