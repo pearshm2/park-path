@@ -5,8 +5,10 @@
  *     the NPS's trails drawn on top.
  *   - Park brochure: the official NPS printed map.
  *
- * Both pinch to zoom, and the expand button turns the phone sideways
- * into a full-screen view, like Explore's map. Visitor centers are green
+ * Both pinch to zoom, and the expand button opens the map full screen:
+ * turned sideways for the real map and for wide brochures, upright for tall
+ * ones (New River Gorge's runs north-south), so a map is never shrunk to
+ * fit the wrong way round. Visitor centers are green
  * stars; where you are is a red "you are here" star, once location is
  * allowed and you're in the park. Tapping a trail (on the map or in the
  * list) highlights it and shows its length, uses and surface.
@@ -68,6 +70,17 @@ type TrailSummary = {
   closed: boolean;
 };
 
+/**
+ * Whether full screen should turn the phone sideways: yes for the real map
+ * (it pans anywhere) and for brochures wider than tall; a tall brochure
+ * stays upright, where it fills the screen.
+ */
+function fullScreenSideways(kind: MapKind, map: ParkMap, brochureIndex: number): boolean {
+  if (kind !== 'brochure') return true;
+  const brochure = map.brochures[brochureIndex] ?? map.brochures[0];
+  return !brochure || brochure.width >= brochure.height;
+}
+
 function summarise(map: ParkMap): TrailSummary[] {
   const byName = new Map<string, TrailSummary>();
   for (const trail of map.trails) {
@@ -92,7 +105,7 @@ export default function ParkMapScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { width: windowWidth } = useWindowDimensions();
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const scrollRef = useRef<ScrollView>(null);
 
   const [kind, setKind] = useState<MapKind>('real');
@@ -126,7 +139,19 @@ export default function ParkMapScreen() {
   const inPark = parkMap ? isOnMap(parkMap, you.point) : false;
 
   const mapWidth = windowWidth - space[4] * 2;
-  const mapHeight = Math.min(Math.round(mapWidth * 1.05), 520);
+  // A brochure's box takes the brochure's shape, so a tall map isn't
+  // squeezed into a square; within reason either way.
+  const brochure = parkMap?.brochures[brochureIndex] ?? parkMap?.brochures[0];
+  const mapHeight =
+    kind === 'brochure' && brochure
+      ? Math.round(
+          Math.min(
+            Math.max((mapWidth * brochure.height) / brochure.width, 260),
+            windowHeight * 0.72,
+          ),
+        )
+      : Math.min(Math.round(mapWidth * 1.05), 520);
+  const sideways = parkMap ? fullScreenSideways(kind, parkMap, brochureIndex) : true;
 
   const canvasProps = parkMap
     ? {
@@ -184,7 +209,7 @@ export default function ParkMapScreen() {
               onPress={() => setFullScreen(true)}
               hitSlop={8}
               accessibilityRole="button"
-              accessibilityLabel="Full screen, sideways"
+              accessibilityLabel={sideways ? 'Full screen, sideways' : 'Full screen'}
               style={({ pressed }) => [styles.expand, pressed && styles.expandPressed]}
             >
               <ExpandIcon color={colors.neutral[800]} />
@@ -194,7 +219,9 @@ export default function ParkMapScreen() {
           <BodyText size={11.5} color={colors.textMuted} style={styles.hint}>
             {kind === 'real'
               ? 'Pinch and drag to explore. Tap a trail or a star for details, or expand to turn it sideways.'
-              : 'Pinch or double-tap to zoom. Tap the expand button to turn it sideways.'}
+              : sideways
+                ? 'Pinch or double-tap to zoom. Tap the expand button to turn it sideways.'
+                : 'Pinch or double-tap to zoom. Tap the expand button for full screen.'}
           </BodyText>
 
           {kind !== 'brochure' ? <Legend /> : null}
@@ -269,6 +296,7 @@ export default function ParkMapScreen() {
       {parkMap && canvasProps ? (
         <FullScreenMap
           visible={fullScreen}
+          sideways={sideways}
           onClose={() => setFullScreen(false)}
           title={site?.name ?? 'Park map'}
           kinds={kinds}
@@ -286,16 +314,19 @@ export default function ParkMapScreen() {
 type CanvasProps = Omit<Parameters<typeof ParkMapCanvas>[0], 'width' | 'height'>;
 
 /**
- * The chosen map, full screen and sideways — as soon as it opens, either
- * way round, upright again when it closes. Same approach as Explore's
- * FullMapView.
+ * The chosen map, full screen: sideways (either way round) when that suits
+ * the map, upright when it doesn't, and upright again when it closes. Same
+ * approach as Explore's FullMapView. Switching maps while it's open turns
+ * the phone to suit the new one.
  */
 function FullScreenMap({
   visible,
+  sideways,
   onClose,
   ...props
 }: {
   visible: boolean;
+  sideways: boolean;
   onClose: () => void;
   title: string;
   kinds: { value: MapKind; label: string }[];
@@ -307,11 +338,15 @@ function FullScreenMap({
 }) {
   useEffect(() => {
     if (!visible) return;
-    ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE).catch(() => {});
+    ScreenOrientation.lockAsync(
+      sideways
+        ? ScreenOrientation.OrientationLock.LANDSCAPE
+        : ScreenOrientation.OrientationLock.PORTRAIT_UP,
+    ).catch(() => {});
     return () => {
       ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP).catch(() => {});
     };
-  }, [visible]);
+  }, [visible, sideways]);
 
   return (
     <Modal
@@ -319,7 +354,7 @@ function FullScreenMap({
       animationType="fade"
       onRequestClose={onClose}
       // iOS keeps a modal portrait unless it's told otherwise.
-      supportedOrientations={['landscape-left', 'landscape-right']}
+      supportedOrientations={sideways ? ['landscape-left', 'landscape-right'] : ['portrait']}
     >
       {/* Its own safe-area provider: the app's one keeps the upright insets
           after the phone turns. */}
@@ -339,7 +374,7 @@ function FullScreenBody({
   trails,
   onRealStyle,
   onBrochure,
-}: Omit<Parameters<typeof FullScreenMap>[0], 'visible'>) {
+}: Omit<Parameters<typeof FullScreenMap>[0], 'visible' | 'sideways'>) {
   const { width, height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
 

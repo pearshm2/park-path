@@ -30,8 +30,10 @@ export function BrochureMapView({
   return (
     <View style={{ width, height }}>
       <ZoomableView
-        // A different map starts again at its fitted size.
-        key={brochure.uri}
+        // A different map, or a new frame size (the phone turning as full
+        // screen opens), starts again fitted to the frame. The zoom's
+        // starting scale is set when it mounts, so it must remount.
+        key={`${brochure.uri}@${width}x${height}`}
         width={width}
         height={height}
         contentWidth={brochure.width}
