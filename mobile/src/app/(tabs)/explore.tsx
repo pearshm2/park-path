@@ -6,9 +6,10 @@
  * fit, and dragging it down tucks the cards away again.
  *
  * The scope menu under Filter picks what the map shows: the 63 national
- * parks, every site, or just the wishlist. The deck holds the same parks
- * as the map: every park or site with the top 10 dealt first and the rest
- * grouped by region, or the wishlist. The
+ * parks, every site, just the wishlist, or just the sites you've visited.
+ * The deck holds the same parks as the map: every park or site with the
+ * top 10 dealt first and the rest grouped by region, or the wishlist, or
+ * your visits, latest first. The
  * top 10 are always ranked from the 63 parks, and are drawn as numbered
  * pins that match the card numbers. Scrolling through the cards keeps the
  * whole map in view and just highlights each card's pin.
@@ -29,7 +30,7 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   Modal,
   Pressable,
@@ -51,8 +52,7 @@ import Svg, { Path } from 'react-native-svg';
 import { scheduleOnRN } from 'react-native-worklets';
 
 import { listSites } from '../../api/parks';
-// Placeholder ranking, not Dylan's engine - see the banner in this file.
-import { provisionalMatches, type ProvisionalMatch } from '../../api/provisionalMatches';
+import { recommendations, type Recommendation } from '../../api/recommendations';
 import {
   activeFilterCount,
   BodyText,
@@ -80,9 +80,17 @@ import {
   type FeedFilters,
 } from '../../components';
 import type { Site, SiteStatus } from '../../data/parks';
-import { REGIONS, regionForState, type Region } from '../../data/regions';
+import { visitSummary } from '../../data/visits';
+import {
+  completedRegions,
+  REGIONS,
+  regionForState,
+  type Region,
+  type RegionId,
+} from '../../data/regions';
 import { RAISE } from '../../components/tabBar';
 import { useQuiz } from '../../quiz/QuizContext';
+import { useWishlist } from '../../wishlist/useWishlist';
 import { colors, radius, shadow, space, useTextScale } from '../../theme';
 
 /** How many recommendations get a numbered pin and a card. */
@@ -94,11 +102,20 @@ const MAP_ASPECT = 1.5;
 /** The sheet's bar, which is all that shows while it is closed. */
 const SHEET_BAR = 50;
 /**
- * Extra room under the map while the sheet is down. The map is centred in
- * the space it has, so this lifts it by half, and leaves room below for the
- * full-screen button.
+ * With the sheet down, how the spare height splits above and below the
+ * map (and its full-screen button). The map's width caps its height, so on
+ * a tall phone there's room to spare; more of it goes below, which sits
+ * the map up near the key it belongs with.
  */
-const EXTRA_LIFT = 72;
+const SPARE_ABOVE = 1;
+const SPARE_BELOW = 6;
+/**
+ * The most the key opens out (in total, spread over its padding and row
+ * gaps) when the screen has height to spare, and the share of that spare
+ * it takes. The rest stays as air around the map.
+ */
+const KEY_ROOM_MAX = 52;
+const KEY_ROOM_SHARE = 0.5;
 /** How far the open sheet sits lower than its deck needs, to give the map room. */
 const SHEET_LOWER = 28;
 /** Breathing room between the sheet's title row and the top card. */
@@ -132,7 +149,7 @@ const SHEET_MS = 260;
 
 
 /** What the map shows. */
-type MapScope = 'parks' | 'all' | 'wishlist';
+type MapScope = 'parks' | 'all' | 'wishlist' | 'visited';
 
 /** Applies the sheet's dials to a ranked list, keeping its order. */
 function applyFilters<T extends { site: Site }>(rows: T[], filters: FeedFilters): T[] {
@@ -156,7 +173,7 @@ type DeckItem = { site: Site; score?: number; reason?: string; rank?: number };
 
 function toDeckItem(
   site: Site,
-  matchById: ReadonlyMap<string, ProvisionalMatch>,
+  matchById: ReadonlyMap<string, Recommendation>,
   rankById: ReadonlyMap<string, number>,
 ): DeckItem {
   const match = matchById.get(site.id);
@@ -198,6 +215,11 @@ export default function ExploreScreen() {
    * region and the deck holds that region's parks.
    */
   const [anchor, setAnchor] = useState<Site | null>(null);
+  /**
+   * A region tapped on a list view (wishlist, visits) with nothing of yours
+   * in it: the map still zooms there, over an empty deck that says so.
+   */
+  const [emptyRegion, setEmptyRegion] = useState<RegionId | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
   /** Which park is on top of the deck, by id, so it survives list changes. */
   const [deckTopId, setDeckTopId] = useState<string | null>(null);
@@ -211,24 +233,49 @@ export default function ExploreScreen() {
   const [peekSite, setPeekSite] = useState<Site | null>(null);
   const router = useRouter();
 
-  const { data: parks = [] } = useQuery({
+  const { data: sharedParks = [] } = useQuery({
     queryKey: ['sites', 'parks'],
     queryFn: () => listSites('parks'),
   });
 
-  const { data: allSites = [] } = useQuery({
+  const { data: sharedSites = [] } = useQuery({
     queryKey: ['sites', 'all'],
     queryFn: () => listSites('all'),
   });
 
   // Scored across every site so wishlist cards and search results have
   // a match too; the picks themselves are drawn from the parks only.
-  const { data: matches = [] } = useQuery({
-    queryKey: ['provisionalMatches', answers, 'all'],
-    queryFn: () => provisionalMatches(answers, 'all'),
+  const { data: sharedMatches = [] } = useQuery({
+    queryKey: ['recommendations', answers, 'all'],
+    queryFn: () => recommendations(answers, 'all'),
   });
 
+  // The site list is shared and carries no per-person status, so your
+  // wishlist is applied here, once, and everything below (map pins, cards,
+  // the wishlist view) reads it from site.status. Visited outranks it.
+  const { ids: wishlistIds, toggle: toggleWishlist } = useWishlist();
+  const withStatus = useCallback(
+    (site: Site): Site => {
+      if (site.status === 'visited') return site;
+      const status: SiteStatus = wishlistIds.has(site.id) ? 'wishlist' : 'new';
+      return status === site.status ? site : { ...site, status };
+    },
+    [wishlistIds],
+  );
+  const parks = useMemo(() => sharedParks.map(withStatus), [sharedParks, withStatus]);
+  const allSites = useMemo(() => sharedSites.map(withStatus), [sharedSites, withStatus]);
+  const matches = useMemo(
+    () => sharedMatches.map((match) => ({ ...match, site: withStatus(match.site) })),
+    [sharedMatches, withStatus],
+  );
+
   const parkIds = useMemo(() => new Set(parks.map((site) => site.id)), [parks]);
+  // Completed regions, marked on the map. The all-sites map counts every
+  // site in a region; the others count its national parks.
+  const completed = useMemo(
+    () => completedRegions(scope === 'all' ? allSites : parks),
+    [scope, allSites, parks],
+  );
   const parkMatches = useMemo(
     () => matches.filter(({ site }) => parkIds.has(site.id)),
     [matches, parkIds],
@@ -250,13 +297,27 @@ export default function ExploreScreen() {
 
   const wishlist = useMemo(() => allSites.filter((site) => site.status === 'wishlist'), [allSites]);
 
-  const mapSites = useMemo(() => {
-    if (scope === 'wishlist') return wishlist;
-    return scope === 'parks' ? parks : allSites;
-  }, [scope, wishlist, parks, allSites]);
+  /** Every site you've been to, latest visit first. */
+  const visited = useMemo(
+    () =>
+      allSites
+        .filter((site) => site.status === 'visited')
+        .sort((a, b) =>
+          (visitSummary(b.id)?.last ?? '').localeCompare(visitSummary(a.id)?.last ?? ''),
+        ),
+    [allSites],
+  );
 
-  /** The wishlist view deals the wishlist; the others deal every park, picks first. */
-  const showingWishlist = scope === 'wishlist';
+  /** The wishlist and visits views show just that list. */
+  const personalList = scope === 'wishlist' ? wishlist : scope === 'visited' ? visited : null;
+
+  const mapSites = useMemo(() => {
+    if (personalList) return personalList;
+    return scope === 'parks' ? parks : allSites;
+  }, [scope, personalList, parks, allSites]);
+
+  /** The list views deal just their list; the others deal every park, picks first. */
+  const showingList = personalList !== null;
 
   /** Unnumbered parks on the map that match the filters, when they apply. */
   const matchIds = useMemo(() => {
@@ -271,7 +332,7 @@ export default function ExploreScreen() {
    * matches, then the rest, each group by region.
    */
   const baseDeck = useMemo<DeckItem[]>(() => {
-    if (showingWishlist) return wishlist.map((site) => toDeckItem(site, matchById, rankById));
+    if (personalList) return personalList.map((site) => toDeckItem(site, matchById, rankById));
 
     const top = picks.map(({ site, score, reason }, index) => ({
       site,
@@ -287,7 +348,7 @@ export default function ExploreScreen() {
     const matched = unranked.filter((item) => matchIds.has(item.site.id));
     const rest = unranked.filter((item) => !matchIds.has(item.site.id));
     return [...top, ...matched, ...rest];
-  }, [showingWishlist, wishlist, picks, mapSites, matchById, rankById, matchIds]);
+  }, [personalList, picks, mapSites, matchById, rankById, matchIds]);
 
   /**
    * The full deck split into sections for SectionDeck: each is a page you
@@ -295,7 +356,7 @@ export default function ExploreScreen() {
    * one sideways row.
    */
   const sections = useMemo<DeckSection<DeckItem>[] | null>(() => {
-    if (showingWishlist) return null;
+    if (showingList) return null;
     const recommended = baseDeck.filter((item) => item.rank !== undefined);
     const unranked = baseDeck.filter((item) => item.rank === undefined);
     return [
@@ -311,19 +372,29 @@ export default function ExploreScreen() {
         items: unranked.filter((item) => !matchIds.has(item.site.id)),
       },
     ].filter((section) => section.items.length > 0);
-  }, [showingWishlist, baseDeck, matchIds]);
+  }, [showingList, baseDeck, matchIds]);
 
-  const focusRegion = anchor ? regionForState(anchor.state) : undefined;
+  const focusRegion = anchor
+    ? regionForState(anchor.state)
+    : REGIONS.find((region) => region.id === emptyRegion);
+  /** Zoomed onto a region, from a park or the region itself. */
+  const focused = focusRegion !== undefined;
 
   /** With a park tapped: every park on the map in its region, best fit first. */
   const regionDeck = useMemo<DeckItem[] | null>(() => {
-    if (!anchor) return null;
-    const inRegion = focusRegion
-      ? mapSites.filter((site) => regionForState(site.state)?.id === focusRegion.id)
-      : [];
-    if (!inRegion.some((site) => site.id === anchor.id)) inRegion.push(anchor);
+    if (!focusRegion) return null;
+    const inRegion = mapSites.filter(
+      (site) => regionForState(site.state)?.id === focusRegion.id,
+    );
+    if (anchor && !inRegion.some((site) => site.id === anchor.id)) inRegion.push(anchor);
     return inRegion.map((site) => toDeckItem(site, matchById, rankById)).sort(byFit);
   }, [anchor, focusRegion, mapSites, matchById, rankById]);
+
+  /** Back out to the whole country. */
+  function clearFocus() {
+    setAnchor(null);
+    setEmptyRegion(null);
+  }
 
   const deck = regionDeck ?? baseDeck;
   const deckIndex = Math.max(
@@ -338,7 +409,7 @@ export default function ExploreScreen() {
     setSheetOpen(open);
     setKeyOpen(false);
     // Closing tucks the cards away and returns to the whole map.
-    if (!open) setAnchor(null);
+    if (!open) clearFocus();
   }
 
   /**
@@ -351,15 +422,47 @@ export default function ExploreScreen() {
       setScope(parkIds.has(site.id) ? 'parks' : 'all');
     }
     setAnchor(site);
+    setEmptyRegion(null);
     setDeckTopId(site.id);
     openSheet(true);
+  }
+
+  /**
+   * Tapping a region's land zooms onto it and deals every park the map
+   * shows there, best fit on top, just as tapping that park would. On the
+   * wishlist and visits views a region can hold none of yours; it still
+   * zooms, over an empty deck.
+   */
+  function focusRegionById(regionId: RegionId) {
+    const best = mapSites
+      .filter((site) => regionForState(site.state)?.id === regionId)
+      .map((site) => toDeckItem(site, matchById, rankById))
+      .sort(byFit)[0];
+    if (best) {
+      focusPark(best.site);
+      return;
+    }
+    setAnchor(null);
+    setEmptyRegion(regionId);
+    setDeckTopId(null);
+    openSheet(true);
+  }
+
+  /**
+   * A card's trip link. Trips isn't built yet, so for now it opens the
+   * Trips tab; later it opens that trip.
+   */
+  function openTrip() {
+    router.navigate('/trips');
   }
 
   /** What the search panel searches, in words: the parks the map shows. */
   const scopeLabel =
     scope === 'wishlist'
       ? `your ${wishlist.length} saved parks`
-      : scope === 'parks'
+      : scope === 'visited'
+        ? `your ${visited.length} visited sites`
+        : scope === 'parks'
         ? `${parks.length} national parks`
         : `all ${allSites.length} sites`;
 
@@ -369,12 +472,26 @@ export default function ExploreScreen() {
    * section of the card on top, and changes as you scroll past each one.
    */
   /** The section the top card is in, and the card's place in it. */
-  const useSections = sections !== null && !anchor;
+  const useSections = sections !== null && !focused;
   // Sized for the sectioned deck in every view, so the sheet and card keep
   // their size when tapping a card switches to the region carousel.
   const { deck: deckHeight, sheet: sheetHeight } = useSheetSize(SECTION_PEEK);
   // The tab bar floats over the bottom of the screen; the sheet runs behind it.
   const tabSpace = useTabBarSpace();
+
+  // On a tall phone the map (capped by the screen's width) leaves height to
+  // spare with the sheet down. The spacers around it measure that spare,
+  // and the key opens out by part of it so the gaps don't just grow.
+  const [keyRoom, setKeyRoom] = useState(0);
+  const spacers = useRef({ above: 0, below: 0 });
+  function measureSpare(which: 'above' | 'below', height: number) {
+    spacers.current[which] = height;
+    // What would be spare with no extra room in the key, so the answer
+    // doesn't change as the key grows.
+    const spare = spacers.current.above + spacers.current.below + keyRoom;
+    const next = Math.round(Math.min(Math.max(spare * KEY_ROOM_SHARE, 0), KEY_ROOM_MAX));
+    if (Math.abs(next - keyRoom) >= 2) setKeyRoom(next);
+  }
   const inSection = useMemo(() => {
     if (!useSections || !topCard) return null;
     const page = sections.findIndex((section) =>
@@ -385,14 +502,18 @@ export default function ExploreScreen() {
     return { page, index, section: sections[page] };
   }, [useSections, sections, topCard]);
 
-  const deckTitle = anchor
-    ? (focusRegion?.label ?? anchor.name)
-    : scope === 'wishlist'
-      ? 'Your wishlist'
-      : inSection
-        ? inSection.section.title
-        : // Closed, there's no card in view: an invitation to swipe up.
-          LETS_GO;
+  const deckTitle = focusRegion
+    ? focusRegion.label
+    : anchor
+      ? anchor.name
+      : scope === 'wishlist'
+        ? 'Your wishlist'
+        : scope === 'visited'
+          ? 'Your visits'
+          : inSection
+            ? inSection.section.title
+            : // Closed, there's no card in view: an invitation to swipe up.
+              LETS_GO;
 
   return (
     <View style={[styles.screen, { paddingTop: insets.top + space[2] }]}>
@@ -413,7 +534,9 @@ export default function ExploreScreen() {
                   this line is the invitation, plus anything the map can't say. */}
               {scope === 'wishlist'
                 ? `Where to next? Pick from your ${wishlist.length} saved`
-                : matchIds.size > 0
+                : scope === 'visited'
+                  ? `Where you've been: ${visited.length} so far`
+                  : matchIds.size > 0
                   ? `Where to next? ${matchIds.size} more fit your filters`
                   : 'Where to next?'}
             </BodyText>
@@ -427,9 +550,10 @@ export default function ExploreScreen() {
               parkCount={parks.length}
               siteCount={allSites.length}
               wishlistCount={wishlist.length}
+              visitedCount={visited.length}
               onChange={(next) => {
                 setScope(next);
-                setAnchor(null);
+                clearFocus();
                 setDeckTopId(null);
               }}
             />
@@ -456,6 +580,7 @@ export default function ExploreScreen() {
         >
           <MapKey
             collapsed={sheetOpen && !keyOpen}
+            room={keyRoom}
             showMatches={matchIds.size > 0}
             onToggle={sheetOpen ? () => setKeyOpen((open) => !open) : undefined}
           />
@@ -464,16 +589,19 @@ export default function ExploreScreen() {
         {/* Deliberately not a layout-animated view: the map has to be told
             its new size when the sheet opens, or it overflows under it. */}
         <View style={[styles.mapArea, {
-              paddingBottom:
-                // With the sheet down there's room to spare: lift the map a
-                // little towards the key rather than centring it.
-                (sheetOpen ? sheetHeight + DECK_GAP : SHEET_BAR + EXTRA_LIFT) + tabSpace,
+              paddingBottom: (sheetOpen ? sheetHeight + DECK_GAP : SHEET_BAR) + tabSpace,
             }]}>
+          {!sheetOpen ? (
+            <View
+              style={{ flex: SPARE_ABOVE }}
+              onLayout={(event) => measureSpare('above', event.nativeEvent.layout.height)}
+            />
+          ) : null}
           {focusRegion ? (
             <RegionTitle
               region={focusRegion}
               actionLabel="Full map"
-              onAction={() => setAnchor(null)}
+              onAction={clearFocus}
             />
           ) : (
             // What the map is showing, now that the scope button is an icon.
@@ -508,23 +636,35 @@ export default function ExploreScreen() {
                 focusPark(site);
               }
             }}
-            style={[styles.map, { maxHeight: windowWidth / MAP_ASPECT }]}
+            onSelectRegion={focusRegionById}
+            completedRegions={completed}
+            // Your visits show every visited pin; the other views tuck a
+            // completed region's pins behind its stamp.
+            tuckCompleted={scope !== 'visited'}
+            style={[
+              styles.map,
+              { maxHeight: windowWidth / MAP_ASPECT },
+              // Closed, the map fills to its full height before the spare
+              // room goes to the spacers around it.
+              !sheetOpen && styles.mapFirst,
+            ]}
           />
           {!sheetOpen ? (
-            <Pressable
-              onPress={() => setFullMapOpen(true)}
-              hitSlop={8}
-              accessibilityRole="button"
-              accessibilityLabel="Open the map full screen"
-              style={({ pressed }) => [
-                styles.expandBelow,
-                // Up near the map; the room under it is EXTRA_LIFT's.
-                { bottom: SHEET_BAR + tabSpace + space[8] + space[1] },
-                pressed && styles.suggestionPressed,
-              ]}
-            >
-              <ExpandIcon size={16} color={colors.accentRamp[700]} />
-            </Pressable>
+            <>
+              <Pressable
+                onPress={() => setFullMapOpen(true)}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel="Open the map full screen"
+                style={({ pressed }) => [styles.expandBelow, pressed && styles.suggestionPressed]}
+              >
+                <ExpandIcon size={16} color={colors.accentRamp[700]} />
+              </Pressable>
+              <View
+                style={{ flex: SPARE_BELOW }}
+                onLayout={(event) => measureSpare('below', event.nativeEvent.layout.height)}
+              />
+            </>
           ) : null}
         </View>
 
@@ -565,6 +705,9 @@ export default function ExploreScreen() {
                   reason={item.reason}
                   rank={item.rank}
                   markWishlist
+                  onOpenTrip={openTrip}
+                  saved={wishlistIds.has(item.site.id)}
+                  onToggleSave={() => toggleWishlist(item.site.id)}
                   onExpand={() => setPeekSite(item.site)}
                   onPress={() => {
                     if (!active) {
@@ -593,6 +736,9 @@ export default function ExploreScreen() {
                   rank={item.rank}
                   // The full decks mix saved parks in with everything else.
                   markWishlist={scope === 'parks' || scope === 'all'}
+                  onOpenTrip={openTrip}
+                  saved={wishlistIds.has(item.site.id)}
+                  onToggleSave={() => toggleWishlist(item.site.id)}
                   onExpand={() => setPeekSite(item.site)}
                   onPress={() => {
                     if (index !== deckIndex) {
@@ -621,7 +767,15 @@ export default function ExploreScreen() {
           ) : (
             <View style={styles.empty}>
               <Heading size={17}>
-                {showingWishlist ? 'Nothing saved yet' : 'No parks match'}
+                {scope === 'wishlist'
+                  ? focusRegion
+                    ? `Nothing saved in ${focusRegion.label}`
+                    : 'Nothing saved yet'
+                  : scope === 'visited'
+                    ? focusRegion
+                      ? `No visits in ${focusRegion.label} yet`
+                      : 'No visits yet'
+                    : 'No parks match'}
               </Heading>
               <BodyText
                 size={13}
@@ -629,9 +783,13 @@ export default function ExploreScreen() {
                 color={colors.neutral[700]}
                 style={styles.emptyBody}
               >
-                {showingWishlist
+                {scope === 'wishlist'
                   ? 'Parks you add to your wishlist will show up here.'
-                  : 'Nothing matched those answers. Widen your terrain or season by retaking the quiz in Settings.'}
+                  : scope === 'visited'
+                    ? focusRegion
+                      ? 'Parks you visit here will show up on this map. Full map goes back to all your visits.'
+                      : 'Parks you log a visit to will show up here, latest first.'
+                    : 'Nothing matched those answers. Widen your terrain or season by retaking the quiz in Settings.'}
               </BodyText>
             </View>
           )}
@@ -645,6 +803,8 @@ export default function ExploreScreen() {
         rankById={rankById}
         matchIds={matchIds}
         featureIcons={scope === 'parks'}
+        completedRegions={completed}
+        tuckCompleted={scope !== 'visited'}
         onClose={() => setFullMapOpen(false)}
         onView={(site) => {
           setFullMapOpen(false);
@@ -664,7 +824,7 @@ export default function ExploreScreen() {
       />
 
       <SitePeek
-        site={peekSite}
+        site={peekSite && withStatus(peekSite)}
         // Great Smoky Mountains, the busiest park, is the crowding yardstick.
         referenceVisits={allSites.find((site) => site.id === 'grsm')?.vis ?? undefined}
         onDismiss={() => setPeekSite(null)}
@@ -801,12 +961,14 @@ function ScopeMenu({
   parkCount,
   siteCount,
   wishlistCount,
+  visitedCount,
   onChange,
 }: {
   value: MapScope;
   parkCount: number;
   siteCount: number;
   wishlistCount: number;
+  visitedCount: number;
   onChange: (next: MapScope) => void;
 }) {
   const anchor = useRef<View>(null);
@@ -831,6 +993,12 @@ function ScopeMenu({
       short: 'Wishlist',
       label: `My wishlist (${wishlistCount})`,
       detail: 'Only the parks you have saved, dealt as cards',
+    },
+    {
+      value: 'visited',
+      short: 'Visited',
+      label: `My visits (${visitedCount})`,
+      detail: "Only the sites you've been to, latest first",
     },
   ];
   const current = options.find((option) => option.value === value) ?? options[0];
@@ -1041,9 +1209,12 @@ function RegionTitle({
 function MapKey({
   collapsed,
   showMatches,
+  room = 0,
   onToggle,
 }: {
   collapsed: boolean;
+  /** Extra height to open out into (up to KEY_ROOM_MAX), on a tall screen. */
+  room?: number;
   /** Adds the filter-match swatch while filters are highlighting parks. */
   showMatches: boolean;
   onToggle?: () => void;
@@ -1072,13 +1243,17 @@ function MapKey({
     );
   }
 
+  // Spread the extra room over the key's padding and gaps, in proportion
+  // to the 52 it can take at most.
+  const r = Math.min(room, KEY_ROOM_MAX) / KEY_ROOM_MAX;
+
   return (
-    <View style={styles.key}>
+    <View style={[styles.key, { paddingVertical: styles.key.paddingVertical + 8 * r }]}>
       <View style={styles.keyHead}>
         <Kicker>Your pins</Kicker>
         {toggle}
       </View>
-      <View style={styles.keyRow}>
+      <View style={[styles.keyRow, { marginTop: styles.keyRow.marginTop + 4 * r }]}>
         <View style={styles.keyItem}>
           <View style={styles.pickSwatch}>
             <BodyText size={8} weight="bold" color={colors.neutral[100]}>
@@ -1120,8 +1295,18 @@ function MapKey({
         ))}
       </View>
 
-      <Kicker style={styles.keyKicker}>Regions</Kicker>
-      <View style={styles.regionGrid}>
+      <Kicker style={[styles.keyKicker, { marginTop: styles.keyKicker.marginTop + 8 * r }]}>
+        Regions
+      </Kicker>
+      <View
+        style={[
+          styles.regionGrid,
+          {
+            marginTop: styles.regionGrid.marginTop + 4 * r,
+            rowGap: styles.regionGrid.rowGap + 5 * r,
+          },
+        ]}
+      >
         {REGIONS.map((region) => (
           <View key={region.id} style={styles.regionItem}>
             <View style={[styles.regionSwatch, { backgroundColor: region.fill }]} />
@@ -1238,10 +1423,10 @@ const styles = StyleSheet.create({
     borderColor: colors.neutral[300],
     backgroundColor: colors.neutral[100],
   },
-  // Centred under the map, just above the closed sheet.
+  // Centred just under the map, so it reads as the map's own button.
   expandBelow: {
-    position: 'absolute',
     alignSelf: 'center',
+    marginTop: space[2],
     width: 34,
     height: 34,
     alignItems: 'center',
@@ -1354,6 +1539,11 @@ const styles = StyleSheet.create({
     flex: 1,
     width: '100%',
     marginTop: space[2],
+  },
+  // Far outweighs the spacers, so the map takes its maxHeight first and
+  // the spacers split only what's left over.
+  mapFirst: {
+    flexGrow: 1000,
   },
   sheet: {
     position: 'absolute',

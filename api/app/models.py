@@ -211,3 +211,29 @@ class SiteFeedback(Base):
         onupdate=lambda: datetime.now(UTC),
         server_default=func.now(),
     )
+
+
+class WishlistItem(Base):
+    """
+    A site the user has saved to their wishlist, to visit some day.
+
+    One row per (user, site): saving is idempotent and removing deletes the
+    row. Private to the user for now; sharing it with friends would go
+    through app/visibility.py like trips.
+    """
+
+    __tablename__ = "wishlist_items"
+    __table_args__ = (UniqueConstraint("user_id", "site_id", name="uq_wishlist_items_user_site"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    site_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("sites.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC), server_default=func.now()
+    )
+
+    site: Mapped[Site] = relationship()

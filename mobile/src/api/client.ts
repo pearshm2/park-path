@@ -83,7 +83,7 @@ function readDetail(body: unknown, fallback: string): string {
 }
 
 export type RequestOptions = {
-  method?: 'GET' | 'POST' | 'PATCH' | 'DELETE';
+  method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
   body?: unknown;
   /** Sent as `Authorization: Bearer <token>`. */
   token?: string | null;

@@ -20,8 +20,14 @@
  * or pick, and picks keep their number in a corner bubble. At full-country
  * size there is no room for them, so the dots stay.
  *
+ * Regions in `completedRegions` (every site visited) are filled in a
+ * richer shade inside a gold edge, with a stamp in the middle, and their
+ * pins are tucked away until the region is focused or `revealedRegion`
+ * (unless `tuckCompleted` is off, for a map of the places you've been).
+ *
  * Passing `focusRegion` zooms the map onto that region and hides every
- * other region and its pins. Pinching zooms around the fingers, and once
+ * other region and its pins; with `onSelectRegion`, tapping a region's land
+ * asks for that. Pinching zooms around the fingers, and once
  * zoomed in a one-finger drag pans; at full-country size a drag is left to
  * the page so it still scrolls. The zoom is a transform on the state
  * outlines; pins are placed in screen space instead, so they keep their
@@ -32,7 +38,13 @@
  * are absent from the map. The prototype notes the same limitation.
  */
 
-import { geoAlbersUsa, geoPath, type GeoPath } from 'd3-geo';
+import {
+  geoAlbersUsa,
+  geoContains,
+  geoPath,
+  type GeoPath,
+  type GeoProjection,
+} from 'd3-geo';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Pressable,
@@ -87,8 +99,19 @@ const ICON_ZOOM = 1.6;
 /** A feature badge's radius, and its glyph's width. */
 const BADGE_R = 12;
 const GLYPH_SIZE = 15;
+/** The edge round a completed region, and how much of it shows outside. */
+const EARNED_EDGE = '#c8961e';
+const EARNED_EDGE_WIDTH = 5;
+/** The completed-region stamp's radius. */
+const STAMP_R = 17;
 /** How far the selected badge's glow reaches past its ring. */
 const HALO = 9;
+/**
+ * Past this share of on-screen badges overlapping a neighbour, a pinched
+ * map goes back to dots: pinching out, the badges bunch up long before
+ * the zoom drops under ICON_ZOOM.
+ */
+const CROWD_SHARE = 0.3;
 
 /** Room left around a zoomed region, and the most it may be magnified. */
 const ZOOM_PADDING = 22;
@@ -125,6 +148,17 @@ type ParkMapProps = {
    */
   controlInset?: { top?: number; right?: number; bottom?: number };
   onSelectSite?: (site: Site) => void;
+  /** Regions to mark as completed: every national park in them visited. */
+  completedRegions?: ReadonlySet<RegionId>;
+  /** A completed region whose pins show anyway, without zooming onto it. */
+  revealedRegion?: RegionId | null;
+  /**
+   * Tuck a completed region's pins away behind its stamp. On by default;
+   * off for the map of your visits, where those pins are the point.
+   */
+  tuckCompleted?: boolean;
+  /** Tapping a region's land (not a pin), while no region is in focus. */
+  onSelectRegion?: (region: RegionId) => void;
   style?: StyleProp<ViewStyle>;
 };
 
@@ -139,6 +173,10 @@ export function ParkMap({
   onExpand,
   controlInset,
   onSelectSite,
+  onSelectRegion,
+  completedRegions,
+  revealedRegion,
+  tuckCompleted = true,
   style,
 }: ParkMapProps) {
   const [size, setSize] = useState({ width: 0, height: 0 });
@@ -176,7 +214,7 @@ export function ParkMap({
       return [{ site, x: point[0], y: point[1] }];
     });
 
-    return { toPath, statePaths, dots };
+    return { projection, toPath, statePaths, dots };
   }, [size.width, size.height, sites]);
 
   /** Where the map should end up: the whole country, or framed on a region. */
@@ -222,28 +260,59 @@ export function ParkMap({
     .onStart(() => beginGesture(0, 0))
     .onUpdate((event) => panBy(event.translationX, event.translationY));
 
-  const gesture = Gesture.Simultaneous(pinch, pan);
+  const regionsTappable = onSelectRegion != null && focusRegion == null;
 
   // Built once per layout, so each frame of a zoom only moves the group.
   // While a region is in focus the others are left out entirely.
-  const stateShapes = useMemo(
-    () =>
-      projected?.statePaths.flatMap((state) => {
-        const region = STATE_REGION[state.id];
-        if (focusRegion != null && region?.id !== focusRegion) return [];
-        return [
-          <Path
-            key={state.id}
-            d={state.d}
-            fill={region?.fill ?? colors.neutral[300]}
-            stroke={colors.bg}
-            strokeWidth={1}
-            vectorEffect="non-scaling-stroke"
-          />,
-        ];
-      }) ?? [],
-    [projected, focusRegion],
-  );
+  //
+  // Completed regions go in three layers: the other states, then a wide
+  // gold stroke round each completed state, then the completed states'
+  // fills on top. The fills cover the gold everywhere but the region's
+  // outer edge (where states inside it meet, both sides are filled), so
+  // the gold rings the region as a whole, not each state in it.
+  const stateShapes = useMemo(() => {
+    if (!projected) return [];
+    const shown = projected.statePaths.flatMap((state) => {
+      const region = STATE_REGION[state.id];
+      if (focusRegion != null && region?.id !== focusRegion) return [];
+      return [{ ...state, region, earned: region != null && completedRegions?.has(region.id) }];
+    });
+    const land = (state: (typeof shown)[number]) => (
+      <Path
+        key={state.id}
+        d={state.d}
+        fill={state.earned ? state.region.earned : (state.region?.fill ?? colors.neutral[300])}
+        stroke={colors.bg}
+        strokeWidth={1}
+        vectorEffect="non-scaling-stroke"
+      />
+    );
+    const earned = shown.filter((state) => state.earned);
+    return [
+      ...shown.filter((state) => !state.earned).map(land),
+      ...earned.map((state) => (
+        <Path
+          key={`edge-${state.id}`}
+          d={state.d}
+          fill="none"
+          stroke={EARNED_EDGE}
+          strokeWidth={EARNED_EDGE_WIDTH}
+          strokeLinejoin="round"
+          vectorEffect="non-scaling-stroke"
+        />
+      )),
+      ...earned.map(land),
+    ];
+  }, [projected, focusRegion, completedRegions]);
+
+  /** Where each completed region's stamp goes, in map coordinates. */
+  const stampSpots = useMemo(() => {
+    if (!projected || !completedRegions?.size) return [];
+    return REGIONS.filter((region) => completedRegions.has(region.id)).map((region) => ({
+      region: region.id,
+      ...regionCentre(region.states, projected),
+    }));
+  }, [projected, completedRegions]);
 
   if (!projected) {
     return <View style={[styles.container, style]} onLayout={onLayout} />;
@@ -254,12 +323,27 @@ export function ParkMap({
     y: y * view.k + view.ty,
   });
   const hasPicks = (rankById?.size ?? 0) > 0;
+  /** A completed region's pins stay tucked away unless it's opened up. */
+  const tucked = (dot: PlacedDot) => {
+    if (!tuckCompleted) return false;
+    const region = regionForState(dot.site.state)?.id;
+    return (
+      region != null &&
+      completedRegions?.has(region) === true &&
+      region !== focusRegion &&
+      region !== revealedRegion &&
+      dot.site.id !== selectedId
+    );
+  };
   // While a region is in focus, only its pins (and the selected one) show.
-  const visible = focusRegion
-    ? projected.dots.filter(
-        (dot) => dot.site.id === selectedId || regionForState(dot.site.state)?.id === focusRegion,
-      )
-    : projected.dots;
+  const visible = (
+    focusRegion
+      ? projected.dots.filter(
+          (dot) =>
+            dot.site.id === selectedId || regionForState(dot.site.state)?.id === focusRegion,
+        )
+      : projected.dots
+  ).filter((dot) => !tucked(dot));
   const picks = visible.filter((dot) => rankById?.has(dot.site.id));
   const unranked = visible.filter((dot) => !rankById?.has(dot.site.id));
   const matched = unranked.filter((dot) => matchIds?.has(dot.site.id));
@@ -270,20 +354,23 @@ export function ParkMap({
   // On the whole map, badges follow a pinch only (`moved`): while it eases
   // back out of a region it passes through the same zoom, and every park in
   // the country would flash up as a badge on the way.
-  const showIcons =
-    featureIcons &&
-    (iconsAtAnyZoom || focusRegion != null || (moved && view.k >= ICON_ZOOM));
-  /** The park's feature, when badges are showing and it has one. */
-  const badgeFor = (site: Site) => (showIcons ? featureForPark(site.id) : undefined);
+  // Only parks on screen get badges. Off-screen ones would be pulled in to
+  // the edges when the badges are kept inside the map, and pile up there.
+  const onScreen = visible.flatMap((dot) => {
+    const at = place(dot);
+    const inView =
+      at.x >= -BADGE_R && at.x <= size.width + BADGE_R &&
+      at.y >= -BADGE_R && at.y <= size.height + BADGE_R;
+    return inView && featureForPark(dot.site.id) ? [{ id: dot.site.id, ...at }] : [];
+  });
+  const pinchedIn = moved && view.k >= ICON_ZOOM && !crowded(onScreen);
+  const showIcons = featureIcons && (iconsAtAnyZoom || focusRegion != null || pinchedIn);
+  const badged = new Set(showIcons ? onScreen.map((spot) => spot.id) : []);
+  /** The park's feature, when it's on screen with badges showing and has one. */
+  const badgeFor = (site: Site) => (badged.has(site.id) ? featureForPark(site.id) : undefined);
   /** Where each badge is drawn, nudged apart where parks sit close together. */
   const badgeSpots = showIcons
-    ? spreadBadges(
-        visible.flatMap((dot) =>
-          featureForPark(dot.site.id) ? [{ id: dot.site.id, ...place(dot) }] : [],
-        ),
-        selectedId,
-        size,
-      )
+    ? spreadBadges(onScreen, selectedId, size)
     : new Map<string, Point>();
   // Draw #1 last so it sits on top where pins overlap.
   picks.sort((a, b) => rankById!.get(b.site.id)! - rankById!.get(a.site.id)!);
@@ -294,11 +381,80 @@ export function ParkMap({
   matched.sort(selectedLast);
   picks.sort(selectedLast);
 
+  // Taps are worked out here rather than by the SVG shapes themselves: on
+  // Android, react-native-svg kept the states' touch areas where they were
+  // drawn while zoomed, so after zooming in and back out a tap landed on
+  // whichever state used to be under the finger. Working from the current
+  // view is exact at any zoom.
+  const showStamps = focusRegion == null && tuckCompleted;
+  /** The pin under a tap, nearest first; badges and numbered pins are bigger targets. */
+  function siteAt(x: number, y: number): Site | undefined {
+    let hit: Site | undefined;
+    let nearest = Infinity;
+    for (const dot of visible) {
+      const spot = badgeSpots.get(dot.site.id) ?? place(dot);
+      const reach = badgeSpots.has(dot.site.id)
+        ? BADGE_R + 4
+        : rankById?.has(dot.site.id)
+          ? 13
+          : HIT_RADIUS;
+      const distance = Math.hypot(spot.x - x, spot.y - y);
+      if (distance <= reach && distance < nearest) {
+        hit = dot.site;
+        nearest = distance;
+      }
+    }
+    return hit;
+  }
+  /** The region under a tap: a completed region's stamp, or the state it lands in. */
+  function regionAt(x: number, y: number): RegionId | undefined {
+    if (showStamps) {
+      for (const spot of stampSpots) {
+        if (spot.region === revealedRegion) continue;
+        const at = { x: spot.x * view.k + view.tx, y: spot.y * view.k + view.ty };
+        if (Math.hypot(at.x - x, at.y - y) <= STAMP_R) return spot.region;
+      }
+    }
+    if (!regionsTappable || !projected) return undefined;
+    const lonLat = projected.projection.invert?.([(x - view.tx) / view.k, (y - view.ty) / view.k]);
+    if (!lonLat) return undefined;
+    const state = US_STATES.find((feature) => geoContains(feature, lonLat));
+    return state ? STATE_REGION[state.id]?.id : undefined;
+  }
+
+  const tap = Gesture.Tap()
+    .runOnJS(true)
+    .maxDistance(10)
+    .onEnd((event, success) => {
+      if (!success) return;
+      const site = siteAt(event.x, event.y);
+      if (site) {
+        onSelectSite?.(site);
+        return;
+      }
+      const region = regionAt(event.x, event.y);
+      if (region && onSelectRegion) onSelectRegion(region);
+    });
+  const gesture = Gesture.Simultaneous(pinch, pan, tap);
+
   return (
     <View style={[styles.container, style]} onLayout={onLayout}>
       <GestureDetector gesture={gesture}>
         <Svg width={size.width} height={size.height}>
           <G transform={`translate(${view.tx} ${view.ty}) scale(${view.k})`}>{stateShapes}</G>
+
+          {/* Stamps on the completed regions, while their pins are tucked away. */}
+          {focusRegion == null && tuckCompleted
+            ? stampSpots
+                .filter((spot) => spot.region !== revealedRegion)
+                .map((spot) => (
+                  <CompleteStamp
+                    key={spot.region}
+                    x={spot.x * view.k + view.tx}
+                    y={spot.y * view.k + view.ty}
+                  />
+                ))
+            : null}
 
           {/* Unmatched parks recede further while a filter is on. */}
           {/* Badges stay at full strength: the picks' numbers already stand out. */}
@@ -312,7 +468,7 @@ export function ParkMap({
               if (feature) {
                 const ring = site.status === 'new' ? look.stroke : STATUS_RING[site.status];
                 return (
-                  <G key={site.id} onPress={onSelectSite ? () => onSelectSite(site) : undefined}>
+                  <G key={site.id}>
                     <FeatureBadge
                       site={site}
                       x={x}
@@ -326,7 +482,7 @@ export function ParkMap({
                 );
               }
               return (
-                <G key={site.id} onPress={onSelectSite ? () => onSelectSite(site) : undefined}>
+                <G key={site.id}>
                   <Circle cx={x} cy={y} r={HIT_RADIUS} fill="transparent" />
                   <Circle
                     cx={x}
@@ -349,7 +505,7 @@ export function ParkMap({
               const feature = badgeFor(site);
               if (feature) {
                 return (
-                  <G key={site.id} onPress={onSelectSite ? () => onSelectSite(site) : undefined}>
+                  <G key={site.id}>
                     <FeatureBadge
                       site={site}
                       x={x}
@@ -363,7 +519,7 @@ export function ParkMap({
                 );
               }
               return (
-                <G key={site.id} onPress={onSelectSite ? () => onSelectSite(site) : undefined}>
+                <G key={site.id}>
                   <Circle cx={x} cy={y} r={HIT_RADIUS} fill="transparent" />
                   <Circle
                     cx={x}
@@ -392,7 +548,7 @@ export function ParkMap({
                 const nx = spot.x + r * 0.75;
                 const ny = spot.y - r * 0.75;
                 return (
-                  <G key={site.id} onPress={onSelectSite ? () => onSelectSite(site) : undefined}>
+                  <G key={site.id}>
                     <FeatureBadge
                       site={site}
                       x={x}
@@ -425,7 +581,7 @@ export function ParkMap({
                 );
               }
               return (
-                <G key={site.id} onPress={onSelectSite ? () => onSelectSite(site) : undefined}>
+                <G key={site.id}>
                   <Circle
                     cx={x}
                     cy={y}
@@ -503,6 +659,22 @@ const STATUS_RING: Record<Exclude<SiteStatus, 'new'>, string> = {
 };
 
 type Point = { x: number; y: number };
+
+/** Whether too many badges would overlap a neighbour to read (see CROWD_SHARE). */
+function crowded(points: Point[]): boolean {
+  if (points.length < 2) return false;
+  const gap = BADGE_R * 2;
+  let overlapping = 0;
+  for (let i = 0; i < points.length; i++) {
+    for (let j = 0; j < points.length; j++) {
+      if (i !== j && Math.hypot(points[i].x - points[j].x, points[i].y - points[j].y) < gap) {
+        overlapping++;
+        break;
+      }
+    }
+  }
+  return overlapping > points.length * CROWD_SHARE;
+}
 
 /**
  * Pushes overlapping badges apart so each one can be read and tapped.
@@ -719,6 +891,68 @@ function useMapView(target: View2D, size: { width: number; height: number }) {
 }
 
 type PlacedDot = { site: Site; x: number; y: number };
+
+/**
+ * A passport-style stamp for a completed region: a gold double ring, the
+ * inner one dashed, round a check mark, set at a slight tilt.
+ */
+function CompleteStamp({ x, y }: { x: number; y: number }) {
+  const r = STAMP_R;
+  return (
+    <G transform={`translate(${x} ${y}) rotate(-12)`}>
+      <Circle r={r} fill={colors.neutral[100]} opacity={0.92} />
+      <Circle r={r} fill="none" stroke={EARNED_EDGE} strokeWidth={2.5} />
+      <Circle
+        r={r - 4.5}
+        fill="none"
+        stroke={EARNED_EDGE}
+        strokeWidth={1.25}
+        strokeDasharray="2.5 2"
+      />
+      <Path
+        d={`M${-r * 0.36} ${r * 0.02}L${-r * 0.08} ${r * 0.3}L${r * 0.4} ${-r * 0.26}`}
+        fill="none"
+        stroke={EARNED_EDGE}
+        strokeWidth={3.25}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </G>
+  );
+}
+
+/**
+ * Where a region's stamp sits: the middle of its land, weighted by each
+ * state's size. If that point falls outside the region (Alaska & Hawaii's
+ * middle is open sea), it goes on the biggest state's centre instead.
+ */
+function regionCentre(
+  stateIds: string[],
+  { projection, toPath }: { projection: GeoProjection; toPath: GeoPath },
+): Point {
+  const states = US_STATES.filter((state) => stateIds.includes(state.id)).map((state) =>
+    mainLand(state, toPath),
+  );
+  let sum = 0;
+  let x = 0;
+  let y = 0;
+  let biggest = { area: 0, at: [0, 0] as [number, number] };
+  for (const state of states) {
+    const area = toPath.area(state);
+    const [cx, cy] = toPath.centroid(state);
+    if (!Number.isFinite(cx) || !Number.isFinite(cy)) continue;
+    sum += area;
+    x += cx * area;
+    y += cy * area;
+    if (area > biggest.area) biggest = { area, at: [cx, cy] };
+  }
+  if (sum === 0) return { x: biggest.at[0], y: biggest.at[1] };
+  const centre: [number, number] = [x / sum, y / sum];
+  const lonLat = projection.invert?.(centre);
+  const inside = lonLat != null && states.some((state) => geoContains(state, lonLat));
+  const [px, py] = inside ? centre : biggest.at;
+  return { x: px, y: py };
+}
 
 /** Islands smaller than this share of a state's largest landmass don't count when framing it. */
 const MIN_LAND_SHARE = 0.01;

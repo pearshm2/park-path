@@ -13,8 +13,10 @@
  */
 
 import { Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
+import Svg, { Path } from 'react-native-svg';
 
 import type { Site } from '../data/parks';
+import { visitMonth, visitSummary, type Trip } from '../data/visits';
 import { regionForState } from '../data/regions';
 import { colors, radius, shadow, space } from '../theme';
 import { STATUS_DOT } from './ParkMap';
@@ -43,18 +45,27 @@ export function ParkCard({
   reason,
   rank,
   markWishlist = false,
+  onOpenTrip,
+  saved = false,
+  onToggleSave,
   onPress,
   onExpand,
   style,
 }: {
   site: Site;
-  /** 0–1 from the provisional ranking. Omitted for parks it did not score. */
+  /** 0–1 from the recommendation engine. Omitted for parks it did not score. */
   score?: number;
   reason?: string;
   /** 1-based position among the picks, shown as a badge on the band. */
   rank?: number;
   /** Flags a wishlist park on the band, for decks that mix them with others. */
   markWishlist?: boolean;
+  /** The visited card's trip link: open that trip, or log one if none. */
+  onOpenTrip?: (trip: Trip | undefined) => void;
+  /** Whether the park is on your wishlist; drives the save button. */
+  saved?: boolean;
+  /** Shows the save button, which adds the park to or removes it from the wishlist. */
+  onToggleSave?: () => void;
   onPress?: () => void;
   /** Shows the expand button, which opens the site's detail sheet. */
   onExpand?: () => void;
@@ -63,6 +74,7 @@ export function ParkCard({
   const tone = terrainTone(site.group);
   const region = regionForState(site.state);
   const percent = score === undefined ? null : Math.round(score * 100);
+  const visits = site.status === 'visited' ? visitSummary(site.id) : undefined;
 
   return (
     <Pressable
@@ -96,6 +108,21 @@ export function ParkCard({
               </BodyText>
             </View>
           ) : null}
+          {site.status === 'visited' ? (
+            // Stamped like the completed regions on the map: gold on white.
+            <View style={styles.visitedStamp}>
+              <CheckIcon />
+              <BodyText size={10.5} weight="bold" color={VISITED_GOLD} numberOfLines={1}>
+                {[
+                  'Visited',
+                  visits && visitMonth(visits.last),
+                  visits && visits.count > 1 && `×${visits.count}`,
+                ]
+                  .filter(Boolean)
+                  .join(' · ')}
+              </BodyText>
+            </View>
+          ) : null}
           {rank !== undefined ? (
             <View style={styles.rankBadge}>
               <BodyText size={11} weight="bold" color={colors.bg}>
@@ -110,6 +137,25 @@ export function ParkCard({
             <Heading size={18} numberOfLines={1} style={styles.name}>
               {site.name}
             </Heading>
+            {onToggleSave ? (
+              // Its own target too, beside expand and the same size.
+              <Pressable
+                onPress={onToggleSave}
+                hitSlop={10}
+                accessibilityRole="button"
+                accessibilityState={{ selected: saved }}
+                accessibilityLabel={
+                  saved ? `Remove ${site.name} from your wishlist` : `Save ${site.name} to your wishlist`
+                }
+                style={({ pressed }) => [
+                  styles.expand,
+                  saved && styles.saveOn,
+                  pressed && styles.expandPressed,
+                ]}
+              >
+                <BookmarkIcon filled={saved} />
+              </Pressable>
+            ) : null}
             {onExpand ? (
               // Its own target, so the card's tap (zoom to region) is untouched.
               <Pressable
@@ -158,6 +204,30 @@ export function ParkCard({
             ) : null}
           </View>
 
+          {/* A visited park links to the trip it was part of, or asks for one. */}
+          {site.status === 'visited' ? (
+            <Pressable
+              onPress={onOpenTrip ? () => onOpenTrip(visits?.trip) : undefined}
+              disabled={!onOpenTrip}
+              hitSlop={6}
+              accessibilityRole="link"
+              style={({ pressed }) => [styles.tripLink, pressed && styles.tripLinkPressed]}
+            >
+              {visits?.trip ? (
+                <BodyText size={12} color={colors.neutral[700]} numberOfLines={1}>
+                  {'From your trip: '}
+                  <BodyText size={12} weight="semibold" color={colors.accentRamp[700]}>
+                    {`${visits.trip.title} →`}
+                  </BodyText>
+                </BodyText>
+              ) : (
+                <BodyText size={12} weight="semibold" color={colors.accentRamp[700]}>
+                  + Add this visit to a trip
+                </BodyText>
+              )}
+            </Pressable>
+          ) : null}
+
           {/* Match strength on one line — the point of the deck is why this
               park and not another. Pinned to the bottom of the card. */}
           {percent !== null ? (
@@ -181,6 +251,40 @@ export function ParkCard({
         </View>
       </View>
     </Pressable>
+  );
+}
+
+/** The gold of the completed-region stamp on the map. */
+const VISITED_GOLD = '#a87a12';
+
+function CheckIcon() {
+  return (
+    <Svg width={10} height={10} viewBox="0 0 24 24">
+      <Path
+        d="M4 12.5l5 5L20 6.5"
+        fill="none"
+        stroke={VISITED_GOLD}
+        strokeWidth={3.5}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </Svg>
+  );
+}
+
+/** A bookmark: outlined when unsaved, filled in the wishlist pin's colour when saved. */
+function BookmarkIcon({ filled }: { filled: boolean }) {
+  const ink = filled ? STATUS_DOT.wishlist.stroke : colors.neutral[800];
+  return (
+    <Svg width={14} height={14} viewBox="0 0 24 24">
+      <Path
+        d="M6.5 3.5h11a1 1 0 0 1 1 1v16l-6.5-4.5-6.5 4.5v-16a1 1 0 0 1 1-1z"
+        fill={filled ? ink : 'none'}
+        stroke={ink}
+        strokeWidth={2.4}
+        strokeLinejoin="round"
+      />
+    </Svg>
   );
 }
 
@@ -230,6 +334,27 @@ const styles = StyleSheet.create({
     borderColor: STATUS_DOT.wishlist.stroke,
     backgroundColor: STATUS_DOT.wishlist.fill,
   },
+  visitedStamp: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 2,
+    paddingHorizontal: 8,
+    borderRadius: radius.pill,
+    borderWidth: 1.5,
+    borderColor: '#c8961e',
+    backgroundColor: colors.neutral[100],
+    flexShrink: 1,
+  },
+  tripLink: {
+    alignSelf: 'flex-start',
+    marginTop: space[2],
+    paddingVertical: 2,
+    borderRadius: radius.sm,
+  },
+  tripLinkPressed: {
+    opacity: 0.6,
+  },
   rankBadge: {
     paddingVertical: 2,
     paddingHorizontal: 9,
@@ -260,6 +385,9 @@ const styles = StyleSheet.create({
   },
   expandPressed: {
     backgroundColor: colors.neutral[300],
+  },
+  saveOn: {
+    backgroundColor: colors.accent2Ramp[100],
   },
   meta: {
     flexDirection: 'row',

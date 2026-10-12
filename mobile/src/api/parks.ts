@@ -4,13 +4,13 @@
  * The API's field names are mapped onto the app's Site shape here, so
  * nothing above this file knows or cares what the backend calls things.
  *
- * Scoring/ranking deliberately does NOT live here — see
- * src/api/provisionalMatches.ts and the banner at the top of it.
+ * Scoring/ranking deliberately does NOT live here — that is the engine's
+ * job, through src/api/recommendations.ts.
  */
 
 import { geoContains, type GeoPermissibleObjects } from 'd3-geo';
 
-import type { EffortLevel, Season, Site, SiteStatus, TerrainGroup } from '../data/parks';
+import type { EffortLevel, Season, Site, TerrainGroup } from '../data/parks';
 import { STATE_FIPS } from '../data/regions';
 import { US_STATES } from '../data/usStates';
 import { request } from './client';
@@ -36,21 +36,6 @@ type SiteOut = {
   seasons: string[] | null;
   permit_required: boolean | null;
   annual_visits_millions: number | null;
-};
-
-/**
- * PLACEHOLDER: visited and wishlist are per-person, and the API has no
- * table for them yet. These are the statuses the old bundled fixtures
- * carried, kept so the map key and the wishlist view still have something
- * to show. Delete once GET /me/sites (or similar) exists.
- */
-const DEMO_STATUS: Record<string, SiteStatus> = {
-  grca: 'visited',
-  romo: 'visited',
-  yose: 'visited',
-  zion: 'wishlist',
-  yell: 'wishlist',
-  olym: 'wishlist',
 };
 
 /** NPS writes some names in title case all the way: "Gates Of The Arctic". */
@@ -109,7 +94,10 @@ function toSite(raw: SiteOut): Site | null {
     days: raw.typical_days,
     seasons: (raw.seasons ?? []) as Season[],
     permit: raw.permit_required,
-    status: DEMO_STATUS[raw.park_code] ?? 'new',
+    // Status is per person, so the shared site list carries none. Explore
+    // applies the signed-in user's wishlist (GET /wishlist) on top; visited
+    // will come from logged visits once Trips exists.
+    status: 'new',
     description: raw.description,
     imageUrl: raw.image_url,
     npsUrl: raw.nps_url,

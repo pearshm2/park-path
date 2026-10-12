@@ -87,6 +87,13 @@ class FriendOut(BaseModel):
     since: datetime | None
 
 
+class WishlistItemOut(BaseModel):
+    """One saved site. The app already has the site details from GET /sites."""
+
+    park_code: str
+    added_at: datetime
+
+
 # --- Recommendations (POST /recommendations) --------------------------------
 
 QuizTerrain = Literal["mountain", "canyon", "desert", "forest", "coast", "water"]

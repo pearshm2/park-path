@@ -13,7 +13,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { API_BASE_URL } from '../../api/client';
 import { useAuth } from '../../auth/AuthContext';
 import { BodyText, Button, Heading, useTabBarSpace } from '../../components';
-import { QUIZ_STEPS } from '../../data/quizSpec';
+import { QUIZ_STEPS, type QuizAnswers } from '../../data/quizSpec';
 import { useQuiz } from '../../quiz/QuizContext';
 import { colors, radius, shadow, space, TEXT_SIZES, useTextSize } from '../../theme';
 
@@ -85,11 +85,10 @@ export default function SettingsScreen() {
           YOUR ANSWERS
         </BodyText>
         <View style={styles.card}>
+          <Row label="Starting from" value={answers.zip ?? 'skipped'} />
           <Row label="Terrain" value={terrainSummary} />
-          <Row label="Season" value={answers.season || 'not set'} />
-          <Row label="Effort" value={effortLabel(answers.effort)} />
-          <Row label="Adjustments" value={answers.needs || 'not set'} />
-          <Row label="Trip length" value={answers.days ? `${answers.days} days` : 'not set'} />
+          <Row label="Seasons" value={seasonSummary(answers.seasons)} />
+          <Row label="Crowds" value={crowdsLabel(answers.crowds)} />
         </View>
         <Button
           label={`Retake the quiz (${QUIZ_STEPS.length} questions)`}
@@ -135,11 +134,17 @@ function Row({ label, value }: { label: string; value: string }) {
   );
 }
 
-function effortLabel(effort: number | null): string {
-  if (effort === 1) return 'Easy walks';
-  if (effort === 2) return 'Half-day hikes';
-  if (effort === 3) return 'All day, strenuous';
-  return 'not set';
+/** "fall, then spring", in ranked order. */
+function seasonSummary(seasons: QuizAnswers['seasons']): string {
+  if (seasons === null) return 'not set';
+  if (seasons.length === 0) return 'any season';
+  return seasons.join(', then ');
+}
+
+function crowdsLabel(crowds: QuizAnswers['crowds']): string {
+  const step = QUIZ_STEPS.find((s) => s.key === 'crowds');
+  const option = step?.key === 'crowds' ? step.options.find((o) => o.value === crowds) : undefined;
+  return option?.label ?? 'not set';
 }
 
 const styles = StyleSheet.create({

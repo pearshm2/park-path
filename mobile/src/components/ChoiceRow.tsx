@@ -20,12 +20,15 @@ export function ChoiceRow({
   onPress,
   /** Multi-select rows announce as checkboxes, single-select as radios. */
   multi = false,
+  /** For tap-to-rank lists: the row's place, shown inside the filled dot. */
+  rank,
 }: {
   label: string;
   sub?: string;
   selected: boolean;
   onPress: () => void;
   multi?: boolean;
+  rank?: number;
 }) {
   const scale = useTextScale();
   return (
@@ -33,14 +36,18 @@ export function ChoiceRow({
       onPress={onPress}
       accessibilityRole={multi ? 'checkbox' : 'radio'}
       accessibilityState={{ checked: selected }}
-      accessibilityLabel={sub ? `${label}. ${sub}` : label}
+      accessibilityLabel={[rank !== undefined && `Choice ${rank}`, label, sub]
+        .filter(Boolean)
+        .join('. ')}
       style={({ pressed }) => [
         styles.row,
         selected ? styles.rowSelected : styles.rowIdle,
         pressed && styles.rowPressed,
       ]}
     >
-      <View style={[styles.dot, selected ? styles.dotSelected : styles.dotIdle]} />
+      <View style={[styles.dot, selected ? styles.dotSelected : styles.dotIdle]}>
+        {rank !== undefined ? <Text style={styles.rank}>{rank}</Text> : null}
+      </View>
       <View style={styles.text}>
         <Text style={[styles.label, scaleType(styles.label, scale)]}>{label}</Text>
         {sub ? <Text style={[styles.sub, scaleType(styles.sub, scale)]}>{sub}</Text> : null}
@@ -77,6 +84,8 @@ const styles = StyleSheet.create({
     width: 22,
     height: 22,
     borderRadius: radius.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
     // 2.75px matches the icon stroke weight the design system uses
     // throughout, which is what makes these rings feel of a piece.
     borderWidth: 2.75,
@@ -88,6 +97,14 @@ const styles = StyleSheet.create({
   dotSelected: {
     borderColor: colors.accent,
     backgroundColor: colors.accent,
+  },
+  rank: {
+    // Sits inside the 22px dot, so it doesn't scale with text size.
+    fontFamily: fonts.bodySemibold,
+    fontSize: 11,
+    lineHeight: 13,
+    textAlign: 'center',
+    color: colors.neutral[100],
   },
   text: {
     flex: 1,
