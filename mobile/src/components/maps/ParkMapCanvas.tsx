@@ -23,6 +23,7 @@ export function ParkMapCanvas({
   brochureIndex,
   selection,
   onSelect,
+  onMapReady,
 }: {
   kind: MapKind;
   map: ParkMap;
@@ -33,6 +34,7 @@ export function ParkMapCanvas({
   brochureIndex: number;
   selection: MapSelection;
   onSelect: (selection: MapSelection) => void;
+  onMapReady?: () => void;
 }) {
   if (kind === 'brochure') {
     const brochure = map.brochures[brochureIndex] ?? map.brochures[0];
@@ -46,6 +48,7 @@ export function ParkMapCanvas({
         you={you}
         selection={selection}
         onSelect={onSelect}
+        onReady={onMapReady}
       />
     </View>
   );

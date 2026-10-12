@@ -107,6 +107,10 @@ export default function ParkMapScreen() {
   const insets = useSafeAreaInsets();
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const scrollRef = useRef<ScrollView>(null);
+  // Where the person last scrolled the page to. On Android the Google map
+  // takes focus as it loads, and the page jumps to it; this is where to
+  // put the page back. Only the person's own scrolling updates it.
+  const userScrollY = useRef(0);
 
   const [kind, setKind] = useState<MapKind>('real');
   const [realStyle, setRealStyle] = useState<RealMapStyle>('terrain');
@@ -168,6 +172,12 @@ export default function ParkMapScreen() {
   return (
     <ScrollView
       ref={scrollRef}
+      onScrollEndDrag={(event) => {
+        userScrollY.current = event.nativeEvent.contentOffset.y;
+      }}
+      onMomentumScrollEnd={(event) => {
+        userScrollY.current = event.nativeEvent.contentOffset.y;
+      }}
       style={styles.screen}
       contentContainerStyle={[
         styles.content,
@@ -204,7 +214,17 @@ export default function ParkMapScreen() {
           />
 
           <View style={[styles.map, { height: mapHeight }]}>
-            <ParkMapCanvas {...canvasProps} width={mapWidth} height={mapHeight} />
+            <ParkMapCanvas
+              {...canvasProps}
+              width={mapWidth}
+              height={mapHeight}
+              // Undo the page's jump to the map as it takes focus (Android).
+              onMapReady={() => {
+                const y = userScrollY.current;
+                scrollRef.current?.scrollTo({ y, animated: false });
+                requestAnimationFrame(() => scrollRef.current?.scrollTo({ y, animated: false }));
+              }}
+            />
             <Pressable
               onPress={() => setFullScreen(true)}
               hitSlop={8}

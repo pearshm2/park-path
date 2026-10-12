@@ -36,12 +36,15 @@ export function RealParkMap({
   you,
   selection,
   onSelect,
+  onReady,
 }: {
   map: ParkMap;
   mapStyle: RealMapStyle;
   you: [number, number] | null;
   selection: MapSelection;
   onSelect: (selection: MapSelection) => void;
+  /** Called once the map has loaded (see the park map screen for why). */
+  onReady?: () => void;
 }) {
   const ref = useRef<MapView>(null);
   const selectedTrail = selection && 'trail' in selection ? selection.trail : null;
@@ -80,7 +83,10 @@ export function RealParkMap({
       ref={ref}
       style={StyleSheet.absoluteFill}
       mapType={MAP_TYPE[mapStyle]}
-      onMapReady={fitPark}
+      onMapReady={() => {
+        fitPark();
+        onReady?.();
+      }}
       showsCompass
       showsScale
       toolbarEnabled={false}
