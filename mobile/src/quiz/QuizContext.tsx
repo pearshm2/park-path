@@ -1,9 +1,8 @@
 /**
  * Holds the quiz answers and whether the quiz has been completed.
  *
- * There is no backend for this yet — api/app/main.py mounts only the
- * auth router — so answers live here and persist locally. When a /quiz
- * endpoint lands, `save` is the single place that needs to also POST.
+ * There is no /quiz endpoint, so answers live here and persist locally.
+ * If one lands, `save` is the single place that needs to also POST.
  *
  * Answers are stored per account. Signing out leaves them on the device,
  * so signing back in restores them rather than forcing a retake; signing
@@ -22,7 +21,7 @@ import {
 } from 'react';
 
 import { useAuth } from '../auth/AuthContext';
-import { EMPTY_ANSWERS, type QuizAnswers } from '../data/quizSpec';
+import { EMPTY_ANSWERS, isComplete, type QuizAnswers } from '../data/quizSpec';
 import { getItem, removeItem, setItem } from '../lib/storage';
 
 /** One key per account — see the note above about shared devices. */
@@ -43,18 +42,23 @@ type QuizContextValue = {
 const QuizContext = createContext<QuizContextValue | null>(null);
 
 /** Stored JSON is untrusted input — a stale or hand-edited value should
- *  not crash the app, so anything unexpected falls back to no answers. */
+ *  not crash the app, so anything unexpected falls back to no answers.
+ *
+ *  Answers saved by the earlier five-question quiz carry over what still
+ *  applies (terrains, and the single season as a one-season ranking) but
+ *  have no crowds answer, so they come back incomplete and the person is
+ *  sent through the quiz again with those pre-filled. */
 function parseAnswers(raw: string | null): QuizAnswers | null {
   if (!raw) return null;
   try {
-    const parsed = JSON.parse(raw) as Partial<QuizAnswers>;
+    const parsed = JSON.parse(raw) as Partial<QuizAnswers> & { season?: unknown };
     if (!parsed || typeof parsed !== 'object') return null;
+    const legacySeason = typeof parsed.season === 'string' && parsed.season ? [parsed.season] : null;
     return {
+      zip: typeof parsed.zip === 'string' ? parsed.zip : null,
       terrains: Array.isArray(parsed.terrains) ? parsed.terrains : [],
-      season: parsed.season ?? '',
-      effort: parsed.effort ?? null,
-      needs: parsed.needs ?? '',
-      days: parsed.days ?? null,
+      seasons: (Array.isArray(parsed.seasons) ? parsed.seasons : legacySeason) as QuizAnswers['seasons'],
+      crowds: parsed.crowds ?? null,
     };
   } catch {
     return null;
@@ -96,7 +100,7 @@ export function QuizProvider({ children }: { children: ReactNode }) {
       setLoaded({
         userId,
         answers: stored ?? EMPTY_ANSWERS,
-        completed: stored !== null,
+        completed: stored !== null && isComplete(stored),
       });
     })();
 

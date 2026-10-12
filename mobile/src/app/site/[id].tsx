@@ -2,10 +2,12 @@
  * The full detail page for one site, reached from the detail sheet's
  * "Open site".
  *
- * PLACEHOLDER: the real page is Week 5 (all nine signals, accessibility
- * callout, condition chips, directions handoff). For now it shows what we
- * already have from NPS (photo, name, description) and says plainly what
- * is coming, the same way the unbuilt tabs use ComingSoon.
+ * PLACEHOLDER: the real page is Week 5 (the four match signals, condition
+ * chips, directions handoff, and later "trails for your pace" once there
+ * is trail data). For now it shows what we already have from NPS (photo,
+ * name, description) and says plainly what is coming, the same way the
+ * unbuilt tabs use ComingSoon. Accessibility is deferred until there is
+ * real per-park data, so the page says "coming soon" rather than guessing.
  */
 
 import { useQuery } from '@tanstack/react-query';
@@ -73,8 +75,11 @@ export default function SiteScreen() {
               The full site page is coming in Week 5
             </BodyText>
             <BodyText size={13} lineHeightRatio={1.5} color={colors.neutral[700]}>
-              How well it matches you on every signal, accessibility, conditions, camping and
-              lodging, and directions to the visitor center in your maps app.
+              How well it matches you on every signal, conditions, camping and lodging, and
+              directions to the visitor center in your maps app.
+            </BodyText>
+            <BodyText size={13} lineHeightRatio={1.5} color={colors.neutral[700]}>
+              Accessibility details coming soon.
             </BodyText>
           </View>
 

@@ -52,8 +52,7 @@ import Svg, { Path } from 'react-native-svg';
 import { scheduleOnRN } from 'react-native-worklets';
 
 import { listSites } from '../../api/parks';
-// Placeholder ranking, not Dylan's engine - see the banner in this file.
-import { provisionalMatches, type ProvisionalMatch } from '../../api/provisionalMatches';
+import { recommendations, type Recommendation } from '../../api/recommendations';
 import {
   activeFilterCount,
   BodyText,
@@ -173,7 +172,7 @@ type DeckItem = { site: Site; score?: number; reason?: string; rank?: number };
 
 function toDeckItem(
   site: Site,
-  matchById: ReadonlyMap<string, ProvisionalMatch>,
+  matchById: ReadonlyMap<string, Recommendation>,
   rankById: ReadonlyMap<string, number>,
 ): DeckItem {
   const match = matchById.get(site.id);
@@ -246,8 +245,8 @@ export default function ExploreScreen() {
   // Scored across every site so wishlist cards and search results have
   // a match too; the picks themselves are drawn from the parks only.
   const { data: matches = [] } = useQuery({
-    queryKey: ['provisionalMatches', answers, 'all'],
-    queryFn: () => provisionalMatches(answers, 'all'),
+    queryKey: ['recommendations', answers, 'all'],
+    queryFn: () => recommendations(answers, 'all'),
   });
 
   const parkIds = useMemo(() => new Set(parks.map((site) => site.id)), [parks]);

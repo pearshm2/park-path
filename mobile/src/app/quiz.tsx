@@ -4,7 +4,7 @@
  * answer rows, then Back / Continue pinned to the bottom.
  *
  * Answers are held in QuizContext and persisted locally — there is no
- * /quiz endpoint yet (api/app/main.py mounts only the auth router).
+ * /quiz endpoint.
  */
 
 import { Redirect, useRouter } from 'expo-router';
@@ -13,14 +13,22 @@ import { ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useAuth } from '../auth/AuthContext';
-import { BodyText, Button, ChoiceRow, Heading, ProgressBar, Toast } from '../components';
 import {
-  EMPTY_ANSWERS,
+  BodyText,
+  Button,
+  ChoiceRow,
+  Heading,
+  ProgressBar,
+  TextField,
+  Toast,
+} from '../components';
+import type { Season } from '../data/parks';
+import {
+  isKnownZip,
   isStepAnswered,
   QUIZ_STEPS,
   type QuizAnswers,
   type QuizStep,
-  type QuizTerrain,
 } from '../data/quizSpec';
 import { useQuiz } from '../quiz/QuizContext';
 import { colors, fonts, space } from '../theme';
@@ -32,10 +40,9 @@ export default function QuizScreen() {
   const { answers: savedAnswers, completed, save } = useQuiz();
 
   // Seeded from whatever was saved, so re-taking the quiz shows the
-  // previous answers rather than starting blank.
-  const [answers, setAnswers] = useState<QuizAnswers>(
-    completed ? savedAnswers : EMPTY_ANSWERS,
-  );
+  // previous answers rather than starting blank. With nothing saved this
+  // is the empty answer set.
+  const [answers, setAnswers] = useState<QuizAnswers>(savedAnswers);
   const [stepIndex, setStepIndex] = useState(0);
   const [toast, setToast] = useState<string | null>(null);
 
@@ -50,36 +57,28 @@ export default function QuizScreen() {
 
   if (status !== 'signedIn') return <Redirect href="/sign-in" />;
 
-  function choose(value: string | number) {
-    setAnswers((prev) => {
-      if (step.key === 'terrains') {
-        const terrain = value as QuizTerrain;
-        const next = prev.terrains.includes(terrain)
-          ? prev.terrains.filter((t) => t !== terrain)
-          : [...prev.terrains, terrain];
-        return { ...prev, terrains: next };
-      }
-      // Single-select steps each write one key; the spec's discriminated
-      // union guarantees the value type matches the key.
-      return { ...prev, [step.key]: value } as QuizAnswers;
-    });
-  }
-
-  async function onNext() {
-    if (!answered) {
-      flash(
-        step.key === 'terrains' ? 'Pick at least one to continue.' : 'Pick an answer to continue.',
-      );
-      return;
-    }
-
+  async function advance(next: QuizAnswers) {
     if (isLast) {
-      await save(answers);
+      await save(next);
       router.replace('/explore');
       return;
     }
-
     setStepIndex((i) => i + 1);
+  }
+
+  function onNext() {
+    if (!answered) {
+      flash(MISSING_ANSWER[step.key]);
+      return;
+    }
+    advance(answers);
+  }
+
+  /** The zip step's way past without a zip code; distance then drops out. */
+  function onSkipZip() {
+    const next = { ...answers, zip: null };
+    setAnswers(next);
+    advance(next);
   }
 
   function onBack() {
@@ -112,8 +111,18 @@ export default function QuizScreen() {
         style={styles.options}
         contentContainerStyle={styles.optionsContent}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
       >
-        {renderOptions(step, answers, choose)}
+        {step.key === 'zip' ? (
+          <ZipStep
+            zip={answers.zip ?? ''}
+            onChange={(zip) => setAnswers((prev) => ({ ...prev, zip }))}
+            onSubmit={onNext}
+            onSkip={onSkipZip}
+          />
+        ) : (
+          renderOptions(step, answers, setAnswers)
+        )}
       </ScrollView>
 
       <View style={styles.toastSlot}>
@@ -141,38 +150,126 @@ export default function QuizScreen() {
   );
 }
 
+/** What the toast says when Continue is tapped with the step unanswered. */
+const MISSING_ANSWER: Record<QuizStep['key'], string> = {
+  zip: 'Enter a 5-digit zip code, or skip for now.',
+  terrains: 'Pick at least one to continue.',
+  seasons: 'Tap a season, or pick any season.',
+  crowds: 'Pick an answer to continue.',
+};
+
+function ZipStep({
+  zip,
+  onChange,
+  onSubmit,
+  onSkip,
+}: {
+  zip: string;
+  onChange: (zip: string) => void;
+  onSubmit: () => void;
+  onSkip: () => void;
+}) {
+  // Only flag a zip code once all five digits are in.
+  const unknown = zip.length === 5 && !isKnownZip(zip);
+  return (
+    <View style={styles.zip}>
+      <TextField
+        label="Zip code"
+        value={zip}
+        onChangeText={(text) => onChange(text.replace(/\D/g, '').slice(0, 5))}
+        onSubmitEditing={onSubmit}
+        placeholder="e.g. 80302"
+        keyboardType="number-pad"
+        textContentType="postalCode"
+        autoComplete="postal-code"
+        returnKeyType="next"
+        maxLength={5}
+        error={unknown ? "We couldn't place that zip code. Check it, or skip for now." : null}
+      />
+      <Button label="Skip for now" variant="ghost" onPress={onSkip} style={styles.skip} />
+    </View>
+  );
+}
+
 /**
  * Pulled out of the component so the discriminated union narrows cleanly
  * — each branch knows its own option value type.
  */
 function renderOptions(
-  step: QuizStep,
+  step: Exclude<QuizStep, { key: 'zip' }>,
   answers: QuizAnswers,
-  choose: (value: string | number) => void,
+  setAnswers: (update: (prev: QuizAnswers) => QuizAnswers) => void,
 ) {
-  if (step.key === 'terrains') {
-    return step.options.map((option) => (
-      <ChoiceRow
-        key={option.value}
-        label={option.label}
-        sub={option.sub}
-        multi
-        selected={answers.terrains.includes(option.value)}
-        onPress={() => choose(option.value)}
-      />
-    ));
-  }
+  switch (step.key) {
+    case 'terrains':
+      return step.options.map((option) => (
+        <ChoiceRow
+          key={option.value}
+          label={option.label}
+          sub={option.sub}
+          multi
+          selected={answers.terrains.includes(option.value)}
+          onPress={() =>
+            setAnswers((prev) => ({
+              ...prev,
+              terrains: toggle(prev.terrains, option.value),
+            }))
+          }
+        />
+      ));
 
-  const current = answers[step.key];
-  return step.options.map((option) => (
-    <ChoiceRow
-      key={String(option.value)}
-      label={option.label}
-      sub={option.sub}
-      selected={current === option.value}
-      onPress={() => choose(option.value)}
-    />
-  ));
+    case 'seasons': {
+      // Tapping ranks a season after the ones already picked; tapping it
+      // again takes it out and the rest close up. "Any season" clears the
+      // ranking, and untapping the last season leaves the question open
+      // again rather than turning into "any".
+      const ranked = answers.seasons ?? [];
+      const anySeason = answers.seasons !== null && ranked.length === 0;
+      return [
+        ...step.options.map((option) => {
+          const place = ranked.indexOf(option.value);
+          return (
+            <ChoiceRow
+              key={option.value}
+              label={option.label}
+              sub={option.sub}
+              multi
+              selected={place >= 0}
+              rank={place >= 0 ? place + 1 : undefined}
+              onPress={() =>
+                setAnswers((prev) => {
+                  const next = toggle<Season>(prev.seasons ?? [], option.value);
+                  return { ...prev, seasons: next.length ? next : null };
+                })
+              }
+            />
+          );
+        }),
+        <ChoiceRow
+          key="any"
+          label={step.anyLabel}
+          selected={anySeason}
+          onPress={() => setAnswers((prev) => ({ ...prev, seasons: anySeason ? null : [] }))}
+        />,
+      ];
+    }
+
+    case 'crowds':
+      return step.options.map((option) => (
+        <ChoiceRow
+          key={option.value}
+          label={option.label}
+          sub={option.sub}
+          selected={answers.crowds === option.value}
+          onPress={() => setAnswers((prev) => ({ ...prev, crowds: option.value }))}
+        />
+      ));
+  }
+}
+
+/** Adds a value to the end of the list, or removes it if already there. */
+function toggle<T>(list: T[], value: T): T[] {
+  return list.includes(value) ? list.filter((item) => item !== value) : [...list, value];
 }
 
 const styles = StyleSheet.create({
@@ -204,6 +301,12 @@ const styles = StyleSheet.create({
     gap: space[2],
     paddingHorizontal: space[2],
     paddingVertical: space[1],
+  },
+  zip: {
+    gap: space[2],
+  },
+  skip: {
+    alignSelf: 'flex-start',
   },
   toastSlot: {
     minHeight: 34,

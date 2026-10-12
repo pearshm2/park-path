@@ -4,8 +4,8 @@
  * The API's field names are mapped onto the app's Site shape here, so
  * nothing above this file knows or cares what the backend calls things.
  *
- * Scoring/ranking deliberately does NOT live here — see
- * src/api/provisionalMatches.ts and the banner at the top of it.
+ * Scoring/ranking deliberately does NOT live here — that is the engine's
+ * job, through src/api/recommendations.ts.
  */
 
 import { geoContains, type GeoPermissibleObjects } from 'd3-geo';

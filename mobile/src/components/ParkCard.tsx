@@ -51,7 +51,7 @@ export function ParkCard({
   style,
 }: {
   site: Site;
-  /** 0–1 from the provisional ranking. Omitted for parks it did not score. */
+  /** 0–1 from the recommendation engine. Omitted for parks it did not score. */
   score?: number;
   reason?: string;
   /** 1-based position among the picks, shown as a badge on the band. */
