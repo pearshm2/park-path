@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.database import get_db
-from app.routers import auth, sites
+from app.routers import auth, friends, sites
 
 app = FastAPI(
     title="ParkPath API",
@@ -53,5 +53,6 @@ def health_db(db: Session = Depends(get_db)):
 
 app.include_router(auth.router, prefix="/auth", tags=["auth"])
 app.include_router(sites.router, prefix="/sites", tags=["sites"])
+app.include_router(friends.router, prefix="/friends", tags=["friends"])
 
 # Future routers (trips, quiz, etc.) follow the same pattern.
