@@ -175,6 +175,16 @@ class PlaceOut(BaseModel):
     point: list[float]  # [longitude, latitude]
 
 
+class MapLabelOut(BaseModel):
+    """Where a label is printed on a brochure map, in the image's pixels."""
+
+    name: str  # "Zion Canyon Visitor Center"
+    x: int
+    y: int
+    width: int
+    height: int
+
+
 class BrochureMapOut(BaseModel):
     """One of the park's official brochure maps, as a JPEG at `url`."""
 
@@ -182,6 +192,7 @@ class BrochureMapOut(BaseModel):
     url: str  # path on this API, e.g. /sites/zion/brochures/0
     width: int
     height: int
+    visitor_centers: list[MapLabelOut]  # their labels printed on this map
 
 
 class ParkMapOut(BaseModel):

@@ -70,6 +70,7 @@ def read_park_map(park_code: str, db: Session = Depends(get_db)):
                 url=f"/sites/{code}/brochures/{b.position}",
                 width=b.width,
                 height=b.height,
+                visitor_centers=b.labels or [],
             )
             for b in brochures
         ],

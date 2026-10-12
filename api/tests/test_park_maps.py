@@ -12,7 +12,14 @@ from fastapi.testclient import TestClient
 from PIL import Image
 from sqlalchemy import delete
 
-from app.brochure_maps import parse_search_page, pick_maps, shrink
+from app.brochure_maps import (
+    looks_like_name,
+    parse_search_page,
+    pick_maps,
+    render_pdf,
+    shrink,
+    visitor_center_labels,
+)
 from app.database import SessionLocal
 from app.main import app
 from app.models import BrochureMap, Site
@@ -284,16 +291,125 @@ def test_brochure_served_and_listed(site):
                 width=10,
                 height=8,
                 image=b"\xff\xd8fake-jpeg",
+                labels=[{"name": "Rim Visitor Center", "x": 1, "y": 2, "width": 3, "height": 1}],
             )
         )
         db.commit()
 
     listed = client.get(f"/sites/{code}/map").json()["brochures"]
     assert listed == [
-        {"title": "Park Map", "url": f"/sites/{code}/brochures/0", "width": 10, "height": 8}
+        {
+            "title": "Park Map",
+            "url": f"/sites/{code}/brochures/0",
+            "width": 10,
+            "height": 8,
+            "visitor_centers": [
+                {"name": "Rim Visitor Center", "x": 1, "y": 2, "width": 3, "height": 1}
+            ],
+        }
     ]
     image = client.get(f"/sites/{code}/brochures/0")
     assert image.status_code == 200
     assert image.headers["content-type"] == "image/jpeg"
     assert image.content == b"\xff\xd8fake-jpeg"
     assert client.get(f"/sites/{code}/brochures/1").status_code == 404
+
+
+# --- visitor center labels on the brochure ----------------------------------------
+
+
+def test_labels_join_the_line_above_and_skip_sentences():
+    # PDF points, origin bottom-left, on a 1000 pt tall page; drawn at 2x.
+    lines = [
+        ("Zion Canyon", (690, 207, 790, 217)),
+        ("Visitor Center", (693, 197, 760, 206)),
+        ("Hulls Cove Visitor Center", (100, 500, 200, 508)),
+        ("Island in the Sky Visitor Center", (100, 400, 260, 408)),
+        ("y Visitor Center", (98, 813, 157, 820)),  # stray letter from the line above
+        ("Kolob Canyons ii", (95, 819, 160, 828)),  # "ii": a map icon read as text
+        ("road navigation. Buy maps at visitor center.", (300, 80, 500, 90)),
+        ("Maps are free at every Visitor Center in the park, ask a ranger", (300, 60, 600, 70)),
+    ]
+    labels = visitor_center_labels(lines, page_height=1000, scale=2)
+    assert [label["name"] for label in labels] == [
+        "Zion Canyon Visitor Center",
+        "Hulls Cove Visitor Center",
+        "Island in the Sky Visitor Center",
+        "Kolob Canyons Visitor Center",
+    ]
+    # Both lines' box, flipped to top-left pixels: x 690 * 2, y (1000 - 217) * 2.
+    assert labels[0] == {
+        "name": "Zion Canyon Visitor Center",
+        "x": 1380,
+        "y": 1566,
+        "width": 200,
+        "height": 40,
+    }
+
+
+def _pdf_with_text(lines: list[tuple[str, int, int]], width: int = 600, height: int = 400) -> bytes:
+    """A minimal one-page PDF with Helvetica text at (x, y) points; pdfium fixes the xref."""
+    text = " ".join(f"BT /F1 10 Tf {x} {y} Td ({s}) Tj ET" for s, x, y in lines)
+    objects = [
+        "<< /Type /Catalog /Pages 2 0 R >>",
+        "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+        f"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {width} {height}] "
+        "/Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>",
+        f"<< /Length {len(text)} >>\nstream\n{text}\nendstream",
+        "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+    ]
+    body = "".join(f"{i} 0 obj\n{o}\nendobj\n" for i, o in enumerate(objects, start=1))
+    return f"%PDF-1.4\n{body}trailer\n<< /Root 1 0 R /Size 6 >>\n%%EOF\n".encode()
+
+
+def test_render_pdf_finds_labels_where_they_are_drawn():
+    pdf = _pdf_with_text([("Zion Canyon", 100, 212), ("Visitor Center", 100, 200)])
+    jpeg, width, height, labels = render_pdf(pdf)
+    # 600 x 400 pt page, long side drawn at 2400 px: 4 px per point.
+    assert (width, height) == (2400, 1600)
+    assert Image.open(io.BytesIO(jpeg)).size == (2400, 1600)
+    assert [label["name"] for label in labels] == ["Zion Canyon Visitor Center"]
+    assert abs(labels[0]["x"] - 100 * 4) < 12
+    # The label's top is the upper line's cap height, ~222 pt up the page.
+    assert abs(labels[0]["y"] - (400 - 222) * 4) < 40
+
+
+@pytest.mark.parametrize(
+    ("text", "is_name"),
+    [
+        ("Persimmon Gap", True),
+        ("Kolob Canyons ii", True),  # a map icon read as "ii"
+        ("Gates of the Arctic", True),
+        ("Island in the Sky", True),
+        ("150 m", False),
+        ("5ft", False),
+        ("TOWERS", False),
+        ("(closed in summer)", False),
+        ("stations", False),
+        ("U", False),
+    ],
+)
+def test_looks_like_name(text, is_name):
+    assert looks_like_name(text) is is_name
+
+
+def test_label_without_a_name_stays_plain():
+    # Arches prints just "Visitor Center"; an elevation and an all-caps area
+    # name sit nearby but aren't its name.
+    lines = [
+        ("Visitor Center", (259, 159, 324, 166)),
+        ("124", (311, 169, 319, 173)),
+        ("TOWERS", (319, 168, 351, 174)),
+    ]
+    (label,) = visitor_center_labels(lines, page_height=1000, scale=1)
+    assert label["name"] == "Visitor Center"
+
+
+def test_name_must_line_up_with_the_label():
+    lines = [
+        ("Visitor Center", (500, 100, 560, 107)),
+        ("Far Away Place", (200, 108, 260, 116)),  # just above, but well to the left
+        ("Rio Grande Village", (498, 108, 590, 116)),  # just above and left-aligned
+    ]
+    (label,) = visitor_center_labels(lines, page_height=1000, scale=1)
+    assert label["name"] == "Rio Grande Village Visitor Center"

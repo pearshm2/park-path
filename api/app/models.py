@@ -287,6 +287,10 @@ class BrochureMap(Base):
     width: Mapped[int] = mapped_column(Integer, nullable=False)
     height: Mapped[int] = mapped_column(Integer, nullable=False)
     image: Mapped[bytes] = mapped_column(LargeBinary, nullable=False, deferred=True)
+    # Visitor center labels printed on the map, in image pixels:
+    # [{"name", "x", "y", "width", "height"}]. NULL until read (see
+    # app/brochure_maps.py); empty when the map has none or isn't a PDF.
+    labels: Mapped[list | None] = mapped_column(JSONB)
     synced_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(UTC), server_default=func.now()
     )
