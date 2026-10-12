@@ -146,3 +146,34 @@ class RecommendationOut(BaseModel):
     score: float | None
     reason: str | None
     signals: SignalScores
+
+
+# --- Park maps (GET /sites/{park_code}/map) ---------------------------------
+
+# A path is a list of [longitude, latitude] points.
+Path = list[list[float]]
+
+
+class TrailOut(BaseModel):
+    name: str | None  # None for unnamed connectors: drawn, not listed
+    uses: list[Literal["hike", "horse", "bike", "motorized"]]
+    surface: str | None
+    closed: bool  # temporarily closed
+    length_miles: float
+    paths: list[Path]
+
+
+class RoadOut(BaseModel):
+    name: str | None
+    kind: Literal["primary", "secondary", "local", "4wd"]
+    paths: list[Path]
+
+
+class ParkMapOut(BaseModel):
+    park_code: str
+    boundary: list[Path]  # rings; fill with the even-odd rule
+    roads: list[RoadOut]
+    trails: list[TrailOut]
+    # The park's own maps page on nps.gov, with the official brochure map.
+    official_map_url: str
+    synced_at: datetime

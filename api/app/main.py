@@ -8,6 +8,7 @@ routers included below — keep main.py thin and push logic into routers.
 
 from fastapi import Depends, FastAPI, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
@@ -28,6 +29,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+# Compress larger responses: a park's trail map (GET /sites/{code}/map) is
+# up to ~0.5 MB of JSON and about a quarter of that gzipped. The phone's
+# fetch decompresses transparently.
+app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 
 @app.get("/", tags=["meta"])

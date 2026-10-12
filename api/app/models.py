@@ -26,7 +26,7 @@ from sqlalchemy import (
     false,
     func,
 )
-from sqlalchemy.dialects.postgresql import ARRAY
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -233,6 +233,32 @@ class WishlistItem(Base):
         Integer, ForeignKey("sites.id", ondelete="CASCADE"), index=True, nullable=False
     )
     created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC), server_default=func.now()
+    )
+
+    site: Mapped[Site] = relationship()
+
+
+class ParkMap(Base):
+    """
+    What a national park's own map is drawn from: its boundary, roads and
+    trails, copied from the NPS's public GIS datasets by app/park_map_sync.py
+    and simplified to phone-screen detail.
+
+    One row per site, replaced whole on every sync. The three columns hold
+    the JSON exactly as GET /sites/{park_code}/map serves it (see
+    ParkMapOut), with coordinates as [longitude, latitude].
+    """
+
+    __tablename__ = "park_maps"
+
+    site_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("sites.id", ondelete="CASCADE"), primary_key=True
+    )
+    boundary: Mapped[list] = mapped_column(JSONB, nullable=False)
+    roads: Mapped[list] = mapped_column(JSONB, nullable=False)
+    trails: Mapped[list] = mapped_column(JSONB, nullable=False)
+    synced_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(UTC), server_default=func.now()
     )
 
