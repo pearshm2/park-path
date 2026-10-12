@@ -10,9 +10,22 @@ tables here.
 
 from datetime import UTC, datetime
 
-from sqlalchemy import Boolean, DateTime, Float, Integer, String, Text, false
+from sqlalchemy import (
+    Boolean,
+    CheckConstraint,
+    Column,
+    DateTime,
+    Float,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    false,
+    func,
+)
 from sqlalchemy.dialects.postgresql import ARRAY
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
 
@@ -84,3 +97,50 @@ class Site(Base):
     seasons: Mapped[list[str] | None] = mapped_column(ARRAY(String(10)))  # ["spring", "fall"]
     permit_required: Mapped[bool | None] = mapped_column(Boolean)
     annual_visits_millions: Mapped[float | None] = mapped_column(Float)
+
+
+class Friendship(Base):
+    """
+    One row per pair of users, in one of two states:
+
+    - "pending":  `requester` asked `addressee`; nothing is shared yet.
+    - "accepted": the addressee said yes; the two are friends (mutual).
+
+    A declined or cancelled request, and an unfriend, delete the row, so
+    there is no "declined" state to get stuck in and either side can ask
+    again later.
+
+    Direction only matters while pending (only the addressee may accept).
+    The unique index on (LEAST(a, b), GREATEST(a, b)) means a pair can never
+    have two rows, even when both users send a request at the same moment.
+    """
+
+    __tablename__ = "friendships"
+    __table_args__ = (
+        CheckConstraint("requester_id <> addressee_id", name="ck_friendships_not_self"),
+        CheckConstraint("status IN ('pending', 'accepted')", name="ck_friendships_status"),
+        Index(
+            "uq_friendships_pair",
+            func.least(Column("requester_id"), Column("addressee_id")),
+            func.greatest(Column("requester_id"), Column("addressee_id")),
+            unique=True,
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    requester_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    addressee_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    status: Mapped[str] = mapped_column(String(10), nullable=False, default="pending")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC), server_default=func.now()
+    )
+    # Set when the request is accepted; null while pending.
+    accepted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    # Loaded together with the row: every response shows both people.
+    requester: Mapped["User"] = relationship(foreign_keys=[requester_id], lazy="joined")
+    addressee: Mapped["User"] = relationship(foreign_keys=[addressee_id], lazy="joined")
