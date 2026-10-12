@@ -6,6 +6,9 @@ never include hashed_password) and conflating them is a common source
 of accidental data leaks.
 """
 
+from datetime import datetime
+from typing import Literal
+
 from pydantic import BaseModel, ConfigDict, EmailStr
 
 
@@ -57,3 +60,28 @@ class SiteOut(BaseModel):
     seasons: list[str] | None
     permit_required: bool | None
     annual_visits_millions: float | None
+
+
+class FriendRequestCreate(BaseModel):
+    email: EmailStr
+
+
+class FriendshipOut(BaseModel):
+    """A friend request, pending or accepted, with both people named."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    status: Literal["pending", "accepted"]
+    created_at: datetime
+    accepted_at: datetime | None
+    requester: UserOut
+    addressee: UserOut
+
+
+class FriendOut(BaseModel):
+    """One entry in the signed-in user's friends list: the *other* person."""
+
+    friendship_id: int
+    user: UserOut
+    since: datetime | None
