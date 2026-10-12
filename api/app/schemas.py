@@ -169,11 +169,28 @@ class RoadOut(BaseModel):
     paths: list[Path]
 
 
+class PlaceOut(BaseModel):
+    name: str
+    kind: Literal["visitor_center"]
+    point: list[float]  # [longitude, latitude]
+
+
+class BrochureMapOut(BaseModel):
+    """One of the park's official brochure maps, as a JPEG at `url`."""
+
+    title: str  # "Park Map", "Park Map, East Unit", ...
+    url: str  # path on this API, e.g. /sites/zion/brochures/0
+    width: int
+    height: int
+
+
 class ParkMapOut(BaseModel):
     park_code: str
     boundary: list[Path]  # rings; fill with the even-odd rule
     roads: list[RoadOut]
     trails: list[TrailOut]
+    places: list[PlaceOut]
+    brochures: list[BrochureMapOut]
     # The park's own maps page on nps.gov, with the official brochure map.
     official_map_url: str
     synced_at: datetime

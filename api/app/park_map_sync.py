@@ -1,18 +1,25 @@
 """
-Park map sync job: copies each national park's boundary, roads and trails
-from the NPS's public GIS datasets into our `park_maps` table, so the app
-can draw a park's own map without calling the NPS from the phone.
+Park map sync job: copies each national park's boundary, roads, trails and
+visitor centers from the NPS's public GIS datasets into our `park_maps`
+table, and its official brochure map into `brochure_maps`, so the app can
+show a park's maps without calling the NPS from the phone.
 
 Run from the api/ folder:
 
-    python -m app.park_map_sync              # every national park (~63 parks, a few minutes)
-    python -m app.park_map_sync --park zion  # just one
+    python -m app.park_map_sync                    # every national park (several minutes)
+    python -m app.park_map_sync --park zion        # just one
+    python -m app.park_map_sync --skip-brochures   # GIS data only, no image downloads
 
-Sources (public domain, no API key):
+Sources (public domain):
 
   - Trails:   NPS_Public_Trails_Geographic   on mapservices.nps.gov
   - Roads:    NPS_Public_Roads_Geographic    on mapservices.nps.gov
+  - Visitor centers: NPS_Public_POIs_Geographic on mapservices.nps.gov, plus
+    the NPS Data API's /visitorcenters when NPS_API_KEY is set (the GIS
+    data misses some, e.g. Yosemite Valley's)
   - Boundary: NPS Land Resources Division Boundary (layer 2) on ArcGIS Online
+  - Brochure maps: the Harpers Ferry Center collection on NPGallery
+    (see app/brochure_maps.py)
 
 Safe to run any number of times: each park's row is replaced whole.
 
@@ -33,12 +40,16 @@ from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
+from app.brochure_maps import sync_brochures
+from app.config import settings
 from app.database import SessionLocal
 from app.models import ParkMap, Site
 
 NPS_GIS = "https://mapservices.nps.gov/arcgis/rest/services/NationalDatasets"
 TRAILS_URL = f"{NPS_GIS}/NPS_Public_Trails_Geographic/FeatureServer/0/query"
 ROADS_URL = f"{NPS_GIS}/NPS_Public_Roads_Geographic/FeatureServer/0/query"
+POIS_URL = f"{NPS_GIS}/NPS_Public_POIs_Geographic/FeatureServer/0/query"
+NPS_VISITOR_CENTERS_URL = "https://developer.nps.gov/api/v1/visitorcenters"
 BOUNDARY_URL = (
     "https://services1.arcgis.com/fBc8EJBxQRMcHlei/arcgis/rest/services/"
     "NPS_Land_Resources_Division_Boundary_and_Tract_Data_Service/FeatureServer/2/query"
@@ -75,22 +86,22 @@ def _in_list(values: list[str] | tuple[str, ...]) -> str:
 def fetch_features(
     client: httpx.Client, url: str, where: str, out_fields: str, detail: float
 ) -> list[dict]:
+    """`detail` is the simplification tolerance; 0 for points, which have none."""
     features: list[dict] = []
     offset = 0
     while True:
-        response = client.get(
-            url,
-            params={
-                "where": where,
-                "outFields": out_fields,
-                "outSR": 4326,
-                "geometryPrecision": 5,
-                "maxAllowableOffset": detail,
-                "resultOffset": offset,
-                "resultRecordCount": PAGE_SIZE,
-                "f": "geojson",
-            },
-        )
+        params = {
+            "where": where,
+            "outFields": out_fields,
+            "outSR": 4326,
+            "geometryPrecision": 5,
+            "resultOffset": offset,
+            "resultRecordCount": PAGE_SIZE,
+            "f": "geojson",
+        }
+        if detail:
+            params["maxAllowableOffset"] = detail
+        response = client.get(url, params=params)
         response.raise_for_status()
         body = response.json()
         if "error" in body:  # ArcGIS reports errors with a 200
@@ -128,7 +139,27 @@ def fetch_park(client: httpx.Client, park_code: str) -> dict[str, list[dict]]:
             "TRLNAME,MAPLABEL,TRLALTNAME,TRLUSE,TRLSURFACE,TRLSTATUS",
             TRAIL_DETAIL,
         ),
+        "visitor_centers": fetch_features(
+            client,
+            POIS_URL,
+            f"UNITCODE IN ({codes}) AND POITYPE = 'Visitor Center'",
+            "POINAME,MAPLABEL,POIALTNAME",
+            0,
+        ),
+        "nps_visitor_centers": fetch_nps_visitor_centers(client, park_code),
     }
+
+
+def fetch_nps_visitor_centers(client: httpx.Client, park_code: str) -> list[dict]:
+    """The NPS Data API's visitor centers for the park; empty without an API key."""
+    if not settings.nps_api_key:
+        return []
+    response = client.get(
+        NPS_VISITOR_CENTERS_URL,
+        params={"parkCode": park_code, "limit": 50, "api_key": settings.nps_api_key},
+    )
+    response.raise_for_status()
+    return response.json().get("data", [])
 
 
 # ---------------------------------------------------------------------------
@@ -251,14 +282,54 @@ def transform_roads(features: list[dict]) -> list[dict]:
     ]
 
 
+def _miles_apart(a: list[float], b: list[float]) -> float:
+    return path_miles([[a, b]])
+
+
+def transform_places(gis: list[dict], nps_api: list[dict]) -> list[dict]:
+    """
+    Visitor centers, from the GIS points first, then any the NPS Data API
+    has that aren't within a quarter mile of one already found.
+    """
+    places: list[dict] = []
+    for feature in gis:
+        geometry = feature.get("geometry") or {}
+        if geometry.get("type") != "Point":
+            continue
+        name = _name(feature.get("properties") or {}, "POINAME", "MAPLABEL", "POIALTNAME")
+        places.append(
+            {
+                "name": name or "Visitor Center",
+                "kind": "visitor_center",
+                "point": _point(geometry["coordinates"]),
+            }
+        )
+    for center in nps_api:
+        try:
+            point = _point([float(center["longitude"]), float(center["latitude"])])
+        except (KeyError, TypeError, ValueError):
+            continue
+        if any(_miles_apart(point, p["point"]) < 0.25 for p in places):
+            continue
+        places.append(
+            {
+                "name": center.get("name") or "Visitor Center",
+                "kind": "visitor_center",
+                "point": point,
+            }
+        )
+    return places
+
+
 def transform_park(raw: dict[str, list[dict]]) -> dict | None:
     """The stored map, or None if the NPS has nothing at all for the park."""
     boundary = [ring for f in raw["boundary"] for ring in polygon_rings(f.get("geometry"))]
     roads = transform_roads(raw["roads"])
     trails = transform_trails(raw["trails"])
+    places = transform_places(raw.get("visitor_centers", []), raw.get("nps_visitor_centers", []))
     if not (boundary or roads or trails):
         return None
-    return {"boundary": boundary, "roads": roads, "trails": trails}
+    return {"boundary": boundary, "roads": roads, "trails": trails, "places": places}
 
 
 # ---------------------------------------------------------------------------
@@ -277,6 +348,9 @@ def save_park_map(db: Session, site_id: int, park_map: dict) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("--park", help="sync just this park_code (e.g. zion)")
+    parser.add_argument(
+        "--skip-brochures", action="store_true", help="don't download the brochure maps"
+    )
     args = parser.parse_args()
 
     with SessionLocal() as db, httpx.Client(timeout=90) as client:
@@ -294,9 +368,10 @@ def main() -> None:
                 continue
             save_park_map(db, site_id, park_map)
             named = sum(1 for t in park_map["trails"] if t["name"])
+            brochures = "" if args.skip_brochures else sync_brochures(db, client, site_id, code)
             print(
                 f"{code}: {named} named trails, {len(park_map['roads'])} roads,"
-                f" {len(park_map['boundary'])} boundary rings"
+                f" {len(park_map['places'])} visitor centers{brochures}"
             )
 
 

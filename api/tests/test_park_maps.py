@@ -4,19 +4,23 @@ GET /sites/{park_code}/map (needs a real Postgres, like the other API
 tests; each test adds its own site and deletes it afterwards).
 """
 
+import io
 import uuid
 
 import pytest
 from fastapi.testclient import TestClient
+from PIL import Image
 from sqlalchemy import delete
 
+from app.brochure_maps import parse_search_page, pick_maps, shrink
 from app.database import SessionLocal
 from app.main import app
-from app.models import Site
+from app.models import BrochureMap, Site
 from app.park_map_sync import (
     save_park_map,
     trail_uses,
     transform_park,
+    transform_places,
     transform_roads,
     transform_trails,
     unit_codes,
@@ -192,3 +196,104 @@ def test_map_served_after_sync(site):
     assert body["trails"][0]["uses"] == ["hike"]
     assert body["roads"][0]["kind"] == "secondary"
     assert len(body["boundary"]) == 1
+
+
+# --- visitor centers ---------------------------------------------------------
+
+
+def point(lon, lat, **props):
+    return {"properties": props, "geometry": {"type": "Point", "coordinates": [lon, lat]}}
+
+
+def test_visitor_centers_from_gis_and_nps_api():
+    places = transform_places(
+        [
+            point(-112.98657, 37.20005, POINAME="Zion Canyon"),
+            point(-113.2, 37.45, POINAME=None, MAPLABEL="Kolob Canyons Visitor Center"),
+            point(-113.3, 37.5),
+        ],
+        [
+            # Within a quarter mile of the GIS point: the same place, skipped.
+            {"name": "Zion Canyon Visitor Center", "latitude": "37.2003", "longitude": "-112.9868"},
+            {"name": "Valley Visitor Center", "latitude": "37.7489", "longitude": "-119.5874"},
+            {"name": "No coordinates", "latitude": "", "longitude": ""},
+        ],
+    )
+    assert [p["name"] for p in places] == [
+        "Zion Canyon",
+        "Kolob Canyons Visitor Center",
+        "Visitor Center",
+        "Valley Visitor Center",
+    ]
+    assert places[0] == {
+        "name": "Zion Canyon",
+        "kind": "visitor_center",
+        "point": [-112.98657, 37.20005],
+    }
+
+
+# --- brochure maps -------------------------------------------------------------
+
+
+def test_parse_search_page():
+    page = (
+        '<script>var x = {"Fields": ["Title"], "UnfilteredCount": 1, "Results": '
+        '[{"Asset": {"AssetID": "abc", "Title": "Park Map  - Zion National Park"}}]};</script>'
+    )
+    assert parse_search_page(page) == [{"id": "abc", "title": "Park Map  - Zion National Park"}]
+    assert parse_search_page("<html>no results here</html>") == []
+
+
+def test_pick_maps():
+    def assets(*titles):
+        return [{"id": str(i), "title": f"{t}  - Some Park"} for i, t in enumerate(titles)]
+
+    assert pick_maps(assets("Locator Globe", "Area Map", "Park Map", "Park Map")) == [
+        {"id": "2", "title": "Park Map"},
+        {"id": "1", "title": "Area Map"},
+    ]
+    picked = pick_maps(assets("Park Map, East Unit", "Park Map, West Unit", "Campground Map"))
+    assert [m["title"] for m in picked] == ["Park Map, East Unit", "Park Map, West Unit"]
+    assert pick_maps(assets("Locator Globe", "Wayside Exhibit")) == []
+
+
+def test_shrink_keeps_aspect_and_caps_long_side():
+    big = io.BytesIO()
+    Image.new("RGB", (5000, 4000), "white").save(big, "JPEG")
+    jpeg, width, height = shrink(big.getvalue())
+    assert (width, height) == (2400, 1920)
+    assert Image.open(io.BytesIO(jpeg)).size == (2400, 1920)
+
+
+def test_brochure_served_and_listed(site):
+    code, site_id = site
+    with SessionLocal() as db:
+        save_park_map(
+            db,
+            site_id,
+            transform_park(
+                {"boundary": [], "roads": [], "trails": [line([[0, 0], [0, 1]], TRLNAME="Rim")]}
+            ),
+        )
+        db.add(
+            BrochureMap(
+                site_id=site_id,
+                asset_id="abc",
+                position=0,
+                title="Park Map",
+                width=10,
+                height=8,
+                image=b"\xff\xd8fake-jpeg",
+            )
+        )
+        db.commit()
+
+    listed = client.get(f"/sites/{code}/map").json()["brochures"]
+    assert listed == [
+        {"title": "Park Map", "url": f"/sites/{code}/brochures/0", "width": 10, "height": 8}
+    ]
+    image = client.get(f"/sites/{code}/brochures/0")
+    assert image.status_code == 200
+    assert image.headers["content-type"] == "image/jpeg"
+    assert image.content == b"\xff\xd8fake-jpeg"
+    assert client.get(f"/sites/{code}/brochures/1").status_code == 404
