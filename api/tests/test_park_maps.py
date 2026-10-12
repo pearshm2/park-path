@@ -385,6 +385,7 @@ def test_render_pdf_finds_labels_where_they_are_drawn():
         ("5ft", False),
         ("TOWERS", False),
         ("(closed in summer)", False),
+        ("See Detail Map Below)", False),
         ("stations", False),
         ("U", False),
     ],

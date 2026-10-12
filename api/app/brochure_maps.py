@@ -160,11 +160,11 @@ def _clean_words(text: str) -> list[str]:
 def looks_like_name(text: str) -> bool:
     """
     "Persimmon Gap" or "Kolob Canyons", not an elevation ("150 m"), an
-    all-caps area name ("TOWERS"), a note ("(closed in summer)") or the
-    end of a sentence ("stations").
+    all-caps area name ("TOWERS"), a note ("(closed in summer)", "See Detail
+    Map Below)") or the end of a sentence ("stations").
     """
     words = _clean_words(text)
-    if not words or len(words) > 5 or text.isupper() or any(c.isdigit() for c in text):
+    if not words or len(words) > 5 or text.isupper() or any(c.isdigit() or c in "()" for c in text):
         return False
     return all(
         w.lower() in NAME_JOINERS or (w[0].isupper() and any(c.islower() for c in w)) for w in words
