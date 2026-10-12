@@ -12,7 +12,8 @@
  * alone so the page around the map can still scroll.
  *
  * `focus` zooms to a spot in the content (a visitor center's label): set it
- * and the view glides there, with some of the map around it in view.
+ * and the view glides there, with some of the map around it in view;
+ * clear it and the view glides back out to the whole map.
  */
 
 import { useEffect, type ReactNode } from 'react';
@@ -127,7 +128,13 @@ export function ZoomableView({
   // Zoom to the focus box: close enough to read it, with its surroundings
   // in view (about twice its width across the frame), centred.
   useEffect(() => {
-    if (!focus) return;
+    if (!focus) {
+      // Back out to the whole map. (On first mount it's already there.)
+      scale.value = withTiming(fit, { duration: 450 });
+      tx.value = withTiming(0, { duration: 450 });
+      ty.value = withTiming(0, { duration: 450 });
+      return;
+    }
     const s = Math.min(
       max,
       Math.max(fit * 2, Math.min(width / (focus.width * 2.2), height / (focus.height * 8))),

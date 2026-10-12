@@ -3,8 +3,9 @@
  * switch between maps for parks that have more than one (Saguaro's East
  * and West units, say).
  *
- * Under the map, the visitor centers labelled on it. Tapping one opens the
- * map full screen, zooms to its label and rings it, so it's easy to find.
+ * Under the map, the visitor centers labelled on it. Tapping one zooms the
+ * map to its label and rings it, so it's easy to find; tapping it again
+ * zooms back out to the whole map. Full screen keeps the selection.
  *
  * The expand button opens the map full screen: turned sideways for wide
  * brochures, upright for tall ones (New River Gorge's runs north-south),
@@ -62,6 +63,8 @@ export default function ParkMapScreen() {
   // On Android the page can scroll itself as it opens. Until the person
   // touches the page, any scroll is one of those and is undone.
   const touched = useRef(false);
+  // Where the map sits on the page, to bring it into view from the list.
+  const mapY = useRef(0);
 
   const [brochureIndex, setBrochureIndex] = useState(0);
   const [highlight, setHighlight] = useState<MapLabel | null>(null);
@@ -109,9 +112,14 @@ export default function ParkMapScreen() {
     setHighlight(null);
   }
 
-  function showVisitorCenter(label: MapLabel) {
+  function toggleVisitorCenter(label: MapLabel) {
+    if (highlight === label) {
+      setHighlight(null);
+      return;
+    }
     setHighlight(label);
-    setFullScreen(true);
+    // The list is under the map; scroll up so the zoom is in view.
+    scrollRef.current?.scrollTo({ y: Math.max(0, mapY.current - space[3]), animated: true });
   }
 
   return (
@@ -151,7 +159,12 @@ export default function ParkMapScreen() {
         <>
           <BrochureChoice brochures={brochures} index={brochureIndex} onChoose={chooseBrochure} />
 
-          <View style={[styles.map, { height: mapHeight }]}>
+          <View
+            style={[styles.map, { height: mapHeight }]}
+            onLayout={(event) => {
+              mapY.current = event.nativeEvent.layout.y;
+            }}
+          >
             <BrochureMapView
               brochure={brochure}
               width={mapWidth}
@@ -179,7 +192,7 @@ export default function ParkMapScreen() {
             labels={brochure.visitorCenters}
             names={centerNames}
             selected={highlight}
-            onSelect={showVisitorCenter}
+            onSelect={toggleVisitorCenter}
           />
         </>
       ) : (
@@ -222,7 +235,7 @@ export default function ParkMapScreen() {
   );
 }
 
-/** The visitor centers labelled on the map; tapping one shows it. */
+/** The visitor centers labelled on the map; tapping one shows it, again hides it. */
 function VisitorCenters({
   labels,
   names,
@@ -247,7 +260,8 @@ function VisitorCenters({
             key={`${label.name}-${label.x}-${label.y}`}
             onPress={() => onSelect(label)}
             accessibilityRole="button"
-            accessibilityHint="Opens the map full screen, zoomed to it"
+            accessibilityState={{ selected: active }}
+            accessibilityHint={active ? 'Zooms back out to the whole map' : 'Zooms the map to it'}
             style={({ pressed }) => [
               styles.row,
               active && styles.rowActive,
@@ -258,7 +272,7 @@ function VisitorCenters({
               {names[i]}
             </BodyText>
             <BodyText size={12.5} weight="semibold" color={colors.accentRamp[700]}>
-              Show on map ›
+              {active ? 'Show whole map' : 'Show on map'}
             </BodyText>
           </Pressable>
         );
