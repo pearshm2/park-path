@@ -56,7 +56,6 @@ import { recommendations, type Recommendation } from '../../api/recommendations'
 import {
   activeFilterCount,
   BodyText,
-  CardCarousel,
   ExpandIcon,
   CROWD_CEILING,
   FilterButton,
@@ -88,7 +87,6 @@ import {
   type Region,
   type RegionId,
 } from '../../data/regions';
-import { RAISE } from '../../components/tabBar';
 import { useQuiz } from '../../quiz/QuizContext';
 import { useWishlist } from '../../wishlist/useWishlist';
 import { colors, radius, shadow, space, useTextScale } from '../../theme';
@@ -352,11 +350,15 @@ export default function ExploreScreen() {
 
   /**
    * The full deck split into sections for SectionDeck: each is a page you
-   * swipe sideways to, with its cards running downward. The wishlist stays
-   * one sideways row.
+   * swipe sideways to, with its cards running downward. The wishlist and
+   * visits are one section each.
    */
   const sections = useMemo<DeckSection<DeckItem>[] | null>(() => {
-    if (showingList) return null;
+    if (showingList) {
+      if (baseDeck.length === 0) return null;
+      const title = scope === 'wishlist' ? 'Your wishlist' : 'Your visits';
+      return [{ key: scope, title, items: baseDeck }];
+    }
     const recommended = baseDeck.filter((item) => item.rank !== undefined);
     const unranked = baseDeck.filter((item) => item.rank === undefined);
     return [
@@ -372,7 +374,7 @@ export default function ExploreScreen() {
         items: unranked.filter((item) => !matchIds.has(item.site.id)),
       },
     ].filter((section) => section.items.length > 0);
-  }, [showingList, baseDeck, matchIds]);
+  }, [showingList, baseDeck, matchIds, scope]);
 
   const focusRegion = anchor
     ? regionForState(anchor.state)
@@ -714,7 +716,8 @@ export default function ExploreScreen() {
                   score={item.score}
                   reason={item.reason}
                   rank={item.rank}
-                  markWishlist
+                  // The full decks mix saved parks in with everything else.
+                  markWishlist={scope === 'parks' || scope === 'all'}
                   onOpenTrip={openTrip}
                   saved={wishlistIds.has(item.site.id)}
                   onToggleSave={() => toggleWishlist(item.site.id)}
@@ -734,48 +737,6 @@ export default function ExploreScreen() {
                   style={styles.deckCard}
                 />
               )}
-            />
-          ) : deck.length > 0 ? (
-            <CardCarousel
-              items={deck}
-              index={deckIndex}
-              keyOf={(item) => item.site.id}
-              onIndexChange={(index) => setDeckTopId(deck[index].site.id)}
-              renderCard={(item, index) => (
-                <ParkCard
-                  site={item.site}
-                  score={item.score}
-                  reason={item.reason}
-                  rank={item.rank}
-                  // The full decks mix saved parks in with everything else.
-                  markWishlist={scope === 'parks' || scope === 'all'}
-                  onOpenTrip={openTrip}
-                  saved={wishlistIds.has(item.site.id)}
-                  onToggleSave={() => toggleWishlist(item.site.id)}
-                  onExpand={() => setPeekSite(item.site)}
-                  onPress={() => {
-                    if (index !== deckIndex) {
-                      // A neighbour peeking in at the edge: bring it to the centre.
-                      setDeckTopId(item.site.id);
-                    } else if (anchor) {
-                      // Second tap: back to the whole map, on the same card.
-                      setAnchor(null);
-                    } else {
-                      // First tap: zoom onto the card's region.
-                      focusPark(item.site);
-                    }
-                  }}
-                  style={styles.deckCard}
-                />
-              )}
-              // The cards' taps depend on these, so redraw them when either changes.
-              extraData={`${deckIndex}:${anchor?.id ?? ''}`}
-              // No card peeks up below here, so the card runs down into that
-              // room, to just above the tab bar's raised circle. Lists grow to
-              // fill their parent by default, and the sheet runs on behind the
-              // tab bar, so pin the height.
-              side={22}
-              style={{ height: deckHeight + RAISE - 6 - SHEET_LOWER, flexGrow: 0 }}
             />
           ) : (
             <View style={styles.empty}>

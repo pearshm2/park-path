@@ -8,7 +8,9 @@
  * over it to full size. At rest the next card waits just below, a little
  * smaller, with a gap so no card's edge is cut off by another.
  *
- * The card in view is reported through `onActiveChange`. Each section
+ * The card in view is reported through `onActiveChange`, as soon as a
+ * swipe carries the next card more than halfway into place (so the map
+ * can follow mid-swipe), and again when it settles. Each section
  * remembers how far down it was scrolled, so swiping back to it returns to
  * the same card.
  */
@@ -158,6 +160,12 @@ export function SectionDeck<T>({
           renderCard={renderCard}
           registerList={(list) => lists.current.set(section.key, list)}
           onSettled={(index) => settle(section, index)}
+          onPassing={(index) => {
+            // Mid-swipe: the card now more than halfway into place. The
+            // map follows it straight away; the deck itself settles later.
+            const item = section.items[index];
+            if (item) onActiveChange(item);
+          }}
           onBringIntoView={(index) => {
             lists.current.get(section.key)?.scrollToOffset({
               offset: index * interval,
@@ -184,6 +192,7 @@ function SectionPage<T>({
   renderCard,
   registerList,
   onSettled,
+  onPassing,
   onBringIntoView,
 }: {
   section: DeckSection<T>;
@@ -196,9 +205,13 @@ function SectionPage<T>({
   renderCard: SectionDeckProps<T>['renderCard'];
   registerList: (list: FlatList<T> | null) => void;
   onSettled: (index: number) => void;
+  /** The card nearest to settling changed, partway through a swipe. */
+  onPassing: (index: number) => void;
   onBringIntoView: (index: number) => void;
 }) {
   const scrollY = useSharedValue(current * interval);
+  /** The card last reported as nearest, so each change is reported once. */
+  const nearest = useSharedValue(current);
   const last = section.items.length - 1;
   const list = useRef<FlatList<T> | null>(null);
 
@@ -214,6 +227,11 @@ function SectionPage<T>({
   const onScroll = useAnimatedScrollHandler({
     onScroll: (event) => {
       scrollY.set(event.contentOffset.y);
+      const index = Math.min(Math.max(Math.round(event.contentOffset.y / interval), 0), last);
+      if (index !== nearest.get()) {
+        nearest.set(index);
+        scheduleOnRN(onPassing, index);
+      }
     },
     onMomentumEnd: (event) => {
       const index = Math.min(Math.max(Math.round(event.contentOffset.y / interval), 0), last);

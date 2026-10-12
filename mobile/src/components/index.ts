@@ -1,5 +1,4 @@
 export { Button } from './Button';
-export { CAROUSEL_SHADOW, CardCarousel } from './CardCarousel';
 export { ChoiceRow } from './ChoiceRow';
 export { ComingSoon } from './ComingSoon';
 export { FilterButton } from './FilterButton';
