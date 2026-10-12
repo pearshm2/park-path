@@ -471,8 +471,17 @@ export default function ExploreScreen() {
    * then everything else. While the sheet is open its title names the
    * section of the card on top, and changes as you scroll past each one.
    */
+  /**
+   * Zoomed onto a region, its parks are one section of the same up-and-down
+   * deck, titled with the region; otherwise the full deck's sections.
+   */
+  const deckSections = useMemo<DeckSection<DeckItem>[] | null>(() => {
+    if (!focused) return sections;
+    if (!regionDeck || regionDeck.length === 0) return null;
+    return [{ key: `region-${focusRegion.id}`, title: focusRegion.label, items: regionDeck }];
+  }, [focused, sections, regionDeck, focusRegion]);
   /** The section the top card is in, and the card's place in it. */
-  const useSections = sections !== null && !focused;
+  const useSections = deckSections !== null;
   // Sized for the sectioned deck in every view, so the sheet and card keep
   // their size when tapping a card switches to the region carousel.
   const { deck: deckHeight, sheet: sheetHeight } = useSheetSize(SECTION_PEEK);
@@ -493,14 +502,14 @@ export default function ExploreScreen() {
     if (Math.abs(next - keyRoom) >= 2) setKeyRoom(next);
   }
   const inSection = useMemo(() => {
-    if (!useSections || !topCard) return null;
-    const page = sections.findIndex((section) =>
+    if (!deckSections || !topCard) return null;
+    const page = deckSections.findIndex((section) =>
       section.items.some((item) => item.site.id === topCard.site.id),
     );
     if (page < 0) return null;
-    const index = sections[page].items.findIndex((item) => item.site.id === topCard.site.id);
-    return { page, index, section: sections[page] };
-  }, [useSections, sections, topCard]);
+    const index = deckSections[page].items.findIndex((item) => item.site.id === topCard.site.id);
+    return { page, index, section: deckSections[page] };
+  }, [deckSections, topCard]);
 
   const deckTitle = focusRegion
     ? focusRegion.label
@@ -682,16 +691,17 @@ export default function ExploreScreen() {
           extra={SECTION_PEEK}
           below={tabSpace}
           pages={
-            useSections && sections.length > 1 && inSection
-              ? { count: sections.length, active: inSection.page }
+            deckSections && deckSections.length > 1 && inSection
+              ? { count: deckSections.length, active: inSection.page }
               : undefined
           }
         >
           {useSections && deck.length > 0 ? (
             <SectionDeck
-              // New sections (another view, other filters) start a fresh deck.
-              key={`${scope}:${sections.map((section) => `${section.key}${section.items.length}`).join()}`}
-              sections={sections}
+              // New sections (another view, other filters, zooming onto a
+              // region and back) start a fresh deck on the same card.
+              key={`${scope}:${deckSections.map((section) => `${section.key}${section.items.length}`).join()}`}
+              sections={deckSections}
               activeId={deck[deckIndex]?.site.id}
               keyOf={(item) => item.site.id}
               onActiveChange={(item) => setDeckTopId(item.site.id)}
@@ -713,8 +723,11 @@ export default function ExploreScreen() {
                     if (!active) {
                       // The card peeking up from below: bring it into view.
                       bringIntoView();
+                    } else if (anchor) {
+                      // Second tap: back to the whole map, on the same card.
+                      setAnchor(null);
                     } else {
-                      // Zoom onto the card's region.
+                      // First tap: zoom onto the card's region.
                       focusPark(item.site);
                     }
                   }}
