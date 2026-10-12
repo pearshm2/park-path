@@ -19,8 +19,10 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
+    SmallInteger,
     String,
     Text,
+    UniqueConstraint,
     false,
     func,
 )
@@ -144,3 +146,68 @@ class Friendship(Base):
     # Loaded together with the row: every response shows both people.
     requester: Mapped["User"] = relationship(foreign_keys=[requester_id], lazy="joined")
     addressee: Mapped["User"] = relationship(foreign_keys=[addressee_id], lazy="joined")
+
+
+class UserTagWeight(Base):
+    """
+    How much one user cares about one tag; the recommendation engine's
+    per-user input, and the thing feedback adjusts.
+
+    A tag is a namespaced string built from a site attribute, so the set of
+    tags can grow without a migration. Convention:
+        "terrain:canyon", "season:fall", "effort:2", "feature:Slot canyon"
+
+    Weights are plain floats, positive for "more of this" and negative for
+    "less". Their scale and how feedback moves them belong to the engine
+    (Dylan), so the database deliberately doesn't constrain the range.
+    A missing row means "no opinion yet", not zero.
+    """
+
+    __tablename__ = "user_tag_weights"
+    __table_args__ = (UniqueConstraint("user_id", "tag", name="uq_user_tag_weights_user_tag"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    tag: Mapped[str] = mapped_column(String(100), nullable=False)
+    weight: Mapped[float] = mapped_column(Float, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
+        server_default=func.now(),
+    )
+
+
+class SiteFeedback(Base):
+    """
+    A user's current thumbs-up (+1) or thumbs-down (-1) on a site.
+
+    One row per (user, site): changing your mind updates the row and taking
+    the vote back deletes it, so this is current state, not a history log.
+    """
+
+    __tablename__ = "site_feedback"
+    __table_args__ = (
+        UniqueConstraint("user_id", "site_id", name="uq_site_feedback_user_site"),
+        CheckConstraint("rating IN (-1, 1)", name="ck_site_feedback_rating"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    site_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("sites.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    rating: Mapped[int] = mapped_column(SmallInteger, nullable=False)  # -1 down, 1 up
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC), server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
+        server_default=func.now(),
+    )
