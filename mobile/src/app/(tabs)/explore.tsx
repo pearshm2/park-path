@@ -72,7 +72,6 @@ import {
   SECTION_PEEK,
   type DeckSection,
   SearchPanel,
-  SitePeek,
   MATCH_DOT,
   PICK_FILL,
   STATUS_DOT,
@@ -228,8 +227,6 @@ export default function ExploreScreen() {
   const [fullMapOpen, setFullMapOpen] = useState(false);
   const [filters, setFilters] = useState<FeedFilters>(NO_FILTERS);
   const [filterOpen, setFilterOpen] = useState(false);
-  /** The site whose detail sheet is open, from a card's expand button. */
-  const [peekSite, setPeekSite] = useState<Site | null>(null);
   const router = useRouter();
 
   const { data: sharedParks = [] } = useQuery({
@@ -757,7 +754,8 @@ export default function ExploreScreen() {
                   onSnooze={
                     scope === 'parks' || scope === 'all' ? () => setAside(item.site) : undefined
                   }
-                  onExpand={() => setPeekSite(item.site)}
+                  // The park's own page: photo, description, facts, directions and map.
+                  onExpand={() => router.push(`/site/${item.site.id}`)}
                   onPress={() => {
                     if (!active) {
                       // The card peeking up from below: bring it into view.
@@ -831,23 +829,6 @@ export default function ExploreScreen() {
           focusPark(site);
         }}
         onClose={() => setSearchOpen(false)}
-      />
-
-      <SitePeek
-        site={peekSite && withStatus(peekSite)}
-        // Great Smoky Mountains, the busiest park, is the crowding yardstick.
-        referenceVisits={allSites.find((site) => site.id === 'grsm')?.vis ?? undefined}
-        saved={peekSite !== null && wishlistIds.has(peekSite.id)}
-        onToggleSave={(site) => toggleWishlist(site.id)}
-        onOpenMap={(site) => {
-          setPeekSite(null);
-          router.push({ pathname: '/park-map/[id]', params: { id: site.id } });
-        }}
-        onDismiss={() => setPeekSite(null)}
-        onOpen={(site) => {
-          setPeekSite(null);
-          router.push(`/site/${site.id}`);
-        }}
       />
 
       <FilterSheet

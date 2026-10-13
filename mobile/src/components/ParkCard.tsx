@@ -17,6 +17,7 @@ import { Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from 'rea
 import Svg, { Path } from 'react-native-svg';
 
 import type { Site } from '../data/parks';
+import { crowdLabel, seasonsLabel, stayLabel } from '../data/siteFacts';
 import { visitMonth, visitSummary, type Trip } from '../data/visits';
 import { regionForState } from '../data/regions';
 import { colors, radius, shadow, space } from '../theme';
@@ -25,14 +26,6 @@ import { Tag } from './Tag';
 import { TERRAIN_LABEL, TerrainIcon, terrainTone } from './TerrainIcon';
 import { ExpandIcon } from './ExpandIcon';
 import { BodyText, Heading } from './Typography';
-
-/** Visitation is the closest thing the data has to a crowd signal. */
-export function crowdLabel(visitsMillions: number): string {
-  if (visitsMillions >= 4) return 'Very busy';
-  if (visitsMillions >= 1.5) return 'Busy';
-  if (visitsMillions >= 0.5) return 'Some company';
-  return 'Quiet';
-}
 
 const EFFORT_LABEL: Record<number, string> = {
   1: 'Easy walks',
@@ -79,6 +72,14 @@ export function ParkCard({
   const region = regionForState(site.state);
   const percent = score === undefined ? null : Math.round(score * 100);
   const visits = site.status === 'visited' ? visitSummary(site.id) : undefined;
+  const seasons = seasonsLabel(site);
+  const stay = stayLabel(site);
+  const timing = [
+    seasons && (seasons === 'Any season' ? 'Good any season' : `Best in ${seasons.toLowerCase()}`),
+    stay && (site.days === 1 ? stay : `Usually ${stay}`),
+  ]
+    .filter(Boolean)
+    .join(' · ');
 
   return (
     <Pressable
@@ -208,6 +209,13 @@ export function ParkCard({
               <Tag tone="neutral" label={EFFORT_LABEL[site.effort] ?? `Effort ${site.effort}`} />
             ) : null}
           </View>
+
+          {/* When to go and for how long, so the card answers it without a tap. */}
+          {timing ? (
+            <BodyText size={12} color={colors.neutral[700]} numberOfLines={1} style={styles.timing}>
+              {timing}
+            </BodyText>
+          ) : null}
 
           {/* A visited park links to the trip it was part of, or asks for one. */}
           {site.status === 'visited' ? (
@@ -508,6 +516,9 @@ const styles = StyleSheet.create({
   },
   reason: {
     marginTop: space[2],
+  },
+  timing: {
+    marginTop: 6,
   },
   tags: {
     flexDirection: 'row',
