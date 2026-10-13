@@ -88,6 +88,7 @@ import {
   type RegionId,
 } from '../../data/regions';
 import { useQuiz } from '../../quiz/QuizContext';
+import { useSnoozed } from '../../wishlist/useSnoozed';
 import { useWishlist } from '../../wishlist/useWishlist';
 import { colors, radius, shadow, space, useTextScale } from '../../theme';
 
@@ -262,9 +263,24 @@ export default function ExploreScreen() {
   );
   const parks = useMemo(() => sharedParks.map(withStatus), [sharedParks, withStatus]);
   const allSites = useMemo(() => sharedSites.map(withStatus), [sharedSites, withStatus]);
+  // Parks set aside with "Not for now" leave the recommendations (they
+  // drop to Parks to Explore, still on the map and in search) until due back.
+  const { ids: snoozedIds, snooze, unsnooze } = useSnoozed();
   const matches = useMemo(
-    () => sharedMatches.map((match) => ({ ...match, site: withStatus(match.site) })),
-    [sharedMatches, withStatus],
+    () =>
+      sharedMatches
+        .filter((match) => !snoozedIds.has(match.site.id))
+        .map((match) => ({ ...match, site: withStatus(match.site) })),
+    [sharedMatches, withStatus, snoozedIds],
+  );
+  /** The park just set aside, while its Undo is on offer. */
+  const [undoPark, setUndoPark] = useState<Site | null>(null);
+  const undoTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(
+    () => () => {
+      if (undoTimer.current) clearTimeout(undoTimer.current);
+    },
+    [],
   );
 
   const parkIds = useMemo(() => new Set(parks.map((site) => site.id)), [parks]);
@@ -484,6 +500,22 @@ export default function ExploreScreen() {
   }, [focused, sections, regionDeck, focusRegion]);
   /** The section the top card is in, and the card's place in it. */
   const useSections = deckSections !== null;
+
+  /** "Not for now": set a park aside, with Undo on offer for a few seconds. */
+  function setAside(site: Site) {
+    // Move the deck on to the next card in this section (or the one before,
+    // at the end), rather than following the park out of it.
+    const section = deckSections?.find((sec) => sec.items.some((i) => i.site.id === site.id));
+    if (section) {
+      const at = section.items.findIndex((i) => i.site.id === site.id);
+      const next = section.items[at + 1] ?? section.items[at - 1];
+      if (next) setDeckTopId(next.site.id);
+    }
+    snooze(site.id);
+    setUndoPark(site);
+    if (undoTimer.current) clearTimeout(undoTimer.current);
+    undoTimer.current = setTimeout(() => setUndoPark(null), 6000);
+  }
   // Sized for the sectioned deck in every view, so the sheet and card keep
   // their size when tapping a card switches to the region carousel.
   const { deck: deckHeight, sheet: sheetHeight } = useSheetSize(SECTION_PEEK);
@@ -721,6 +753,10 @@ export default function ExploreScreen() {
                   onOpenTrip={openTrip}
                   saved={wishlistIds.has(item.site.id)}
                   onToggleSave={() => toggleWishlist(item.site.id)}
+                  // Setting aside is about recommendations, so only on the full decks.
+                  onSnooze={
+                    scope === 'parks' || scope === 'all' ? () => setAside(item.site) : undefined
+                  }
                   onExpand={() => setPeekSite(item.site)}
                   onPress={() => {
                     if (!active) {
@@ -829,6 +865,27 @@ export default function ExploreScreen() {
         }}
         onClose={() => setFilterOpen(false)}
       />
+
+      {undoPark ? (
+        <View style={[styles.undoBar, { bottom: tabSpace + space[2] }]}>
+          <BodyText size={13} color={colors.neutral[100]} style={styles.undoText} numberOfLines={2}>
+            {`${undoPark.name} set aside for 30 days`}
+          </BodyText>
+          <Pressable
+            onPress={() => {
+              unsnooze(undoPark.id);
+              setUndoPark(null);
+            }}
+            hitSlop={10}
+            accessibilityRole="button"
+            accessibilityLabel={`Undo, bring ${undoPark.name} back`}
+          >
+            <BodyText size={13} weight="bold" color={colors.accentRamp[300]}>
+              Undo
+            </BodyText>
+          </Pressable>
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -1581,6 +1638,23 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   deckCard: {
+    flex: 1,
+  },
+  undoBar: {
+    position: 'absolute',
+    left: space[4],
+    right: space[4],
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space[3],
+    paddingVertical: space[3],
+    paddingHorizontal: space[4],
+    borderRadius: radius.md,
+    backgroundColor: colors.neutral[900],
+    zIndex: 50,
+    ...shadow.lg,
+  },
+  undoText: {
     flex: 1,
   },
   empty: {

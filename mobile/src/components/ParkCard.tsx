@@ -12,6 +12,7 @@
  * swatch beside the park's details, matching the map and its key.
  */
 
+import { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 
@@ -48,6 +49,7 @@ export function ParkCard({
   onOpenTrip,
   saved = false,
   onToggleSave,
+  onSnooze,
   onPress,
   onExpand,
   style,
@@ -66,6 +68,8 @@ export function ParkCard({
   saved?: boolean;
   /** Shows the save button, which adds the park to or removes it from the wishlist. */
   onToggleSave?: () => void;
+  /** Shows the "Not for now" button, which sets the park aside for a while. */
+  onSnooze?: () => void;
   onPress?: () => void;
   /** Shows the expand button, which opens the site's detail sheet. */
   onExpand?: () => void;
@@ -156,6 +160,7 @@ export function ParkCard({
                 <BookmarkIcon filled={saved} />
               </Pressable>
             ) : null}
+            {onSnooze ? <SnoozeButton siteName={site.name} onSnooze={onSnooze} /> : null}
             {onExpand ? (
               // Its own target, so the card's tap (zoom to region) is untouched.
               <Pressable
@@ -251,6 +256,88 @@ export function ParkCard({
         </View>
       </View>
     </Pressable>
+  );
+}
+
+/** How long a held press waits before the tip shows, and how long it stays. */
+const TIP_DELAY = 350;
+const TIP_LINGER = 2200;
+
+/**
+ * "Not for now": a snooze clock that sets the park aside for a while. An
+ * icon to save room on the card; holding it (or hovering, in a browser)
+ * shows a short tip saying what it does.
+ */
+function SnoozeButton({ siteName, onSnooze }: { siteName: string; onSnooze: () => void }) {
+  const [tip, setTip] = useState(false);
+  const hide = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function showTip(linger: boolean) {
+    if (hide.current) clearTimeout(hide.current);
+    setTip(true);
+    if (linger) hide.current = setTimeout(() => setTip(false), TIP_LINGER);
+  }
+
+  useEffect(
+    () => () => {
+      if (hide.current) clearTimeout(hide.current);
+    },
+    [],
+  );
+
+  return (
+    <View>
+      <Pressable
+        onPress={onSnooze}
+        // A held press shows the tip instead of setting the park aside.
+        onLongPress={() => showTip(true)}
+        delayLongPress={TIP_DELAY}
+        onHoverIn={() => showTip(false)}
+        onHoverOut={() => setTip(false)}
+        hitSlop={10}
+        accessibilityRole="button"
+        accessibilityLabel={`Not for now: set ${siteName} aside`}
+        accessibilityHint="Leaves it out of your recommendations for 30 days. It isn't a dislike."
+        style={({ pressed }) => [styles.expand, pressed && styles.expandPressed]}
+      >
+        <SnoozeIcon />
+      </Pressable>
+      {tip ? (
+        <View style={styles.tip} pointerEvents="none">
+          <BodyText size={12} weight="semibold" color={colors.neutral[100]}>
+            Not for now
+          </BodyText>
+          <BodyText size={11} lineHeightRatio={1.35} color={colors.neutral[300]}>
+            Sets this park aside from your picks for 30 days. Not a dislike.
+          </BodyText>
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+/** A clock with a little "z": snooze, as on a phone's alarm. */
+function SnoozeIcon() {
+  const ink = colors.neutral[800];
+  return (
+    <Svg width={15} height={15} viewBox="0 0 24 24">
+      <Path
+        d="M12 21a8 8 0 1 0 0-16 8 8 0 0 0 0 16zM12 9v4l2.5 1.5"
+        fill="none"
+        stroke={ink}
+        strokeWidth={2.2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <Path
+        d="M16.5 2.5h4l-4 4h4"
+        fill="none"
+        stroke={ink}
+        strokeWidth={1.8}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </Svg>
   );
 }
 
@@ -371,6 +458,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: space[2],
+    // Above the lines below it, which the snooze tip opens over.
+    zIndex: 2,
   },
   name: {
     flex: 1,
@@ -385,6 +474,19 @@ const styles = StyleSheet.create({
   },
   expandPressed: {
     backgroundColor: colors.neutral[300],
+  },
+  tip: {
+    position: 'absolute',
+    top: 34,
+    right: -6,
+    width: 190,
+    gap: 2,
+    paddingVertical: 7,
+    paddingHorizontal: 10,
+    borderRadius: radius.md,
+    backgroundColor: colors.neutral[900],
+    zIndex: 10,
+    ...shadow.md,
   },
   saveOn: {
     backgroundColor: colors.accent2Ramp[100],
