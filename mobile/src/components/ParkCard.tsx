@@ -19,7 +19,7 @@ import { Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from 'rea
 import Svg, { Path } from 'react-native-svg';
 
 import type { Site } from '../data/parks';
-import { crowdLabel, factRows, seasonsLabel, stayLabel } from '../data/siteFacts';
+import { crowdLabel, factRows } from '../data/siteFacts';
 import { visitMonth, visitSummary, type Trip } from '../data/visits';
 import { regionForState } from '../data/regions';
 import { colors, radius, shadow, space } from '../theme';
@@ -76,16 +76,8 @@ export function ParkCard({
   const tone = terrainTone(site.group);
   const region = regionForState(site.state);
   const visits = site.status === 'visited' ? visitSummary(site.id) : undefined;
-  const seasons = seasonsLabel(site);
-  const stay = stayLabel(site);
-  const timing = [
-    seasons && (seasons === 'Any season' ? 'Good any season' : `Best in ${seasons.toLowerCase()}`),
-    stay && (site.days === 1 ? stay : `Usually ${stay}`),
-  ]
-    .filter(Boolean)
-    .join(' · ');
-  // The facts the card face doesn't already give (its tags and timing line do).
-  const extraFacts = more ? factRows(site).filter((row) => !ON_FACE.has(row.label)) : [];
+  // The facts the tags above don't already give, when to go first.
+  const facts = factRows(site).filter((row) => !IN_TAGS.has(row.label));
 
   return (
     <Pressable
@@ -216,13 +208,6 @@ export function ParkCard({
             ) : null}
           </View>
 
-          {/* When to go and for how long, so the card answers it without a tap. */}
-          {timing ? (
-            <BodyText size={12} color={colors.neutral[700]} numberOfLines={1} style={styles.timing}>
-              {timing}
-            </BodyText>
-          ) : null}
-
           {/* A visited park links to the trip it was part of, or asks for one. */}
           {site.status === 'visited' ? (
             <Pressable
@@ -247,27 +232,43 @@ export function ParkCard({
             </Pressable>
           ) : null}
 
-          {/* More about the park, shown when the deck is raised: a little of
-              the NPS description and the facts not already on the card. */}
-          {more ? (
-            <View style={styles.more}>
-              {site.description ? (
-                <BodyText size={12.5} lineHeightRatio={1.45} color={colors.neutral[800]} numberOfLines={4}>
+          {/* About the park and its facts: the start of each on the card, all
+              of it once the arrow raises the deck. Clipped to the room there
+              is, so the arrow below always shows. */}
+          <View style={styles.details}>
+            {site.description ? (
+              <>
+                <BodyText size={10} weight="semibold" color={colors.accentRamp[700]} style={styles.detailsLabel}>
+                  ABOUT
+                </BodyText>
+                <BodyText
+                  size={12.5}
+                  lineHeightRatio={1.42}
+                  color={colors.neutral[800]}
+                  numberOfLines={more ? 5 : 2}
+                >
                   {site.description}
                 </BodyText>
-              ) : null}
-              {extraFacts.map((row) => (
-                <View key={row.label} style={styles.factRow}>
-                  <BodyText size={12} color={colors.neutral[600]} style={styles.factLabel}>
-                    {row.label}
-                  </BodyText>
-                  <BodyText size={12} weight="semibold" color={row.color} numberOfLines={1}>
-                    {row.value}
-                  </BodyText>
-                </View>
-              ))}
-            </View>
-          ) : null}
+              </>
+            ) : null}
+            {facts.length > 0 ? (
+              <View style={styles.facts}>
+                <BodyText size={10} weight="semibold" color={colors.accentRamp[700]} style={styles.detailsLabel}>
+                  FACTS & FEATURES
+                </BodyText>
+                {(more ? facts : facts.slice(0, 2)).map((row) => (
+                  <View key={row.label} style={styles.factRow}>
+                    <BodyText size={12} color={colors.neutral[600]} style={styles.factLabel} numberOfLines={1}>
+                      {row.label}
+                    </BodyText>
+                    <BodyText size={12} weight="semibold" color={row.color} numberOfLines={1}>
+                      {row.value}
+                    </BodyText>
+                  </View>
+                ))}
+              </View>
+            ) : null}
+          </View>
 
           {/* A small arrow to show more of the park (or less), raising the deck. */}
           {onToggleMore ? (
@@ -287,8 +288,8 @@ export function ParkCard({
   );
 }
 
-/** Facts already on the card's face, left out of its "more" section. */
-const ON_FACE = new Set(['Best time to go', 'Typical stay', 'Effort', 'Permit or lottery', 'Designation']);
+/** Facts the card's tags (crowds, feature, effort) and its type line already give. */
+const IN_TAGS = new Set(['Effort', 'Designation', 'Crowding']);
 
 /** A small chevron, down for "more", up for "less". */
 function ChevronIcon({ up }: { up: boolean }) {
@@ -556,9 +557,25 @@ const styles = StyleSheet.create({
   reason: {
     marginTop: space[2],
   },
-  more: {
-    gap: 4,
+  details: {
+    flex: 1,
+    // Shrinks to the room there is (clipping the end), so the arrow below
+    // never gets pushed out of the card.
+    minHeight: 0,
+    overflow: 'hidden',
+    gap: 3,
     marginTop: space[2],
+  },
+  detailsLabel: {
+    letterSpacing: 1,
+  },
+  facts: {
+    gap: 3,
+    marginTop: space[2],
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: radius.md,
+    backgroundColor: colors.accent2Ramp[100],
   },
   factRow: {
     flexDirection: 'row',
@@ -569,7 +586,7 @@ const styles = StyleSheet.create({
   },
   moreToggle: {
     alignSelf: 'center',
-    marginTop: 'auto',
+    marginTop: 6,
     paddingHorizontal: 18,
     paddingVertical: 2,
     borderRadius: radius.pill,
@@ -577,9 +594,6 @@ const styles = StyleSheet.create({
   },
   moreTogglePressed: {
     backgroundColor: colors.neutral[300],
-  },
-  timing: {
-    marginTop: 6,
   },
   tags: {
     flexDirection: 'row',
