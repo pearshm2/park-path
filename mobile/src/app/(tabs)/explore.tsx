@@ -534,7 +534,7 @@ export default function ExploreScreen() {
   // The arrow on a card raises the whole deck to show more about the park.
   const [moreOpen, setMoreOpen] = useState(false);
   const deckExtra = SECTION_PEEK + (moreOpen ? MORE_ROOM : 0);
-  const { deck: deckHeight } = useSheetSize(deckExtra);
+  const { deck: deckHeight, sheet: openSheetHeight } = useSheetSize(deckExtra);
   // The map keeps its usual room; the raised deck just covers more of it.
   const { sheet: sheetHeight } = useSheetSize(SECTION_PEEK);
   function toggleMore() {
@@ -557,6 +557,15 @@ export default function ExploreScreen() {
     top: stageFrame.areaY + stageFrame.mapY,
     height: stageFrame.height,
   };
+  // The map keeps the size it has with the sheet down: opening the sheet
+  // slides it up under the key rather than shrinking it (which shrank its
+  // pins too), and its bottom runs on behind the sheet.
+  const [mapHeight, setMapHeight] = useState(0);
+  const openSheetTop = stageFrame.height - openSheetHeight - DECK_GAP - tabSpace;
+  const mapCovered =
+    sheetOpen && mapHeight > 0
+      ? Math.max(0, mapCanvas.top + mapHeight - openSheetTop + DECK_GAP)
+      : 0;
   const spacers = useRef({ above: 0, below: 0 });
   function measureSpare(which: 'above' | 'below', height: number) {
     spacers.current[which] = height;
@@ -689,6 +698,9 @@ export default function ExploreScreen() {
               onLayout={(event) => measureSpare('above', event.nativeEvent.layout.height)}
             />
           ) : null}
+          {/* The title and the map slide (rather than jump) to where the
+              sheet leaves them, in step with the sheet and the key. */}
+          <Animated.View layout={LinearTransition.duration(SHEET_MS)} style={styles.titleSlot}>
           {focusRegion ? (
             <RegionTitle
               region={focusRegion}
@@ -705,6 +717,24 @@ export default function ExploreScreen() {
               </Heading>
             </View>
           )}
+          </Animated.View>
+          <Animated.View
+            layout={LinearTransition.duration(SHEET_MS)}
+            style={[
+              styles.map,
+              sheetOpen && mapHeight > 0
+                ? { flex: 0, height: mapHeight }
+                : { maxHeight: windowWidth / MAP_ASPECT },
+              // Closed, the map fills to its full height before the spare
+              // room goes to the spacers around it.
+              !sheetOpen && styles.mapFirst,
+            ]}
+            onLayout={(event) => {
+              const { y, height } = event.nativeEvent.layout;
+              setStageFrame((f) => (Math.abs(f.mapY - y) > 1 ? { ...f, mapY: y } : f));
+              if (!sheetOpen) setMapHeight((h) => (Math.abs(h - height) > 1 ? height : h));
+            }}
+          >
           <ParkMap
             sites={mapSites}
             rankById={rankById}
@@ -734,17 +764,10 @@ export default function ExploreScreen() {
             // completed region's pins behind its stamp.
             tuckCompleted={scope !== 'visited'}
             canvas={mapCanvas}
-            onFrame={(y) =>
-              setStageFrame((f) => (Math.abs(f.mapY - y) > 1 ? { ...f, mapY: y } : f))
-            }
-            style={[
-              styles.map,
-              { maxHeight: windowWidth / MAP_ASPECT },
-              // Closed, the map fills to its full height before the spare
-              // room goes to the spacers around it.
-              !sheetOpen && styles.mapFirst,
-            ]}
+            obscuredBottom={mapCovered}
+            style={styles.mapFill}
           />
+          </Animated.View>
           {!sheetOpen ? (
             <>
               <Pressable
@@ -1624,6 +1647,13 @@ const styles = StyleSheet.create({
     flex: 1,
     width: '100%',
     marginTop: space[2],
+  },
+  mapFill: {
+    flex: 1,
+  },
+  // Holds the map's title; it overlaps the map's top edge (see mapTitle).
+  titleSlot: {
+    zIndex: 1,
   },
   // Far outweighs the spacers, so the map takes its maxHeight first and
   // the spacers split only what's left over.

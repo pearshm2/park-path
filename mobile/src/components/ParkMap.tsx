@@ -175,6 +175,13 @@ type ParkMapProps = {
    * notch or status bar (the full-screen view).
    */
   controlInset?: { top?: number; right?: number; bottom?: number };
+  /**
+   * How much of the box's bottom is covered (Explore's open card sheet).
+   * The whole country still fills the box, running on under the cover,
+   * but a region in focus is framed in the part left showing, and the
+   * expand button sits above the cover.
+   */
+  obscuredBottom?: number;
   onSelectSite?: (site: Site) => void;
   /** Regions to mark as completed: every national park in them visited. */
   completedRegions?: ReadonlySet<RegionId>;
@@ -211,6 +218,7 @@ export function ParkMap({
   iconsAtAnyZoom = false,
   onExpand,
   controlInset,
+  obscuredBottom = 0,
   onSelectSite,
   onSelectRegion,
   completedRegions,
@@ -287,8 +295,12 @@ export function ParkMap({
     });
     // Wider at the sides: an edge park's badge (and the expand button in
     // the corner) needs the room.
-    return frameBounds(bounds, size, ZOOM_PADDING_X, ZOOM_PADDING, base.k * MAX_ZOOM);
-  }, [projected, focusRegion, size, base]);
+    const showing = {
+      width: size.width,
+      height: Math.max(size.height - obscuredBottom, size.height / 2),
+    };
+    return frameBounds(bounds, showing, ZOOM_PADDING_X, ZOOM_PADDING, base.k * MAX_ZOOM);
+  }, [projected, focusRegion, size, base, obscuredBottom]);
 
   // The live view, on the UI thread.
   const k = useSharedValue(1);
@@ -713,9 +725,9 @@ export function ParkMap({
           accessibilityLabel="Open the map full screen"
           style={({ pressed }) => [
             styles.expand,
-            controlInset && {
-              bottom: 8 + (controlInset.bottom ?? 0),
-              right: 12 + (controlInset.right ?? 0),
+            (controlInset || obscuredBottom > 0) && {
+              bottom: 8 + (controlInset?.bottom ?? 0) + obscuredBottom,
+              right: 12 + (controlInset?.right ?? 0),
             },
             pressed && styles.resetPressed,
           ]}
