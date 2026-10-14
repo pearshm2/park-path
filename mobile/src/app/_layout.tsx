@@ -25,6 +25,8 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { AuthProvider, useAuth } from '../auth/AuthContext';
 import { QuizProvider, useQuiz } from '../quiz/QuizContext';
+import { ArrivalBanner } from '../arrivals/ArrivalBanner';
+import { ArrivalsProvider } from '../arrivals/ArrivalsContext';
 import { TripsProvider } from '../trips/TripsContext';
 import { colors, TextSizeProvider, useAppFonts } from '../theme';
 
@@ -62,10 +64,14 @@ export default function RootLayout() {
           <AuthProvider>
             <QuizProvider>
               <TripsProvider>
-                <TextSizeProvider>
-                  <StatusBar style="dark" />
-                  <SessionGate />
-                </TextSizeProvider>
+                <ArrivalsProvider>
+                  <TextSizeProvider>
+                    <StatusBar style="dark" />
+                    <SessionGate />
+                    {/* Over every screen: the nudge when you arrive at a park. */}
+                    <ArrivalBanner />
+                  </TextSizeProvider>
+                </ArrivalsProvider>
               </TripsProvider>
             </QuizProvider>
           </AuthProvider>

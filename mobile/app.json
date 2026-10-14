@@ -34,7 +34,13 @@
         }
       ],
       "expo-secure-store",
-      "@react-native-community/datetimepicker"
+      "@react-native-community/datetimepicker",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "ParkPath uses your location while it's open to let you know when you've arrived at a park, so you can log the visit while it's fresh. It never leaves your phone."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

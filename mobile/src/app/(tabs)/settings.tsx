@@ -7,10 +7,11 @@
  */
 
 import { useRouter } from 'expo-router';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Linking, Pressable, ScrollView, StyleSheet, Switch, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { API_BASE_URL } from '../../api/client';
+import { useArrivals } from '../../arrivals/ArrivalsContext';
 import { useAuth } from '../../auth/AuthContext';
 import { BodyText, Button, Heading, useTabBarSpace } from '../../components';
 import { QUIZ_STEPS, type QuizAnswers } from '../../data/quizSpec';
@@ -23,6 +24,7 @@ export default function SettingsScreen() {
   const { user, signOut } = useAuth();
   const { answers } = useQuiz();
   const { size: textSize, setSize: setTextSize } = useTextSize();
+  const arrivals = useArrivals();
   const tabSpace = useTabBarSpace();
 
   const terrainSummary = answers.terrains.length
@@ -77,6 +79,40 @@ export default function SettingsScreen() {
           <BodyText size={11.5} lineHeightRatio={1.45} color={colors.textMuted}>
             {"Your phone's own text size setting applies on top of this."}
           </BodyText>
+        </View>
+      </View>
+
+      <View style={styles.group}>
+        <BodyText size={10} weight="semibold" color={colors.neutral[600]} style={styles.groupTitle}>
+          ARRIVAL REMINDERS
+        </BodyText>
+        <View style={styles.card}>
+          <View style={styles.switchRow}>
+            <BodyText size={13.5} weight="semibold" style={styles.switchLabel}>
+              Remind me when I arrive at a park
+            </BodyText>
+            <Switch
+              value={arrivals.enabled}
+              onValueChange={(on) => {
+                void arrivals.setEnabled(on);
+              }}
+              trackColor={{ true: colors.accent, false: colors.neutral[300] }}
+              thumbColor={colors.neutral[100]}
+              accessibilityLabel="Arrival reminders"
+            />
+          </View>
+          <BodyText size={11.5} lineHeightRatio={1.45} color={colors.textMuted}>
+            While ParkPath is open, it notices when you&apos;ve arrived at a national park and
+            reminds you to log the trip. Uses your location only while the app is open; it never
+            leaves your phone.
+          </BodyText>
+          {arrivals.permission === 'denied' ? (
+            <Pressable onPress={() => Linking.openSettings()} accessibilityRole="link">
+              <BodyText size={12} weight="semibold" color={colors.accentRamp[700]}>
+                Location is off for ParkPath. Turn it on in your phone&apos;s settings ›
+              </BodyText>
+            </Pressable>
+          ) : null}
         </View>
       </View>
 
@@ -169,6 +205,14 @@ const styles = StyleSheet.create({
     backgroundColor: colors.neutral[100],
     gap: space[3],
     ...shadow.sm,
+  },
+  switchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space[3],
+  },
+  switchLabel: {
+    flex: 1,
   },
   row: {
     flexDirection: 'row',
