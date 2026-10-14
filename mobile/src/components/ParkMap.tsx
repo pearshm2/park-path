@@ -53,7 +53,15 @@ import {
   type GeoPath,
   type GeoProjection,
 } from 'd3-geo';
-import { useEffect, useMemo, useRef, useState, type ComponentType, type ReactNode } from 'react';
+import {
+  memo,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ComponentType,
+  type ReactNode,
+} from 'react';
 import {
   Pressable,
   StyleSheet,
@@ -561,6 +569,26 @@ export function ParkMap({
     const at = place(dot);
     return { x: spot.x - at.x, y: spot.y - at.y };
   };
+  /** What a pin draws, as plain values: a pin whose values are unchanged isn't re-rendered. */
+  const pinProps = (dot: PlacedDot, kind: PinKind) => {
+    const nudge = nudgeFor(dot);
+    return {
+      site: dot.site,
+      x: dot.x,
+      y: dot.y,
+      k,
+      tx,
+      ty,
+      lift,
+      kind,
+      selected: dot.site.id === selectedId,
+      rank: kind === 'pick' ? rankById?.get(dot.site.id) : undefined,
+      feature: badgeFor(dot.site),
+      nudgeX: nudge?.x,
+      nudgeY: nudge?.y,
+      fade: kind === 'other' ? othersFade : 1,
+    };
+  };
   // Draw #1 last so it sits on top where pins overlap.
   picks.sort((a, b) => rankById!.get(b.site.id)! - rankById!.get(a.site.id)!);
   // The selected park goes on top of its own group, glow and all.
@@ -670,138 +698,9 @@ export function ParkMap({
               The fade is set on each shape, not on a group around them: on
               Android a translucent group is drawn through a whole extra
               canvas-sized bitmap, on every frame the map moves. */}
-          <G>
-            {others.map((dot) => {
-              const { site } = dot;
-              const selected = site.id === selectedId;
-              const look = STATUS_DOT[site.status];
-              const feature = badgeFor(site);
-              if (feature) {
-                const ring = site.status === 'new' ? look.stroke : STATUS_RING[site.status];
-                return (
-                  <Pinned key={site.id} at={dot} view={live} lift={lift}>
-                    <FeatureBadge
-                      site={site}
-                      nudge={nudgeFor(dot)}
-                      feature={feature}
-                      ring={ring}
-                      selected={selected}
-                      opacity={othersFade}
-                    />
-                  </Pinned>
-                );
-              }
-              return (
-                <Pinned key={site.id} at={dot} view={live} lift={lift}>
-                  <Circle
-                    r={selected ? 7 : 4}
-                    fill={look.fill}
-                    stroke={selected ? colors.text : look.stroke}
-                    strokeWidth={selected ? 2.5 : 1.5}
-                    opacity={othersFade}
-                  />
-                </Pinned>
-              );
-            })}
-          </G>
-
-          <G>
-            {matched.map((dot) => {
-              const { site } = dot;
-              const selected = site.id === selectedId;
-              const feature = badgeFor(site);
-              if (feature) {
-                return (
-                  <Pinned key={site.id} at={dot} view={live} lift={lift}>
-                    <FeatureBadge
-                      site={site}
-                      nudge={nudgeFor(dot)}
-                      feature={feature}
-                      ring={MATCH_DOT.fill}
-                      selected={selected}
-                    />
-                  </Pinned>
-                );
-              }
-              return (
-                <Pinned key={site.id} at={dot} view={live} lift={lift}>
-                  <Circle
-                    r={selected ? 8 : 6}
-                    fill={MATCH_DOT.fill}
-                    stroke={selected ? colors.text : MATCH_DOT.stroke}
-                    strokeWidth={selected ? 2.5 : 1.75}
-                  />
-                </Pinned>
-              );
-            })}
-          </G>
-
-          <G>
-            {picks.map((dot) => {
-              const { site } = dot;
-              const selected = site.id === selectedId;
-              const rank = rankById!.get(site.id)!;
-              const feature = badgeFor(site);
-              if (feature) {
-                const r = selected ? BADGE_R + 2 : BADGE_R;
-                const nudge = nudgeFor(dot);
-                // The number rides on the badge's upper-right edge.
-                const nx = (nudge?.x ?? 0) + r * 0.75;
-                const ny = (nudge?.y ?? 0) - r * 0.75;
-                return (
-                  <Pinned key={site.id} at={dot} view={live} lift={lift}>
-                    <FeatureBadge
-                      site={site}
-                      nudge={nudge}
-                      feature={feature}
-                      ring={PICK_FILL}
-                      selected={selected}
-                    />
-                    <Circle
-                      cx={nx}
-                      cy={ny}
-                      r={7.5}
-                      fill={PICK_FILL}
-                      stroke={colors.neutral[100]}
-                      strokeWidth={1.5}
-                    />
-                    <SvgText
-                      x={nx}
-                      y={ny + 3.2}
-                      textAnchor="middle"
-                      fontSize={9.5}
-                      fontFamily={fonts.bodyBold}
-                      fontWeight="bold"
-                      fill={colors.neutral[100]}
-                    >
-                      {String(rank)}
-                    </SvgText>
-                  </Pinned>
-                );
-              }
-              return (
-                <Pinned key={site.id} at={dot} view={live} lift={lift}>
-                  <Circle
-                    r={selected ? 12 : 10}
-                    fill={selected ? colors.accentRamp[700] : PICK_FILL}
-                    stroke={colors.neutral[100]}
-                    strokeWidth={2}
-                  />
-                  <SvgText
-                    // SVG text sits on its baseline; nudge down to centre it.
-                    y={3.8}
-                    textAnchor="middle"
-                    fontSize={11}
-                    fontFamily={fonts.bodyBold}
-                    fontWeight="bold"
-                    fill={colors.neutral[100]}
-                  >
-                    {String(rank)}
-                  </SvgText>
-                </Pinned>
-              );
-            })}
-          </G>
+          <G>{others.map((dot) => <ParkPin key={dot.site.id} {...pinProps(dot, 'other')} />)}</G>
+          <G>{matched.map((dot) => <ParkPin key={dot.site.id} {...pinProps(dot, 'match')} />)}</G>
+          <G>{picks.map((dot) => <ParkPin key={dot.site.id} {...pinProps(dot, 'pick')} />)}</G>
         </Svg>
         </View>
       </GestureDetector>
@@ -866,6 +765,146 @@ function Zoomed({ view, lift, children }: { view: LiveView; lift: number; childr
   });
   return <AnimatedG animatedProps={animatedProps}>{children}</AnimatedG>;
 }
+
+type PinKind = 'other' | 'match' | 'pick';
+
+/**
+ * One park's pin: a dot (styled by visit status, or the match colour), a
+ * numbered pick, or a feature badge. Memoised on plain values, so opening
+ * the card sheet or selecting a park re-renders only the pins that change;
+ * re-rendering all of them (each with its UI-thread position) cost a
+ * noticeable pause before the map moved.
+ */
+const ParkPin = memo(function ParkPin({
+  site,
+  x,
+  y,
+  k,
+  tx,
+  ty,
+  lift,
+  kind,
+  selected,
+  rank,
+  feature,
+  nudgeX,
+  nudgeY,
+  fade,
+}: {
+  site: Site;
+  x: number;
+  y: number;
+  k: SharedValue<number>;
+  tx: SharedValue<number>;
+  ty: SharedValue<number>;
+  lift: number;
+  kind: PinKind;
+  selected: boolean;
+  rank?: number;
+  feature?: Feature;
+  nudgeX?: number;
+  nudgeY?: number;
+  fade: number;
+}) {
+  const nudge = nudgeX != null && nudgeY != null ? { x: nudgeX, y: nudgeY } : undefined;
+  let body: ReactNode;
+  if (feature) {
+    const ring =
+      kind === 'pick'
+        ? PICK_FILL
+        : kind === 'match'
+          ? MATCH_DOT.fill
+          : site.status === 'new'
+            ? STATUS_DOT.new.stroke
+            : STATUS_RING[site.status];
+    const r = selected ? BADGE_R + 2 : BADGE_R;
+    // A pick's number rides on the badge's upper-right edge.
+    const nx = (nudge?.x ?? 0) + r * 0.75;
+    const ny = (nudge?.y ?? 0) - r * 0.75;
+    body = (
+      <>
+        <FeatureBadge
+          site={site}
+          nudge={nudge}
+          feature={feature}
+          ring={ring}
+          selected={selected}
+          opacity={fade}
+        />
+        {kind === 'pick' ? (
+          <>
+            <Circle
+              cx={nx}
+              cy={ny}
+              r={7.5}
+              fill={PICK_FILL}
+              stroke={colors.neutral[100]}
+              strokeWidth={1.5}
+            />
+            <SvgText
+              x={nx}
+              y={ny + 3.2}
+              textAnchor="middle"
+              fontSize={9.5}
+              fontFamily={fonts.bodyBold}
+              fontWeight="bold"
+              fill={colors.neutral[100]}
+            >
+              {String(rank)}
+            </SvgText>
+          </>
+        ) : null}
+      </>
+    );
+  } else if (kind === 'pick') {
+    body = (
+      <>
+        <Circle
+          r={selected ? 12 : 10}
+          fill={selected ? colors.accentRamp[700] : PICK_FILL}
+          stroke={colors.neutral[100]}
+          strokeWidth={2}
+        />
+        <SvgText
+          // SVG text sits on its baseline; nudge down to centre it.
+          y={3.8}
+          textAnchor="middle"
+          fontSize={11}
+          fontFamily={fonts.bodyBold}
+          fontWeight="bold"
+          fill={colors.neutral[100]}
+        >
+          {String(rank)}
+        </SvgText>
+      </>
+    );
+  } else if (kind === 'match') {
+    body = (
+      <Circle
+        r={selected ? 8 : 6}
+        fill={MATCH_DOT.fill}
+        stroke={selected ? colors.text : MATCH_DOT.stroke}
+        strokeWidth={selected ? 2.5 : 1.75}
+      />
+    );
+  } else {
+    const look = STATUS_DOT[site.status];
+    body = (
+      <Circle
+        r={selected ? 7 : 4}
+        fill={look.fill}
+        stroke={selected ? colors.text : look.stroke}
+        strokeWidth={selected ? 2.5 : 1.5}
+        opacity={fade}
+      />
+    );
+  }
+  return (
+    <Pinned at={{ x, y }} view={{ k, tx, ty }} lift={lift}>
+      {body}
+    </Pinned>
+  );
+});
 
 /**
  * Something drawn round its own origin and kept at a map point as the map
