@@ -146,3 +146,62 @@ class RecommendationOut(BaseModel):
     score: float | None
     reason: str | None
     signals: SignalScores
+
+
+# --- Park maps (GET /sites/{park_code}/map) ---------------------------------
+
+# A path is a list of [longitude, latitude] points.
+Path = list[list[float]]
+
+
+class TrailOut(BaseModel):
+    name: str | None  # None for unnamed connectors: drawn, not listed
+    uses: list[Literal["hike", "horse", "bike", "motorized"]]
+    surface: str | None
+    closed: bool  # temporarily closed
+    length_miles: float
+    paths: list[Path]
+
+
+class RoadOut(BaseModel):
+    name: str | None
+    kind: Literal["primary", "secondary", "local", "4wd"]
+    paths: list[Path]
+
+
+class PlaceOut(BaseModel):
+    name: str
+    kind: Literal["visitor_center"]
+    point: list[float]  # [longitude, latitude]
+
+
+class MapLabelOut(BaseModel):
+    """Where a label is printed on a brochure map, in the image's pixels."""
+
+    name: str  # "Zion Canyon Visitor Center"
+    x: int
+    y: int
+    width: int
+    height: int
+
+
+class BrochureMapOut(BaseModel):
+    """One of the park's official brochure maps, as a JPEG at `url`."""
+
+    title: str  # "Park Map", "Park Map, East Unit", ...
+    url: str  # path on this API, e.g. /sites/zion/brochures/0
+    width: int
+    height: int
+    visitor_centers: list[MapLabelOut]  # their labels printed on this map
+
+
+class ParkMapOut(BaseModel):
+    park_code: str
+    boundary: list[Path]  # rings; fill with the even-odd rule
+    roads: list[RoadOut]
+    trails: list[TrailOut]
+    places: list[PlaceOut]
+    brochures: list[BrochureMapOut]
+    # The park's own maps page on nps.gov, with the official brochure map.
+    official_map_url: str
+    synced_at: datetime

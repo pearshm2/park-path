@@ -19,6 +19,7 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
+    LargeBinary,
     SmallInteger,
     String,
     Text,
@@ -26,7 +27,7 @@ from sqlalchemy import (
     false,
     func,
 )
-from sqlalchemy.dialects.postgresql import ARRAY
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -237,3 +238,59 @@ class WishlistItem(Base):
     )
 
     site: Mapped[Site] = relationship()
+
+
+class ParkMap(Base):
+    """
+    What a national park's own map is drawn from: its boundary, roads and
+    trails, copied from the NPS's public GIS datasets by app/park_map_sync.py
+    and simplified to phone-screen detail.
+
+    One row per site, replaced whole on every sync. The three columns hold
+    the JSON exactly as GET /sites/{park_code}/map serves it (see
+    ParkMapOut), with coordinates as [longitude, latitude]. `places` holds
+    the visitor centers.
+    """
+
+    __tablename__ = "park_maps"
+
+    site_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("sites.id", ondelete="CASCADE"), primary_key=True
+    )
+    boundary: Mapped[list] = mapped_column(JSONB, nullable=False)
+    roads: Mapped[list] = mapped_column(JSONB, nullable=False)
+    trails: Mapped[list] = mapped_column(JSONB, nullable=False)
+    places: Mapped[list] = mapped_column(JSONB, nullable=False, default=list, server_default="[]")
+    synced_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC), server_default=func.now()
+    )
+
+    site: Mapped[Site] = relationship()
+
+
+class BrochureMap(Base):
+    """
+    One of a park's official NPS brochure maps, as a JPEG ready to serve
+    (see app/brochure_maps.py). `position` orders a park's maps, main first.
+    """
+
+    __tablename__ = "brochure_maps"
+    __table_args__ = (UniqueConstraint("site_id", "asset_id", name="uq_brochure_maps_site_asset"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    site_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("sites.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    asset_id: Mapped[str] = mapped_column(String(64), nullable=False)  # NPGallery AssetID
+    position: Mapped[int] = mapped_column(Integer, nullable=False)
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    width: Mapped[int] = mapped_column(Integer, nullable=False)
+    height: Mapped[int] = mapped_column(Integer, nullable=False)
+    image: Mapped[bytes] = mapped_column(LargeBinary, nullable=False, deferred=True)
+    # Visitor center labels printed on the map, in image pixels:
+    # [{"name", "x", "y", "width", "height"}]. NULL until read (see
+    # app/brochure_maps.py); empty when the map has none or isn't a PDF.
+    labels: Mapped[list | None] = mapped_column(JSONB)
+    synced_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC), server_default=func.now()
+    )

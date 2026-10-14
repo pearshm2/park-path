@@ -56,7 +56,6 @@ import { recommendations, type Recommendation } from '../../api/recommendations'
 import {
   activeFilterCount,
   BodyText,
-  CardCarousel,
   ExpandIcon,
   CROWD_CEILING,
   FilterButton,
@@ -73,7 +72,6 @@ import {
   SECTION_PEEK,
   type DeckSection,
   SearchPanel,
-  SitePeek,
   MATCH_DOT,
   PICK_FILL,
   STATUS_DOT,
@@ -88,8 +86,8 @@ import {
   type Region,
   type RegionId,
 } from '../../data/regions';
-import { RAISE } from '../../components/tabBar';
 import { useQuiz } from '../../quiz/QuizContext';
+import { useSnoozed } from '../../wishlist/useSnoozed';
 import { useWishlist } from '../../wishlist/useWishlist';
 import { colors, radius, shadow, space, useTextScale } from '../../theme';
 
@@ -146,6 +144,11 @@ function useSheetSize(extra = 0) {
   return { deck: deck + extra, sheet: SHEET_BAR + deck + extra + space[2] - SHEET_LOWER };
 }
 const SHEET_MS = 260;
+/**
+ * How much the deck rises when a card's arrow shows more about the park:
+ * room for a few lines of its description and the rest of its facts.
+ */
+const MORE_ROOM = 200;
 
 
 /** What the map shows. */
@@ -229,8 +232,6 @@ export default function ExploreScreen() {
   const [fullMapOpen, setFullMapOpen] = useState(false);
   const [filters, setFilters] = useState<FeedFilters>(NO_FILTERS);
   const [filterOpen, setFilterOpen] = useState(false);
-  /** The site whose detail sheet is open, from a card's expand button. */
-  const [peekSite, setPeekSite] = useState<Site | null>(null);
   const router = useRouter();
 
   const { data: sharedParks = [] } = useQuery({
@@ -264,9 +265,24 @@ export default function ExploreScreen() {
   );
   const parks = useMemo(() => sharedParks.map(withStatus), [sharedParks, withStatus]);
   const allSites = useMemo(() => sharedSites.map(withStatus), [sharedSites, withStatus]);
+  // Parks set aside with "Not for now" leave the recommendations (they
+  // drop to Parks to Explore, still on the map and in search) until due back.
+  const { ids: snoozedIds, snooze, unsnooze } = useSnoozed();
   const matches = useMemo(
-    () => sharedMatches.map((match) => ({ ...match, site: withStatus(match.site) })),
-    [sharedMatches, withStatus],
+    () =>
+      sharedMatches
+        .filter((match) => !snoozedIds.has(match.site.id))
+        .map((match) => ({ ...match, site: withStatus(match.site) })),
+    [sharedMatches, withStatus, snoozedIds],
+  );
+  /** The park just set aside, while its Undo is on offer. */
+  const [undoPark, setUndoPark] = useState<Site | null>(null);
+  const undoTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(
+    () => () => {
+      if (undoTimer.current) clearTimeout(undoTimer.current);
+    },
+    [],
   );
 
   const parkIds = useMemo(() => new Set(parks.map((site) => site.id)), [parks]);
@@ -352,11 +368,15 @@ export default function ExploreScreen() {
 
   /**
    * The full deck split into sections for SectionDeck: each is a page you
-   * swipe sideways to, with its cards running downward. The wishlist stays
-   * one sideways row.
+   * swipe sideways to, with its cards running downward. The wishlist and
+   * visits are one section each.
    */
   const sections = useMemo<DeckSection<DeckItem>[] | null>(() => {
-    if (showingList) return null;
+    if (showingList) {
+      if (baseDeck.length === 0) return null;
+      const title = scope === 'wishlist' ? 'Your wishlist' : 'Your visits';
+      return [{ key: scope, title, items: baseDeck }];
+    }
     const recommended = baseDeck.filter((item) => item.rank !== undefined);
     const unranked = baseDeck.filter((item) => item.rank === undefined);
     return [
@@ -372,7 +392,7 @@ export default function ExploreScreen() {
         items: unranked.filter((item) => !matchIds.has(item.site.id)),
       },
     ].filter((section) => section.items.length > 0);
-  }, [showingList, baseDeck, matchIds]);
+  }, [showingList, baseDeck, matchIds, scope]);
 
   const focusRegion = anchor
     ? regionForState(anchor.state)
@@ -409,7 +429,10 @@ export default function ExploreScreen() {
     setSheetOpen(open);
     setKeyOpen(false);
     // Closing tucks the cards away and returns to the whole map.
-    if (!open) clearFocus();
+    if (!open) {
+      clearFocus();
+      setMoreOpen(false);
+    }
   }
 
   /**
@@ -471,11 +494,46 @@ export default function ExploreScreen() {
    * then everything else. While the sheet is open its title names the
    * section of the card on top, and changes as you scroll past each one.
    */
+  /**
+   * Zoomed onto a region, its parks are one section of the same up-and-down
+   * deck, titled with the region; otherwise the full deck's sections.
+   */
+  const deckSections = useMemo<DeckSection<DeckItem>[] | null>(() => {
+    if (!focused) return sections;
+    if (!regionDeck || regionDeck.length === 0) return null;
+    return [{ key: `region-${focusRegion.id}`, title: focusRegion.label, items: regionDeck }];
+  }, [focused, sections, regionDeck, focusRegion]);
   /** The section the top card is in, and the card's place in it. */
-  const useSections = sections !== null && !focused;
+  const useSections = deckSections !== null;
+
+  /** "Not for now": set a park aside, with Undo on offer for a few seconds. */
+  function setAside(site: Site) {
+    // Move the deck on to the next card in this section (or the one before,
+    // at the end), rather than following the park out of it.
+    const section = deckSections?.find((sec) => sec.items.some((i) => i.site.id === site.id));
+    if (section) {
+      const at = section.items.findIndex((i) => i.site.id === site.id);
+      const next = section.items[at + 1] ?? section.items[at - 1];
+      if (next) setDeckTopId(next.site.id);
+    }
+    snooze(site.id);
+    setUndoPark(site);
+    if (undoTimer.current) clearTimeout(undoTimer.current);
+    undoTimer.current = setTimeout(() => setUndoPark(null), 6000);
+  }
   // Sized for the sectioned deck in every view, so the sheet and card keep
   // their size when tapping a card switches to the region carousel.
-  const { deck: deckHeight, sheet: sheetHeight } = useSheetSize(SECTION_PEEK);
+  // The arrow on a card raises the whole deck to show more about the park.
+  const [moreOpen, setMoreOpen] = useState(false);
+  const deckExtra = SECTION_PEEK + (moreOpen ? MORE_ROOM : 0);
+  const { deck: deckHeight } = useSheetSize(deckExtra);
+  // The map keeps its usual room; the raised deck just covers more of it.
+  const { sheet: sheetHeight } = useSheetSize(SECTION_PEEK);
+  function toggleMore() {
+    // No layout animation here: it moves the deck's cards mid-snap and
+    // leaves them stuck between two (the deck re-snaps on its own).
+    setMoreOpen((open) => !open);
+  }
   // The tab bar floats over the bottom of the screen; the sheet runs behind it.
   const tabSpace = useTabBarSpace();
 
@@ -493,14 +551,14 @@ export default function ExploreScreen() {
     if (Math.abs(next - keyRoom) >= 2) setKeyRoom(next);
   }
   const inSection = useMemo(() => {
-    if (!useSections || !topCard) return null;
-    const page = sections.findIndex((section) =>
+    if (!deckSections || !topCard) return null;
+    const page = deckSections.findIndex((section) =>
       section.items.some((item) => item.site.id === topCard.site.id),
     );
     if (page < 0) return null;
-    const index = sections[page].items.findIndex((item) => item.site.id === topCard.site.id);
-    return { page, index, section: sections[page] };
-  }, [useSections, sections, topCard]);
+    const index = deckSections[page].items.findIndex((item) => item.site.id === topCard.site.id);
+    return { page, index, section: deckSections[page] };
+  }, [deckSections, topCard]);
 
   const deckTitle = focusRegion
     ? focusRegion.label
@@ -679,19 +737,20 @@ export default function ExploreScreen() {
                 ? `${deckIndex + 1} of ${deck.length}`
                 : undefined
           }
-          extra={SECTION_PEEK}
+          extra={deckExtra}
           below={tabSpace}
           pages={
-            useSections && sections.length > 1 && inSection
-              ? { count: sections.length, active: inSection.page }
+            deckSections && deckSections.length > 1 && inSection
+              ? { count: deckSections.length, active: inSection.page }
               : undefined
           }
         >
           {useSections && deck.length > 0 ? (
             <SectionDeck
-              // New sections (another view, other filters) start a fresh deck.
-              key={`${scope}:${sections.map((section) => `${section.key}${section.items.length}`).join()}`}
-              sections={sections}
+              // New sections (another view, other filters, zooming onto a
+              // region and back) start a fresh deck on the same card.
+              key={`${scope}:${deckSections.map((section) => `${section.key}${section.items.length}`).join()}`}
+              sections={deckSections}
               activeId={deck[deckIndex]?.site.id}
               keyOf={(item) => item.site.id}
               onActiveChange={(item) => setDeckTopId(item.site.id)}
@@ -701,37 +760,6 @@ export default function ExploreScreen() {
               renderCard={(item, active, bringIntoView) => (
                 <ParkCard
                   site={item.site}
-                  score={item.score}
-                  reason={item.reason}
-                  rank={item.rank}
-                  markWishlist
-                  onOpenTrip={openTrip}
-                  saved={wishlistIds.has(item.site.id)}
-                  onToggleSave={() => toggleWishlist(item.site.id)}
-                  onExpand={() => setPeekSite(item.site)}
-                  onPress={() => {
-                    if (!active) {
-                      // The card peeking up from below: bring it into view.
-                      bringIntoView();
-                    } else {
-                      // Zoom onto the card's region.
-                      focusPark(item.site);
-                    }
-                  }}
-                  style={styles.deckCard}
-                />
-              )}
-            />
-          ) : deck.length > 0 ? (
-            <CardCarousel
-              items={deck}
-              index={deckIndex}
-              keyOf={(item) => item.site.id}
-              onIndexChange={(index) => setDeckTopId(deck[index].site.id)}
-              renderCard={(item, index) => (
-                <ParkCard
-                  site={item.site}
-                  score={item.score}
                   reason={item.reason}
                   rank={item.rank}
                   // The full decks mix saved parks in with everything else.
@@ -739,11 +767,18 @@ export default function ExploreScreen() {
                   onOpenTrip={openTrip}
                   saved={wishlistIds.has(item.site.id)}
                   onToggleSave={() => toggleWishlist(item.site.id)}
-                  onExpand={() => setPeekSite(item.site)}
+                  // Setting aside is about recommendations, so only on the full decks.
+                  onSnooze={
+                    scope === 'parks' || scope === 'all' ? () => setAside(item.site) : undefined
+                  }
+                  // The park's own page: photo, description, facts, directions and map.
+                  onExpand={() => router.push(`/site/${item.site.id}`)}
+                  more={moreOpen}
+                  onToggleMore={toggleMore}
                   onPress={() => {
-                    if (index !== deckIndex) {
-                      // A neighbour peeking in at the edge: bring it to the centre.
-                      setDeckTopId(item.site.id);
+                    if (!active) {
+                      // The card peeking up from below: bring it into view.
+                      bringIntoView();
                     } else if (anchor) {
                       // Second tap: back to the whole map, on the same card.
                       setAnchor(null);
@@ -755,14 +790,6 @@ export default function ExploreScreen() {
                   style={styles.deckCard}
                 />
               )}
-              // The cards' taps depend on these, so redraw them when either changes.
-              extraData={`${deckIndex}:${anchor?.id ?? ''}`}
-              // No card peeks up below here, so the card runs down into that
-              // room, to just above the tab bar's raised circle. Lists grow to
-              // fill their parent by default, and the sheet runs on behind the
-              // tab bar, so pin the height.
-              side={22}
-              style={{ height: deckHeight + RAISE - 6 - SHEET_LOWER, flexGrow: 0 }}
             />
           ) : (
             <View style={styles.empty}>
@@ -823,17 +850,6 @@ export default function ExploreScreen() {
         onClose={() => setSearchOpen(false)}
       />
 
-      <SitePeek
-        site={peekSite && withStatus(peekSite)}
-        // Great Smoky Mountains, the busiest park, is the crowding yardstick.
-        referenceVisits={allSites.find((site) => site.id === 'grsm')?.vis ?? undefined}
-        onDismiss={() => setPeekSite(null)}
-        onOpen={(site) => {
-          setPeekSite(null);
-          router.push(`/site/${site.id}`);
-        }}
-      />
-
       <FilterSheet
         visible={filterOpen}
         value={filters}
@@ -849,6 +865,27 @@ export default function ExploreScreen() {
         }}
         onClose={() => setFilterOpen(false)}
       />
+
+      {undoPark ? (
+        <View style={[styles.undoBar, { bottom: tabSpace + space[2] }]}>
+          <BodyText size={13} color={colors.neutral[100]} style={styles.undoText} numberOfLines={2}>
+            {`${undoPark.name} set aside for 30 days`}
+          </BodyText>
+          <Pressable
+            onPress={() => {
+              unsnooze(undoPark.id);
+              setUndoPark(null);
+            }}
+            hitSlop={10}
+            accessibilityRole="button"
+            accessibilityLabel={`Undo, bring ${undoPark.name} back`}
+          >
+            <BodyText size={13} weight="bold" color={colors.accentRamp[300]}>
+              Undo
+            </BodyText>
+          </Pressable>
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -1601,6 +1638,23 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   deckCard: {
+    flex: 1,
+  },
+  undoBar: {
+    position: 'absolute',
+    left: space[4],
+    right: space[4],
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space[3],
+    paddingVertical: space[3],
+    paddingHorizontal: space[4],
+    borderRadius: radius.md,
+    backgroundColor: colors.neutral[900],
+    zIndex: 50,
+    ...shadow.lg,
+  },
+  undoText: {
     flex: 1,
   },
   empty: {
