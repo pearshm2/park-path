@@ -266,7 +266,7 @@ export function ParkCard({
                     style={[styles.switchOption, active && styles.switchActive]}
                   >
                     <BodyText
-                      size={11.5}
+                      size={10.5}
                       weight="semibold"
                       color={active ? colors.neutral[100] : colors.neutral[700]}
                     >
@@ -276,7 +276,8 @@ export function ParkCard({
                 );
               })}
             </View>
-            {(more ? rows : rows.slice(0, 2)).map((row) => (
+            {/* Lowered, just the tab titles show; the arrow opens the rows. */}
+            {(more ? rows : []).map((row) => (
               <View key={row.label} style={styles.factRow}>
                 <BodyText
                   size={12}
@@ -595,19 +596,21 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
   },
   // The same pill switch as the park's page and Settings.
+  // Compact: sized to its two titles, so it fits the lowered card.
   switch: {
     flexDirection: 'row',
-    gap: 4,
-    padding: 3,
-    marginTop: space[2],
+    alignSelf: 'flex-start',
+    gap: 2,
+    padding: 2,
+    marginTop: 6,
     marginBottom: 2,
     borderRadius: radius.pill,
     backgroundColor: colors.neutral[200],
   },
   switchOption: {
-    flex: 1,
     alignItems: 'center',
-    paddingVertical: 5,
+    paddingVertical: 3,
+    paddingHorizontal: 12,
     borderRadius: radius.pill,
   },
   switchActive: {
