@@ -64,9 +64,10 @@ try {
 } catch (error) {
   console.error(
     error.code === 'ETIMEDOUT'
-      ? "adb isn't responding (its server is stuck). Restart it, then try again:
-" +
-          '  taskkill //F //IM adb.exe   (Git Bash; in PowerShell: taskkill /F /IM adb.exe)'
+      ? [
+          "adb isn't responding (its server is stuck). Restart it, then try again:",
+          '  taskkill //F //IM adb.exe   (Git Bash; in PowerShell: taskkill /F /IM adb.exe)',
+        ].join('\n')
       : `Couldn't run adb (${adb}). Is Android Studio's SDK installed?`,
   );
   process.exit(1);
