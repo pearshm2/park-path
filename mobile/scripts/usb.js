@@ -13,8 +13,10 @@
  * times; Settings > Developer options > USB debugging), the phone plugged
  * in and "Allow" tapped, and the API running (docker compose up -d).
  *
- * Then it starts Expo; press `a` to open the app on the device. Extra
- * arguments go to Expo: `npm run usb -- -c` clears its cache.
+ * Then it starts Expo; press `a` to open the app on the device. While it
+ * runs, it checks every few seconds and restores the links for any device
+ * that reconnects or is newly plugged in. Extra arguments go to Expo:
+ * `npm run usb -- -c` clears its cache.
  */
 
 const { execFileSync, spawn } = require('node:child_process');
@@ -85,12 +87,52 @@ if (ready.length === 0) {
   process.exit(1);
 }
 
-for (const [serial] of ready) {
+/** The serials linked so far, and the links each had last time we looked. */
+const linked = new Map();
+
+function link(serial) {
   for (const port of PORTS) {
     run(['-s', serial, 'reverse', `tcp:${port}`, `tcp:${port}`]);
   }
+}
+
+for (const [serial] of ready) {
+  link(serial);
+  linked.set(serial, true);
   console.log(`${serial}: linked to this computer on ports ${PORTS.join(' and ')}`);
 }
+
+// A phone that reconnects (a loose cable, the screen locking on some
+// phones) loses its links, and pressing `a` only brings back Expo's own,
+// so the app loads but can't reach the API. Keep checking while Expo runs
+// and put any missing links back, for new devices too.
+setInterval(() => {
+  let current;
+  try {
+    current = devices().filter(([, state]) => state === 'device');
+  } catch {
+    return; // adb busy; try again next time
+  }
+  for (const [serial] of current) {
+    let links = '';
+    try {
+      links = run(['-s', serial, 'reverse', '--list']);
+    } catch {
+      continue;
+    }
+    const missing = PORTS.filter((port) => !links.includes(`tcp:${port}`));
+    if (missing.length === 0) continue;
+    try {
+      link(serial);
+      console.log(
+        `${serial}: ${linked.has(serial) ? 'reconnected, links restored' : 'connected, linked'} (ports ${PORTS.join(' and ')})`,
+      );
+      linked.set(serial, true);
+    } catch {
+      // It went away again; the next check will catch it.
+    }
+  }
+}, 4000).unref();
 
 // Expo on localhost, so the device loads the app through the cable too.
 // adb reverse connects to 127.0.0.1, but Node resolves "localhost" to the
