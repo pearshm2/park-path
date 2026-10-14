@@ -219,7 +219,7 @@ export function NewEntrySheet({
                 display="compact"
                 maximumDate={new Date()}
                 accentColor={colors.accent}
-                onChange={(_event, picked) => picked && setDay(toDay(picked))}
+                onValueChange={(_event, picked) => setDay(toDay(picked))}
                 style={styles.iosDate}
               />
             ) : (
@@ -229,9 +229,8 @@ export function NewEntrySheet({
                     value: fromDay(day),
                     mode: 'date',
                     maximumDate: new Date(),
-                    onChange: (event, picked) => {
-                      if (event.type === 'set' && picked) setDay(toDay(picked));
-                    },
+                    // Only called when a date is picked, not when cancelled.
+                    onValueChange: (_event, picked) => setDay(toDay(picked)),
                   })
                 }
                 accessibilityRole="button"
