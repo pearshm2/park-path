@@ -76,8 +76,11 @@ export function ParkCard({
   const tone = terrainTone(site.group);
   const region = regionForState(site.state);
   const visits = site.status === 'visited' ? visitSummary(site.id) : undefined;
-  // The facts the tags above don't already give, when to go first.
-  const facts = factRows(site).filter((row) => !IN_TAGS.has(row.label));
+  // The Features and Facts tabs, as on the park's page; the tags above
+  // already give its effort, main feature and crowds.
+  const [tab, setTab] = useState<'features' | 'facts'>('features');
+  const allRows = factRows(site);
+  const rows = allRows.filter((row) => (tab === 'features' ? FEATURES : FACTS).has(row.label));
 
   return (
     <Pressable
@@ -251,23 +254,44 @@ export function ParkCard({
                 </BodyText>
               </>
             ) : null}
-            {facts.length > 0 ? (
-              <View style={styles.facts}>
-                <BodyText size={10} weight="semibold" color={colors.accentRamp[700]} style={styles.detailsLabel}>
-                  FACTS & FEATURES
+            <View style={styles.switch} accessibilityRole="tablist">
+              {(['features', 'facts'] as const).map((key) => {
+                const active = tab === key;
+                return (
+                  <Pressable
+                    key={key}
+                    onPress={() => setTab(key)}
+                    accessibilityRole="tab"
+                    accessibilityState={{ selected: active }}
+                    style={[styles.switchOption, active && styles.switchActive]}
+                  >
+                    <BodyText
+                      size={11.5}
+                      weight="semibold"
+                      color={active ? colors.neutral[100] : colors.neutral[700]}
+                    >
+                      {key === 'features' ? 'Features' : 'Facts'}
+                    </BodyText>
+                  </Pressable>
+                );
+              })}
+            </View>
+            {(more ? rows : rows.slice(0, 2)).map((row) => (
+              <View key={row.label} style={styles.factRow}>
+                <BodyText
+                  size={12}
+                  weight="medium"
+                  color={colors.neutral[700]}
+                  style={styles.factLabel}
+                  numberOfLines={1}
+                >
+                  {row.label}
                 </BodyText>
-                {(more ? facts : facts.slice(0, 2)).map((row) => (
-                  <View key={row.label} style={styles.factRow}>
-                    <BodyText size={12} color={colors.neutral[600]} style={styles.factLabel} numberOfLines={1}>
-                      {row.label}
-                    </BodyText>
-                    <BodyText size={12} weight="semibold" color={row.color} numberOfLines={1}>
-                      {row.value}
-                    </BodyText>
-                  </View>
-                ))}
+                <BodyText size={12} weight="semibold" color={row.color} numberOfLines={1}>
+                  {row.value}
+                </BodyText>
               </View>
-            ) : null}
+            ))}
           </View>
 
           {/* A small arrow to show more of the park (or less), raising the deck. */}
@@ -288,8 +312,9 @@ export function ParkCard({
   );
 }
 
-/** Facts the card's tags (crowds, feature, effort) and its type line already give. */
-const IN_TAGS = new Set(['Effort', 'Designation', 'Crowding']);
+/** Which facts go under each tab; effort, feature and crowds are the tags above. */
+const FEATURES = new Set(['Best time to go', 'Typical stay', 'Permit or lottery']);
+const FACTS = new Set(['Annual visits', 'Average per day']);
 
 /** A small chevron, down for "more", up for "less". */
 function ChevronIcon({ up }: { up: boolean }) {
@@ -569,17 +594,32 @@ const styles = StyleSheet.create({
   detailsLabel: {
     letterSpacing: 1,
   },
-  facts: {
-    gap: 3,
+  // The same pill switch as the park's page and Settings.
+  switch: {
+    flexDirection: 'row',
+    gap: 4,
+    padding: 3,
     marginTop: space[2],
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    borderRadius: radius.md,
-    backgroundColor: colors.accent2Ramp[100],
+    marginBottom: 2,
+    borderRadius: radius.pill,
+    backgroundColor: colors.neutral[200],
+  },
+  switchOption: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 5,
+    borderRadius: radius.pill,
+  },
+  switchActive: {
+    backgroundColor: colors.accent,
   },
   factRow: {
     flexDirection: 'row',
+    alignItems: 'baseline',
     gap: space[2],
+    paddingVertical: 4,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.divider,
   },
   factLabel: {
     flex: 1,
