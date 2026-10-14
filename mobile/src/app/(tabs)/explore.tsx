@@ -667,7 +667,8 @@ export default function ExploreScreen() {
           // spare room is measured), so remount it whenever either changes.
           key={`${matchIds.size > 0 ? 'key-with-matches' : 'key'}-${keyRoom}`}
           layout={LinearTransition.duration(SHEET_MS)}
-          style={styles.keyWrap}
+          // Collapsed, the key moves up a little to give the map the room.
+          style={[styles.keyWrap, sheetOpen && styles.keyWrapOpen]}
         >
           {/* The key is a legend: kept a little smaller than Large text, so it
               doesn't crowd out the map it explains. */}
@@ -684,9 +685,14 @@ export default function ExploreScreen() {
         {/* Deliberately not a layout-animated view: the map has to be told
             its new size when the sheet opens, or it overflows under it. */}
         <View
-          style={[styles.mapArea, {
-              paddingBottom: (sheetOpen ? sheetHeight + DECK_GAP : SHEET_BAR) + tabSpace,
-            }]}
+          style={[
+            styles.mapArea,
+            { paddingBottom: (sheetOpen ? sheetHeight + DECK_GAP : SHEET_BAR) + tabSpace },
+            // Open, the map is taller than the room above the sheet: stack
+            // it from the top (centred, it rode up under the key) and let
+            // its bottom run on behind the sheet.
+            sheetOpen && styles.mapAreaOpen,
+          ]}
           onLayout={(event) => {
             const { y } = event.nativeEvent.layout;
             setStageFrame((f) => (Math.abs(f.areaY - y) > 1 ? { ...f, areaY: y } : f));
@@ -722,6 +728,8 @@ export default function ExploreScreen() {
             layout={LinearTransition.duration(SHEET_MS)}
             style={[
               styles.map,
+              // Open, the map's empty top margin tucks under its title.
+              sheetOpen && styles.mapOpen,
               sheetOpen && mapHeight > 0
                 ? { flex: 0, height: mapHeight }
                 : { maxHeight: windowWidth / MAP_ASPECT },
@@ -1489,10 +1497,20 @@ const styles = StyleSheet.create({
   },
   stage: {
     flex: 1,
-    // A little more air above and below the key.
-    marginTop: space[4],
+    // A little more air above and below the key. Padding, not margin: the
+    // collapsed key moves up into it (keyWrapOpen), inside the clip.
+    paddingTop: space[4],
     // The closed sheet's deck sits below this edge and stays hidden.
     overflow: 'hidden',
+  },
+  keyWrapOpen: {
+    marginTop: -space[2],
+  },
+  mapAreaOpen: {
+    justifyContent: 'flex-start',
+  },
+  mapOpen: {
+    marginTop: -space[3],
   },
   keyWrap: {
     marginHorizontal: space[4],
