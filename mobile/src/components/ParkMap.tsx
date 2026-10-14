@@ -45,7 +45,7 @@ import {
   type GeoPath,
   type GeoProjection,
 } from 'd3-geo';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import {
   Pressable,
   StyleSheet,
@@ -55,7 +55,16 @@ import {
   type ViewStyle,
 } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import Svg, { Circle, G, Path, Text as SvgText } from 'react-native-svg';
+import Svg, {
+  Circle,
+  Defs,
+  G,
+  LinearGradient,
+  Path,
+  Rect,
+  Stop,
+  Text as SvgText,
+} from 'react-native-svg';
 
 import type { Site, SiteStatus } from '../data/parks';
 import { REGIONS, regionForState, STATE_REGION, type RegionId } from '../data/regions';
@@ -606,6 +615,9 @@ export function ParkMap({
               );
             })}
           </G>
+          {/* Zoomed in, the map runs past its frame; fade it into the page at
+              the edges rather than ending in a hard cut. */}
+          {view.k > 1.02 ? <EdgeFade width={size.width} height={size.height} /> : null}
         </Svg>
       </GestureDetector>
 
@@ -976,6 +988,36 @@ function mainLand(feature: StateFeature, toPath: GeoPath): StateFeature {
       coordinates: polygons.filter((_, index) => areas[index] >= largest * MIN_LAND_SHARE),
     },
   };
+}
+
+/** How far the zoomed map fades into the page at each edge. */
+const FADE = 22;
+
+/** A soft fade to the page colour along all four edges of the map. */
+function EdgeFade({ width, height }: { width: number; height: number }) {
+  // Unique per map, so the full-screen map's fades don't collide with these.
+  const id = useId().replace(/[^a-zA-Z0-9]/g, '');
+  const edges = [
+    { id: `fadeTop${id}`, x1: 0, y1: 0, x2: 0, y2: 1, rect: { x: 0, y: 0, width, height: FADE } },
+    { id: `fadeBottom${id}`, x1: 0, y1: 1, x2: 0, y2: 0, rect: { x: 0, y: height - FADE, width, height: FADE } },
+    { id: `fadeLeft${id}`, x1: 0, y1: 0, x2: 1, y2: 0, rect: { x: 0, y: 0, width: FADE, height } },
+    { id: `fadeRight${id}`, x1: 1, y1: 0, x2: 0, y2: 0, rect: { x: width - FADE, y: 0, width: FADE, height } },
+  ];
+  return (
+    <>
+      <Defs>
+        {edges.map((edge) => (
+          <LinearGradient key={edge.id} id={edge.id} x1={edge.x1} y1={edge.y1} x2={edge.x2} y2={edge.y2}>
+            <Stop offset="0" stopColor={colors.bg} stopOpacity={1} />
+            <Stop offset="1" stopColor={colors.bg} stopOpacity={0} />
+          </LinearGradient>
+        ))}
+      </Defs>
+      {edges.map((edge) => (
+        <Rect key={edge.id} {...edge.rect} fill={`url(#${edge.id})`} />
+      ))}
+    </>
+  );
 }
 
 const styles = StyleSheet.create({
