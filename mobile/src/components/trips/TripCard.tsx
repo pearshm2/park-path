@@ -1,6 +1,6 @@
 /**
  * One journal entry in the Trips rail, as in the prototype: its lead photo
- * (or the park's terrain colour without one), the park and month, its
+ * (or the park's terrain colour without one), the park and date, its
  * star rating, the title, its location stamp (a trail or spot they loved),
  * the notes, then tags for the region, the park's feature, how many photos
  * and who was there.
@@ -23,7 +23,7 @@ import { displayName } from '../../api/friends';
 import type { Site } from '../../data/parks';
 import { regionForState } from '../../data/regions';
 import { colors, radius, shadow, space } from '../../theme';
-import { monthLabel, type TripEntry } from '../../trips/TripsContext';
+import { dateLabel, type TripEntry } from '../../trips/TripsContext';
 import { Tag } from '../Tag';
 import { TerrainIcon, terrainTone } from '../TerrainIcon';
 import { BodyText, Heading } from '../Typography';
@@ -111,7 +111,7 @@ export function TripCard({
               </View>
             ) : null}
             <BodyText size={11.5} weight="medium" color={colors.neutral[600]}>
-              {monthLabel(entry.date)}
+              {dateLabel(entry.date)}
             </BodyText>
           </View>
         </View>

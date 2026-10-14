@@ -28,7 +28,8 @@ import { getItem, setItem } from '../lib/storage';
 export type TripEntry = {
   id: string;
   siteId: string;
-  /** The month of the visit, as YYYY-MM-01. */
+  /** The day of the visit, as YYYY-MM-DD. (Entries logged before exact
+   *  dates were asked for have the first of the month.) */
   date: string;
   title: string;
   notes: string;
@@ -197,7 +198,13 @@ export function useTrips(): TripsValue {
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
-/** "2024-06-01" -> "Jun 2024". */
+/** "2024-06-12" -> "Jun 12, 2024". */
+export function dateLabel(date: string): string {
+  const [year, month, day] = date.split('-');
+  return `${MONTHS[Number(month) - 1]} ${Number(day)}, ${year}`;
+}
+
+/** "2024-06-12" -> "Jun 2024". */
 export function monthLabel(date: string): string {
   const [year, month] = date.split('-');
   return `${MONTHS[Number(month) - 1]} ${year}`;

@@ -1,6 +1,6 @@
 /**
  * The prototype's "New journal entry" sheet: the park visited (searched
- * from every site, national parks first), the month, a title, notes, a
+ * from every site, national parks first), the exact date, a title, notes, a
  * star rating, a location stamp (a trail or spot you loved, suggested from
  * the park's own trails), who was with you (your friends) and photos.
  *
@@ -11,6 +11,7 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { Image } from 'expo-image';
+import DateTimePicker, { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
 import * as ImagePicker from 'expo-image-picker';
 import { useMemo, useState } from 'react';
 import {
@@ -30,7 +31,7 @@ import { fetchParkMap } from '../../api/parkMaps';
 import { listSites } from '../../api/parks';
 import { useFriends } from '../../friends/useFriends';
 import { colors, radius, shadow, space } from '../../theme';
-import { monthLabel, useTrips, type TripEntry } from '../../trips/TripsContext';
+import { dateLabel, useTrips, type TripEntry } from '../../trips/TripsContext';
 import { Avatar } from '../Avatar';
 import { Button } from '../Button';
 import { TextField } from '../TextField';
@@ -38,17 +39,15 @@ import { BodyText, Heading } from '../Typography';
 
 const MAX_PHOTOS = 8;
 
-/** This month, as YYYY-MM-01. */
-function thisMonth(): string {
-  const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
+/** A local date as YYYY-MM-DD (not via ISO, which would shift it to UTC). */
+function toDay(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 }
 
-/** A YYYY-MM-01 date moved by `by` months. */
-function shiftMonth(date: string, by: number): string {
-  const [year, month] = date.split('-').map(Number);
-  const moved = new Date(year, month - 1 + by, 1);
-  return `${moved.getFullYear()}-${String(moved.getMonth() + 1).padStart(2, '0')}-01`;
+/** YYYY-MM-DD back to a local Date, for the picker. */
+function fromDay(day: string): Date {
+  const [year, month, date] = day.split('-').map(Number);
+  return new Date(year, month - 1, date);
 }
 
 export function NewEntrySheet({
@@ -74,7 +73,7 @@ export function NewEntrySheet({
   // chosen park's name.
   const [query, setQuery] = useState<string | null>(null);
   const [listOpen, setListOpen] = useState(false);
-  const [month, setMonth] = useState(thisMonth);
+  const [day, setDay] = useState(() => toDay(new Date()));
   const [title, setTitle] = useState('');
   const [notes, setNotes] = useState('');
   const [rating, setRating] = useState<number | null>(null);
@@ -136,7 +135,7 @@ export function NewEntrySheet({
     try {
       const entry = await add({
         siteId: chosen.id,
-        date: month,
+        date: day,
         title: title.trim(),
         notes: notes.trim(),
         photos,
@@ -152,7 +151,6 @@ export function NewEntrySheet({
     }
   }
 
-  const latest = thisMonth();
 
   return (
     <Modal visible transparent animationType="slide" onRequestClose={onClose}>
@@ -213,17 +211,42 @@ export function NewEntrySheet({
             ) : null}
 
             <Label>When</Label>
-            <View style={styles.month}>
-              <StepButton direction="back" onPress={() => setMonth((m) => shiftMonth(m, -1))} />
-              <BodyText size={14} weight="semibold" style={styles.monthText}>
-                {monthLabel(month)}
-              </BodyText>
-              <StepButton
-                direction="forward"
-                disabled={month >= latest}
-                onPress={() => setMonth((m) => (m >= latest ? m : shiftMonth(m, 1)))}
+            {Platform.OS === 'ios' ? (
+              // iOS's compact picker: the date as a button that opens a calendar.
+              <DateTimePicker
+                value={fromDay(day)}
+                mode="date"
+                display="compact"
+                maximumDate={new Date()}
+                accentColor={colors.accent}
+                onChange={(_event, picked) => picked && setDay(toDay(picked))}
+                style={styles.iosDate}
               />
-            </View>
+            ) : (
+              <Pressable
+                onPress={() =>
+                  DateTimePickerAndroid.open({
+                    value: fromDay(day),
+                    mode: 'date',
+                    maximumDate: new Date(),
+                    onChange: (event, picked) => {
+                      if (event.type === 'set' && picked) setDay(toDay(picked));
+                    },
+                  })
+                }
+                accessibilityRole="button"
+                accessibilityLabel={`Date visited, ${dateLabel(day)}. Change`}
+                style={({ pressed }) => [styles.date, pressed && styles.datePressed]}
+              >
+                <CalendarIcon />
+                <BodyText size={14} weight="semibold" style={styles.dateText}>
+                  {dateLabel(day)}
+                </BodyText>
+                <BodyText size={12} weight="semibold" color={colors.accentRamp[700]}>
+                  Change
+                </BodyText>
+              </Pressable>
+            )}
 
             <Label>Title</Label>
             <TextField
@@ -391,38 +414,6 @@ function Label({ children }: { children: string }) {
   );
 }
 
-function StepButton({
-  direction,
-  disabled = false,
-  onPress,
-}: {
-  direction: 'back' | 'forward';
-  disabled?: boolean;
-  onPress: () => void;
-}) {
-  return (
-    <Pressable
-      onPress={onPress}
-      disabled={disabled}
-      hitSlop={6}
-      accessibilityRole="button"
-      accessibilityLabel={direction === 'back' ? 'Earlier month' : 'Later month'}
-      style={({ pressed }) => [styles.step, pressed && styles.stepPressed, disabled && styles.stepOff]}
-    >
-      <Svg width={16} height={16} viewBox="0 0 24 24">
-        <Path
-          d={direction === 'back' ? 'M14.5 5L8 12l6.5 7' : 'M9.5 5L16 12l-6.5 7'}
-          fill="none"
-          stroke={colors.neutral[700]}
-          strokeWidth={2.75}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      </Svg>
-    </Pressable>
-  );
-}
-
 const RATING_WORDS = ['Not great', 'Okay', 'Good', 'Great', 'Unforgettable'];
 
 /** A star for the rating: filled orange when on, outlined when off. */
@@ -452,6 +443,21 @@ export function PinIcon({ color = colors.accentRamp[700], size = 13 }: { color?:
         strokeLinejoin="round"
       />
       <Path d="M12 7.6a2.2 2.2 0 1 1 0 4.4 2.2 2.2 0 0 1 0-4.4z" fill={color} />
+    </Svg>
+  );
+}
+
+function CalendarIcon() {
+  return (
+    <Svg width={18} height={18} viewBox="0 0 24 24">
+      <Path
+        d="M5 5.5h14a1 1 0 0 1 1 1V19a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6.5a1 1 0 0 1 1-1zM4 10h16M8 3.5v4M16 3.5v4"
+        fill="none"
+        stroke={colors.neutral[700]}
+        strokeWidth={2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
     </Svg>
   );
 }
@@ -524,29 +530,25 @@ const styles = StyleSheet.create({
   noResults: {
     padding: 11,
   },
-  month: {
+  date: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: space[3],
-  },
-  monthText: {
-    minWidth: 90,
-    textAlign: 'center',
-  },
-  step: {
-    width: 34,
-    height: 34,
-    alignItems: 'center',
-    justifyContent: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
     borderRadius: radius.pill,
     borderWidth: 1.5,
-    borderColor: colors.neutral[400],
+    borderColor: colors.neutral[300],
+    backgroundColor: colors.neutral[100],
   },
-  stepPressed: {
+  datePressed: {
     backgroundColor: colors.neutral[200],
   },
-  stepOff: {
-    opacity: 0.35,
+  dateText: {
+    flex: 1,
+  },
+  iosDate: {
+    alignSelf: 'flex-start',
   },
   notes: {
     minHeight: 84,
