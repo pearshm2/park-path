@@ -414,3 +414,38 @@ def test_name_must_line_up_with_the_label():
     ]
     (label,) = visitor_center_labels(lines, page_height=1000, scale=1)
     assert label["name"] == "Rio Grande Village Visitor Center"
+
+
+def test_boundaries_listed_coarsely(site):
+    code, site_id = site
+    with SessionLocal() as db:
+        save_park_map(
+            db,
+            site_id,
+            transform_park(
+                {
+                    "boundary": [
+                        {
+                            "geometry": {
+                                "type": "Polygon",
+                                "coordinates": [
+                                    [
+                                        [-113.01234, 37.2],
+                                        [-112.9, 37.2],
+                                        [-112.9, 37.3],
+                                        [-113.01234, 37.2],
+                                    ]
+                                ],
+                            }
+                        }
+                    ],
+                    "roads": [],
+                    "trails": [],
+                }
+            ),
+        )
+    rows = {row["park_code"]: row for row in client.get("/sites/boundaries").json()}
+    assert rows[code]["bbox"] == [-113.012, 37.2, -112.9, 37.3]
+    assert rows[code]["rings"][0][0] == [-113.012, 37.2]
+    # The route doesn't swallow real park codes.
+    assert client.get("/sites/boundaries").status_code == 200

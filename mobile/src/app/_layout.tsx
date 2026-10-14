@@ -25,6 +25,9 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { AuthProvider, useAuth } from '../auth/AuthContext';
 import { QuizProvider, useQuiz } from '../quiz/QuizContext';
+import { ArrivalBanner } from '../arrivals/ArrivalBanner';
+import { ArrivalsProvider } from '../arrivals/ArrivalsContext';
+import { TripsProvider } from '../trips/TripsContext';
 import { colors, TextSizeProvider, useAppFonts } from '../theme';
 
 SplashScreen.preventAutoHideAsync().catch(() => {
@@ -60,10 +63,16 @@ export default function RootLayout() {
         <QueryClientProvider client={queryClient}>
           <AuthProvider>
             <QuizProvider>
-              <TextSizeProvider>
-                <StatusBar style="dark" />
-                <SessionGate />
-              </TextSizeProvider>
+              <TripsProvider>
+                <ArrivalsProvider>
+                  <TextSizeProvider>
+                    <StatusBar style="dark" />
+                    <SessionGate />
+                    {/* Over every screen: the nudge when you arrive at a park. */}
+                    <ArrivalBanner />
+                  </TextSizeProvider>
+                </ArrivalsProvider>
+              </TripsProvider>
             </QuizProvider>
           </AuthProvider>
         </QueryClientProvider>

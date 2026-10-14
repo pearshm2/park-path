@@ -1,6 +1,6 @@
 """
-Site routes: GET /sites, GET /sites/{park_code}, GET /sites/{park_code}/map,
-GET /sites/{park_code}/brochures/{position}.
+Site routes: GET /sites, GET /sites/boundaries, GET /sites/{park_code},
+GET /sites/{park_code}/map, GET /sites/{park_code}/brochures/{position}.
 
 Public on purpose: park data isn't tied to an account, and the map should
 load before anyone signs in. Per-user data lives in its own tables and
@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models import BrochureMap, ParkMap, Site
-from app.schemas import BrochureMapOut, ParkMapOut, SiteOut
+from app.schemas import BrochureMapOut, ParkBoundaryOut, ParkMapOut, SiteOut
 
 router = APIRouter()
 
@@ -31,6 +31,35 @@ def list_sites(
     if scope == "parks":
         stmt = stmt.where(Site.is_named_park.is_(True))
     return db.scalars(stmt).all()
+
+
+@router.get("/boundaries", response_model=list[ParkBoundaryOut])
+def list_boundaries(db: Session = Depends(get_db)):
+    """
+    Every national park's outline, coarsened to ~100 m (3 decimal places),
+    for the app to tell on the device whether you're inside one: it never
+    sends its location here. Declared before /{park_code} so "boundaries"
+    isn't read as a park code.
+    """
+    rows = db.execute(
+        select(Site.park_code, ParkMap.boundary).join(ParkMap, ParkMap.site_id == Site.id)
+    ).all()
+    out = []
+    for code, rings in rows:
+        coarse = [[[round(lon, 3), round(lat, 3)] for lon, lat in ring] for ring in rings]
+        points = [point for ring in coarse for point in ring]
+        if not points:
+            continue
+        lons = [p[0] for p in points]
+        lats = [p[1] for p in points]
+        out.append(
+            ParkBoundaryOut(
+                park_code=code,
+                bbox=[min(lons), min(lats), max(lons), max(lats)],
+                rings=coarse,
+            )
+        )
+    return out
 
 
 @router.get("/{park_code}", response_model=SiteOut)

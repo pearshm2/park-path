@@ -26,10 +26,12 @@ type TextFieldProps = TextInputProps & {
   /** Shown under the field in the deep accent step, and ties into a11y. */
   error?: string | null;
   containerStyle?: StyleProp<ViewStyle>;
+  /** Keeps the label for screen readers but doesn't show it (the form labels the field itself). */
+  hideLabel?: boolean;
 };
 
 export const TextField = forwardRef<TextInput, TextFieldProps>(function TextField(
-  { label, error, containerStyle, onFocus, onBlur, style, ...inputProps },
+  { label, error, containerStyle, hideLabel = false, onFocus, onBlur, style, ...inputProps },
   ref,
 ) {
   const [focused, setFocused] = useState(false);
@@ -37,7 +39,9 @@ export const TextField = forwardRef<TextInput, TextFieldProps>(function TextFiel
   const scale = useTextScale();
   return (
     <View style={containerStyle}>
-      <Text style={[styles.label, scaleType(styles.label, scale)]}>{label}</Text>
+      {hideLabel ? null : (
+        <Text style={[styles.label, scaleType(styles.label, scale)]}>{label}</Text>
+      )}
       <TextInput
         ref={ref}
         accessibilityLabel={label}

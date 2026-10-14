@@ -1,5 +1,7 @@
 /**
- * The in-app text size: Default, Large or Larger, chosen in Settings.
+ * The in-app text size: Small, Medium or Large, chosen in Settings. Large
+ * is the default (it reads best across the app); Small and Medium are
+ * there for anyone who wants more on screen.
  *
  * This sits on top of the phone's own text-size setting, which React
  * Native already applies to every Text; it is for people who want bigger
@@ -27,11 +29,16 @@ import { getItem, setItem } from '../lib/storage';
 
 export type TextSize = 'default' | 'large' | 'larger';
 
+// The stored values predate the labels: 'default' was the smallest size
+// before Large became the default. They're kept so saved choices still work.
 export const TEXT_SIZES: { value: TextSize; label: string; scale: number }[] = [
-  { value: 'default', label: 'Default', scale: 1 },
-  { value: 'large', label: 'Large', scale: 1.15 },
-  { value: 'larger', label: 'Larger', scale: 1.3 },
+  { value: 'default', label: 'Small', scale: 1 },
+  { value: 'large', label: 'Medium', scale: 1.15 },
+  { value: 'larger', label: 'Large', scale: 1.3 },
 ];
+
+/** What's used until someone picks a size. */
+const DEFAULT_SIZE: TextSize = 'larger';
 
 const KEY = 'parkpath.textSize';
 
@@ -42,8 +49,8 @@ type TextSizeValue = {
 };
 
 const TextSizeContext = createContext<TextSizeValue>({
-  size: 'default',
-  scale: 1,
+  size: DEFAULT_SIZE,
+  scale: 1.3,
   setSize: () => {},
 });
 
@@ -52,7 +59,7 @@ function scaleOf(size: TextSize): number {
 }
 
 export function TextSizeProvider({ children }: { children: ReactNode }) {
-  const [size, setSizeState] = useState<TextSize>('default');
+  const [size, setSizeState] = useState<TextSize>(DEFAULT_SIZE);
 
   useEffect(() => {
     getItem(KEY).then((stored) => {
