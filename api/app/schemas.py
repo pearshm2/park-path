@@ -195,6 +195,14 @@ class BrochureMapOut(BaseModel):
     visitor_centers: list[MapLabelOut]  # their labels printed on this map
 
 
+class ParkBoundaryOut(BaseModel):
+    """A park's outline, for working out on the device whether you're in it."""
+
+    park_code: str
+    bbox: list[float]  # [min_lon, min_lat, max_lon, max_lat], to rule parks out fast
+    rings: list[Path]  # test with the even-odd rule
+
+
 class ParkMapOut(BaseModel):
     park_code: str
     boundary: list[Path]  # rings; fill with the even-odd rule
