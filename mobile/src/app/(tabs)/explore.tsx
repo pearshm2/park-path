@@ -32,7 +32,6 @@ import { useQuery } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
-  LayoutAnimation,
   Modal,
   Pressable,
   StyleSheet,
@@ -531,7 +530,8 @@ export default function ExploreScreen() {
   // The map keeps its usual room; the raised deck just covers more of it.
   const { sheet: sheetHeight } = useSheetSize(SECTION_PEEK);
   function toggleMore() {
-    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    // No layout animation here: it moves the deck's cards mid-snap and
+    // leaves them stuck between two (the deck re-snaps on its own).
     setMoreOpen((open) => !open);
   }
   // The tab bar floats over the bottom of the screen; the sheet runs behind it.

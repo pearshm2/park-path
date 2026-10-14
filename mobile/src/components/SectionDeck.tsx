@@ -218,8 +218,19 @@ function SectionPage<T>({
   // If the card size changes while open (text size, a taller sheet), the
   // old scroll offset no longer lands on a card: snap back onto this one.
   useEffect(() => {
-    list.current?.scrollToOffset({ offset: current * interval, animated: false });
-    scrollY.set(current * interval);
+    const offset = current * interval;
+    const land = () => list.current?.scrollToOffset({ offset, animated: false });
+    scrollY.set(offset);
+    land();
+    // The list may not have its new size yet (the deck being raised for
+    // "more"), which would leave it stuck between two cards: land again
+    // once the new layout is in.
+    const frame = requestAnimationFrame(land);
+    const settled = setTimeout(land, 150);
+    return () => {
+      cancelAnimationFrame(frame);
+      clearTimeout(settled);
+    };
     // Only a new size should trigger this, not scrolling to another card.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [interval]);
