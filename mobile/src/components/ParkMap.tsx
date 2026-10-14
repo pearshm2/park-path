@@ -45,7 +45,7 @@ import {
   type GeoPath,
   type GeoProjection,
 } from 'd3-geo';
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Pressable,
   StyleSheet,
@@ -55,16 +55,7 @@ import {
   type ViewStyle,
 } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import Svg, {
-  Circle,
-  Defs,
-  G,
-  LinearGradient,
-  Path,
-  Rect,
-  Stop,
-  Text as SvgText,
-} from 'react-native-svg';
+import Svg, { Circle, G, Path, Text as SvgText } from 'react-native-svg';
 
 import type { Site, SiteStatus } from '../data/parks';
 import { REGIONS, regionForState, STATE_REGION, type RegionId } from '../data/regions';
@@ -169,6 +160,15 @@ type ParkMapProps = {
   /** Tapping a region's land (not a pin), while no region is in focus. */
   onSelectRegion?: (region: RegionId) => void;
   style?: StyleProp<ViewStyle>;
+  /**
+   * Draw the map this far beyond its box, above and below, so that zoomed
+   * in it slides behind what's laid over it (Explore's key and card sheet)
+   * rather than stopping at a hard edge. The whole map still fits the box
+   * at rest, and only the box takes touches.
+   */
+  bleed?: { top: number; bottom: number };
+  /** The box's y and height within its parent, when they change. */
+  onFrame?: (y: number, height: number) => void;
 };
 
 export function ParkMap({
@@ -187,11 +187,16 @@ export function ParkMap({
   revealedRegion,
   tuckCompleted = true,
   style,
+  bleed,
+  onFrame,
 }: ParkMapProps) {
   const [size, setSize] = useState({ width: 0, height: 0 });
+  const bleedTop = Math.max(0, Math.round(bleed?.top ?? 0));
+  const bleedBottom = Math.max(0, Math.round(bleed?.bottom ?? 0));
 
   function onLayout(event: LayoutChangeEvent) {
-    const { width, height } = event.nativeEvent.layout;
+    const { width, height, y } = event.nativeEvent.layout;
+    onFrame?.(y, height);
     // Avoid re-projecting on sub-pixel layout jitter.
     if (Math.abs(width - size.width) > 1 || Math.abs(height - size.height) > 1) {
       setSize({ width, height });
@@ -258,8 +263,9 @@ export function ParkMap({
   // state; the map is light enough for that to keep up.
   const pinch = Gesture.Pinch()
     .runOnJS(true)
-    .onStart((event) => beginGesture(event.focalX, event.focalY))
-    .onUpdate((event) => pinchTo(event.scale, event.focalX, event.focalY));
+    // Gesture points are on the Svg, which starts bleedTop above the box.
+    .onStart((event) => beginGesture(event.focalX, event.focalY - bleedTop))
+    .onUpdate((event) => pinchTo(event.scale, event.focalX, event.focalY - bleedTop));
 
   const pan = Gesture.Pan()
     .runOnJS(true)
@@ -436,21 +442,40 @@ export function ParkMap({
     .maxDistance(10)
     .onEnd((event, success) => {
       if (!success) return;
-      const site = siteAt(event.x, event.y);
+      // Taps land on the Svg, which starts bleedTop above the box.
+      const y = event.y - bleedTop;
+      const site = siteAt(event.x, y);
       if (site) {
         onSelectSite?.(site);
         return;
       }
-      const region = regionAt(event.x, event.y);
+      const region = regionAt(event.x, y);
       if (region && onSelectRegion) onSelectRegion(region);
     });
   const gesture = Gesture.Simultaneous(pinch, pan, tap);
 
   return (
-    <View style={[styles.container, style]} onLayout={onLayout}>
+    <View
+      style={[styles.container, (bleedTop > 0 || bleedBottom > 0) && styles.bleeding, style]}
+      onLayout={onLayout}
+    >
       <GestureDetector gesture={gesture}>
-        <Svg width={size.width} height={size.height}>
-          <G transform={`translate(${view.tx} ${view.ty}) scale(${view.k})`}>{stateShapes}</G>
+        <Svg
+          width={size.width}
+          height={size.height + bleedTop + bleedBottom}
+          // Out of the layout, so drawing past the box never changes its size
+          // (which would feed back into the screen's layout).
+          style={
+            bleedTop > 0 || bleedBottom > 0
+              ? { position: 'absolute', top: -bleedTop, left: 0 }
+              : undefined
+          }
+        >
+          {/* The shapes' own transform takes the bleed: a scaled group inside
+              another transformed one doesn't draw on Android. */}
+          <G transform={`translate(${view.tx} ${view.ty + bleedTop}) scale(${view.k})`}>{stateShapes}</G>
+          {/* Drawn in the box's coordinates, moved down by the bleed above it. */}
+          <G transform={`translate(0 ${bleedTop})`}>
 
           {/* Stamps on the completed regions, while their pins are tucked away. */}
           {focusRegion == null && tuckCompleted
@@ -615,9 +640,7 @@ export function ParkMap({
               );
             })}
           </G>
-          {/* Zoomed in, the map runs past its frame; fade it into the page at
-              the edges rather than ending in a hard cut. */}
-          {view.k > 1.02 ? <EdgeFade width={size.width} height={size.height} /> : null}
+          </G>
         </Svg>
       </GestureDetector>
 
@@ -990,40 +1013,16 @@ function mainLand(feature: StateFeature, toPath: GeoPath): StateFeature {
   };
 }
 
-/** How far the zoomed map fades into the page at each edge. */
-const FADE = 22;
-
-/** A soft fade to the page colour along all four edges of the map. */
-function EdgeFade({ width, height }: { width: number; height: number }) {
-  // Unique per map, so the full-screen map's fades don't collide with these.
-  const id = useId().replace(/[^a-zA-Z0-9]/g, '');
-  const edges = [
-    { id: `fadeTop${id}`, x1: 0, y1: 0, x2: 0, y2: 1, rect: { x: 0, y: 0, width, height: FADE } },
-    { id: `fadeBottom${id}`, x1: 0, y1: 1, x2: 0, y2: 0, rect: { x: 0, y: height - FADE, width, height: FADE } },
-    { id: `fadeLeft${id}`, x1: 0, y1: 0, x2: 1, y2: 0, rect: { x: 0, y: 0, width: FADE, height } },
-    { id: `fadeRight${id}`, x1: 1, y1: 0, x2: 0, y2: 0, rect: { x: width - FADE, y: 0, width: FADE, height } },
-  ];
-  return (
-    <>
-      <Defs>
-        {edges.map((edge) => (
-          <LinearGradient key={edge.id} id={edge.id} x1={edge.x1} y1={edge.y1} x2={edge.x2} y2={edge.y2}>
-            <Stop offset="0" stopColor={colors.bg} stopOpacity={1} />
-            <Stop offset="1" stopColor={colors.bg} stopOpacity={0} />
-          </LinearGradient>
-        ))}
-      </Defs>
-      {edges.map((edge) => (
-        <Rect key={edge.id} {...edge.rect} fill={`url(#${edge.id})`} />
-      ))}
-    </>
-  );
-}
-
 const styles = StyleSheet.create({
   container: {
     backgroundColor: colors.bg,
     overflow: 'hidden',
+  },
+  // Drawing past the box (see `bleed`): let it, and let what's beyond show
+  // through, since the page around it is the same colour.
+  bleeding: {
+    overflow: 'visible',
+    backgroundColor: 'transparent',
   },
   reset: {
     position: 'absolute',

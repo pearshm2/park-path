@@ -549,6 +549,14 @@ export default function ExploreScreen() {
   // spare with the sheet down. The spacers around it measure that spare,
   // and the key opens out by part of it so the gaps don't just grow.
   const [keyRoom, setKeyRoom] = useState(0);
+  // Where the map's box sits in the stage, for drawing it on behind the key
+  // (up to the stage's top) and behind the card sheet (down to its bottom).
+  const [stageFrame, setStageFrame] = useState({ height: 0, areaY: 0, mapY: 0, mapH: 0 });
+  const mapTop = stageFrame.areaY + stageFrame.mapY;
+  const mapBleed = {
+    top: mapTop,
+    bottom: Math.max(0, stageFrame.height - mapTop - stageFrame.mapH),
+  };
   const spacers = useRef({ above: 0, below: 0 });
   function measureSpare(which: 'above' | 'below', height: number) {
     spacers.current[which] = height;
@@ -634,13 +642,21 @@ export default function ExploreScreen() {
         </View>
       </View>
 
-      {/* The stage: key and map, with the card sheet over its bottom edge. */}
-      <View style={styles.stage}>
+      {/* The stage: key and map, with the card sheet over its bottom edge.
+          The map draws behind the key and the sheet (its bleed), so zoomed
+          in it slides under them; the stage clips it at the key's top. */}
+      <View
+        style={styles.stage}
+        onLayout={(event) => {
+          const { height } = event.nativeEvent.layout;
+          setStageFrame((f) => (Math.abs(f.height - height) > 1 ? { ...f, height } : f));
+        }}
+      >
         <Animated.View
           // The layout transition keeps a stale height when the key's
-          // content grows on its own (the filter swatch adds a line), so
-          // remount it whenever that swatch comes or goes.
-          key={matchIds.size > 0 ? 'key-with-matches' : 'key'}
+          // content grows on its own (the filter swatch adds a line, or the
+          // spare room is measured), so remount it whenever either changes.
+          key={`${matchIds.size > 0 ? 'key-with-matches' : 'key'}-${keyRoom}`}
           layout={LinearTransition.duration(SHEET_MS)}
           style={styles.keyWrap}
         >
@@ -658,9 +674,15 @@ export default function ExploreScreen() {
 
         {/* Deliberately not a layout-animated view: the map has to be told
             its new size when the sheet opens, or it overflows under it. */}
-        <View style={[styles.mapArea, {
+        <View
+          style={[styles.mapArea, {
               paddingBottom: (sheetOpen ? sheetHeight + DECK_GAP : SHEET_BAR) + tabSpace,
-            }]}>
+            }]}
+          onLayout={(event) => {
+            const { y } = event.nativeEvent.layout;
+            setStageFrame((f) => (Math.abs(f.areaY - y) > 1 ? { ...f, areaY: y } : f));
+          }}
+        >
           {!sheetOpen ? (
             <View
               style={{ flex: SPARE_ABOVE }}
@@ -711,6 +733,14 @@ export default function ExploreScreen() {
             // Your visits show every visited pin; the other views tuck a
             // completed region's pins behind its stamp.
             tuckCompleted={scope !== 'visited'}
+            bleed={mapBleed}
+            onFrame={(y, height) =>
+              setStageFrame((f) =>
+                Math.abs(f.mapY - y) > 1 || Math.abs(f.mapH - height) > 1
+                  ? { ...f, mapY: y, mapH: height }
+                  : f,
+              )
+            }
             style={[
               styles.map,
               { maxHeight: windowWidth / MAP_ASPECT },
@@ -1449,6 +1479,8 @@ const styles = StyleSheet.create({
     marginHorizontal: space[4],
     marginBottom: space[2],
     overflow: 'hidden',
+    // Over the map, which slides behind it when zoomed in.
+    zIndex: 2,
   },
   mapArea: {
     flex: 1,
@@ -1512,6 +1544,14 @@ const styles = StyleSheet.create({
     gap: space[2],
     marginTop: space[3],
     marginHorizontal: space[4],
+    // Over the map, which slides behind it when zoomed in, on a backing so
+    // it stays readable there.
+    zIndex: 1,
+    elevation: 1,
+    paddingVertical: 4,
+    paddingHorizontal: space[3],
+    borderRadius: radius.pill,
+    backgroundColor: colors.bg,
   },
   regionTitleSwatch: {
     width: 14,
