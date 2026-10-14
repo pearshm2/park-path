@@ -82,6 +82,17 @@ export function useTextSize(): TextSizeValue {
   return useContext(TextSizeContext);
 }
 
+/**
+ * Caps the text size for the part of the screen inside it, for small
+ * reference text (a map key) that crowds out what it labels at Large. The
+ * choice in Settings still applies up to the cap.
+ */
+export function CapTextScale({ max, children }: { max: number; children: ReactNode }) {
+  const outer = useContext(TextSizeContext);
+  const value = useMemo(() => ({ ...outer, scale: Math.min(outer.scale, max) }), [outer, max]);
+  return <TextSizeContext.Provider value={value}>{children}</TextSizeContext.Provider>;
+}
+
 /** The multiplier for font sizes: 1, 1.15 or 1.3. */
 export function useTextScale(): number {
   return useContext(TextSizeContext).scale;

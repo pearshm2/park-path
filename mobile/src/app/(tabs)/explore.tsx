@@ -89,7 +89,7 @@ import {
 import { useQuiz } from '../../quiz/QuizContext';
 import { useSnoozed } from '../../wishlist/useSnoozed';
 import { useWishlist } from '../../wishlist/useWishlist';
-import { colors, radius, shadow, space, useTextScale } from '../../theme';
+import { CapTextScale, colors, radius, shadow, space, useTextScale } from '../../theme';
 
 /** How many recommendations get a numbered pin and a card. */
 const TOP_N = 10;
@@ -644,12 +644,16 @@ export default function ExploreScreen() {
           layout={LinearTransition.duration(SHEET_MS)}
           style={styles.keyWrap}
         >
-          <MapKey
-            collapsed={sheetOpen && !keyOpen}
-            room={keyRoom}
-            showMatches={matchIds.size > 0}
-            onToggle={sheetOpen ? () => setKeyOpen((open) => !open) : undefined}
-          />
+          {/* The key is a legend: kept a little smaller than Large text, so it
+              doesn't crowd out the map it explains. */}
+          <CapTextScale max={1.1}>
+            <MapKey
+              collapsed={sheetOpen && !keyOpen}
+              room={keyRoom}
+              showMatches={matchIds.size > 0}
+              onToggle={sheetOpen ? () => setKeyOpen((open) => !open) : undefined}
+            />
+          </CapTextScale>
         </Animated.View>
 
         {/* Deliberately not a layout-animated view: the map has to be told
