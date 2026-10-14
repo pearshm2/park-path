@@ -32,6 +32,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
+  LayoutAnimation,
   Modal,
   Pressable,
   StyleSheet,
@@ -144,6 +145,11 @@ function useSheetSize(extra = 0) {
   return { deck: deck + extra, sheet: SHEET_BAR + deck + extra + space[2] - SHEET_LOWER };
 }
 const SHEET_MS = 260;
+/**
+ * How much the deck rises when a card's arrow shows more about the park:
+ * room for a few lines of its description and the rest of its facts.
+ */
+const MORE_ROOM = 200;
 
 
 /** What the map shows. */
@@ -424,7 +430,10 @@ export default function ExploreScreen() {
     setSheetOpen(open);
     setKeyOpen(false);
     // Closing tucks the cards away and returns to the whole map.
-    if (!open) clearFocus();
+    if (!open) {
+      clearFocus();
+      setMoreOpen(false);
+    }
   }
 
   /**
@@ -515,7 +524,16 @@ export default function ExploreScreen() {
   }
   // Sized for the sectioned deck in every view, so the sheet and card keep
   // their size when tapping a card switches to the region carousel.
-  const { deck: deckHeight, sheet: sheetHeight } = useSheetSize(SECTION_PEEK);
+  // The arrow on a card raises the whole deck to show more about the park.
+  const [moreOpen, setMoreOpen] = useState(false);
+  const deckExtra = SECTION_PEEK + (moreOpen ? MORE_ROOM : 0);
+  const { deck: deckHeight } = useSheetSize(deckExtra);
+  // The map keeps its usual room; the raised deck just covers more of it.
+  const { sheet: sheetHeight } = useSheetSize(SECTION_PEEK);
+  function toggleMore() {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setMoreOpen((open) => !open);
+  }
   // The tab bar floats over the bottom of the screen; the sheet runs behind it.
   const tabSpace = useTabBarSpace();
 
@@ -719,7 +737,7 @@ export default function ExploreScreen() {
                 ? `${deckIndex + 1} of ${deck.length}`
                 : undefined
           }
-          extra={SECTION_PEEK}
+          extra={deckExtra}
           below={tabSpace}
           pages={
             deckSections && deckSections.length > 1 && inSection
@@ -742,7 +760,6 @@ export default function ExploreScreen() {
               renderCard={(item, active, bringIntoView) => (
                 <ParkCard
                   site={item.site}
-                  score={item.score}
                   reason={item.reason}
                   rank={item.rank}
                   // The full decks mix saved parks in with everything else.
@@ -756,6 +773,8 @@ export default function ExploreScreen() {
                   }
                   // The park's own page: photo, description, facts, directions and map.
                   onExpand={() => router.push(`/site/${item.site.id}`)}
+                  more={moreOpen}
+                  onToggleMore={toggleMore}
                   onPress={() => {
                     if (!active) {
                       // The card peeking up from below: bring it into view.

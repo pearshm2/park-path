@@ -4,8 +4,10 @@
  * Follows the prototype's card, tightened so a card and the map fit on
  * screen together: a slim terrain band, the park name in the display
  * face, the reason it surfaced in the deep accent step (one line), one
- * row of tags, then the match strength on a single line. The band stands in for the
- * prototype's photograph — see TerrainIcon for why.
+ * row of tags and when to go. A small arrow at the bottom shows more (a
+ * little of the description and the rest of the facts) when the deck is
+ * raised for it. The band stands in for the prototype's photograph — see
+ * TerrainIcon for why.
  *
  * The band is coloured by terrain, not region, so a deck dealt from one
  * region still varies card to card. The region shows instead as a small
@@ -17,7 +19,7 @@ import { Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from 'rea
 import Svg, { Path } from 'react-native-svg';
 
 import type { Site } from '../data/parks';
-import { crowdLabel, seasonsLabel, stayLabel } from '../data/siteFacts';
+import { crowdLabel, factRows, seasonsLabel, stayLabel } from '../data/siteFacts';
 import { visitMonth, visitSummary, type Trip } from '../data/visits';
 import { regionForState } from '../data/regions';
 import { colors, radius, shadow, space } from '../theme';
@@ -35,7 +37,6 @@ const EFFORT_LABEL: Record<number, string> = {
 
 export function ParkCard({
   site,
-  score,
   reason,
   rank,
   markWishlist = false,
@@ -43,13 +44,13 @@ export function ParkCard({
   saved = false,
   onToggleSave,
   onSnooze,
+  more = false,
+  onToggleMore,
   onPress,
   onExpand,
   style,
 }: {
   site: Site;
-  /** 0–1 from the recommendation engine. Omitted for parks it did not score. */
-  score?: number;
   reason?: string;
   /** 1-based position among the picks, shown as a badge on the band. */
   rank?: number;
@@ -63,6 +64,10 @@ export function ParkCard({
   onToggleSave?: () => void;
   /** Shows the "Not for now" button, which sets the park aside for a while. */
   onSnooze?: () => void;
+  /** Shows the description and remaining facts (the deck has been raised for them). */
+  more?: boolean;
+  /** Shows the arrow that shows more or less of the park. */
+  onToggleMore?: () => void;
   onPress?: () => void;
   /** Shows the expand button, which opens the site's detail sheet. */
   onExpand?: () => void;
@@ -70,7 +75,6 @@ export function ParkCard({
 }) {
   const tone = terrainTone(site.group);
   const region = regionForState(site.state);
-  const percent = score === undefined ? null : Math.round(score * 100);
   const visits = site.status === 'visited' ? visitSummary(site.id) : undefined;
   const seasons = seasonsLabel(site);
   const stay = stayLabel(site);
@@ -80,13 +84,15 @@ export function ParkCard({
   ]
     .filter(Boolean)
     .join(' · ');
+  // The facts the card face doesn't already give (its tags and timing line do).
+  const extraFacts = more ? factRows(site).filter((row) => !ON_FACE.has(row.label)) : [];
 
   return (
     <Pressable
       onPress={onPress}
       disabled={!onPress}
       accessibilityRole={onPress ? 'button' : undefined}
-      accessibilityLabel={[site.name, percent !== null && `${percent}% match`, reason]
+      accessibilityLabel={[site.name, reason]
         .filter(Boolean)
         .join('. ')}
       style={({ pressed }) => [styles.card, style, pressed && onPress && styles.pressed]}
@@ -241,29 +247,62 @@ export function ParkCard({
             </Pressable>
           ) : null}
 
-          {/* Match strength on one line — the point of the deck is why this
-              park and not another. Pinned to the bottom of the card. */}
-          {percent !== null ? (
-            <View style={styles.matchRow}>
-              <BodyText
-                size={10}
-                weight="semibold"
-                color={colors.neutral[600]}
-                style={styles.matchLabel}
-              >
-                MATCH
-              </BodyText>
-              <View style={styles.matchTrack}>
-                <View style={[styles.matchFill, { width: `${Math.max(percent, 3)}%` }]} />
-              </View>
-              <BodyText size={14} weight="bold" color={colors.accentRamp[700]}>
-                {`${percent}%`}
-              </BodyText>
+          {/* More about the park, shown when the deck is raised: a little of
+              the NPS description and the facts not already on the card. */}
+          {more ? (
+            <View style={styles.more}>
+              {site.description ? (
+                <BodyText size={12.5} lineHeightRatio={1.45} color={colors.neutral[800]} numberOfLines={4}>
+                  {site.description}
+                </BodyText>
+              ) : null}
+              {extraFacts.map((row) => (
+                <View key={row.label} style={styles.factRow}>
+                  <BodyText size={12} color={colors.neutral[600]} style={styles.factLabel}>
+                    {row.label}
+                  </BodyText>
+                  <BodyText size={12} weight="semibold" color={row.color} numberOfLines={1}>
+                    {row.value}
+                  </BodyText>
+                </View>
+              ))}
             </View>
+          ) : null}
+
+          {/* A small arrow to show more of the park (or less), raising the deck. */}
+          {onToggleMore ? (
+            <Pressable
+              onPress={onToggleMore}
+              hitSlop={10}
+              accessibilityRole="button"
+              accessibilityLabel={more ? 'Show less about the park' : 'Show more about the park'}
+              style={({ pressed }) => [styles.moreToggle, pressed && styles.moreTogglePressed]}
+            >
+              <ChevronIcon up={more} />
+            </Pressable>
           ) : null}
         </View>
       </View>
     </Pressable>
+  );
+}
+
+/** Facts already on the card's face, left out of its "more" section. */
+const ON_FACE = new Set(['Best time to go', 'Typical stay', 'Effort', 'Permit or lottery', 'Designation']);
+
+/** A small chevron, down for "more", up for "less". */
+function ChevronIcon({ up }: { up: boolean }) {
+  return (
+    <Svg width={16} height={16} viewBox="0 0 24 24">
+      <Path
+        d={up ? 'M6 15l6-6 6 6' : 'M6 9l6 6 6-6'}
+        fill="none"
+        stroke={colors.neutral[700]}
+        strokeWidth={2.4}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </Svg>
   );
 }
 
@@ -517,6 +556,28 @@ const styles = StyleSheet.create({
   reason: {
     marginTop: space[2],
   },
+  more: {
+    gap: 4,
+    marginTop: space[2],
+  },
+  factRow: {
+    flexDirection: 'row',
+    gap: space[2],
+  },
+  factLabel: {
+    flex: 1,
+  },
+  moreToggle: {
+    alignSelf: 'center',
+    marginTop: 'auto',
+    paddingHorizontal: 18,
+    paddingVertical: 2,
+    borderRadius: radius.pill,
+    backgroundColor: colors.neutral[200],
+  },
+  moreTogglePressed: {
+    backgroundColor: colors.neutral[300],
+  },
   timing: {
     marginTop: 6,
   },
@@ -525,27 +586,5 @@ const styles = StyleSheet.create({
     gap: 6,
     marginTop: space[2],
     overflow: 'hidden',
-  },
-  matchRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: space[2],
-    marginTop: 'auto',
-    paddingTop: space[2],
-  },
-  matchLabel: {
-    letterSpacing: 1,
-  },
-  matchTrack: {
-    flex: 1,
-    height: 8,
-    borderRadius: radius.pill,
-    backgroundColor: colors.neutral[300],
-    overflow: 'hidden',
-  },
-  matchFill: {
-    height: '100%',
-    borderRadius: radius.pill,
-    backgroundColor: colors.accent,
   },
 });
