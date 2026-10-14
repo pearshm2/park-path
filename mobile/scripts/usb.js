@@ -80,8 +80,15 @@ for (const [serial] of ready) {
 }
 
 // Expo on localhost, so the device loads the app through the cable too.
+// adb reverse connects to 127.0.0.1, but Node resolves "localhost" to the
+// IPv6 ::1 first, which would leave Expo listening where the cable can't
+// reach it; ipv4first makes it listen on 127.0.0.1.
 const expo = spawn('npx', ['expo', 'start', '--localhost', ...process.argv.slice(2)], {
   stdio: 'inherit',
   shell: process.platform === 'win32',
+  env: {
+    ...process.env,
+    NODE_OPTIONS: [process.env.NODE_OPTIONS, '--dns-result-order=ipv4first'].filter(Boolean).join(' '),
+  },
 });
 expo.on('exit', (code) => process.exit(code ?? 0));
