@@ -549,13 +549,13 @@ export default function ExploreScreen() {
   // spare with the sheet down. The spacers around it measure that spare,
   // and the key opens out by part of it so the gaps don't just grow.
   const [keyRoom, setKeyRoom] = useState(0);
-  // Where the map's box sits in the stage, for drawing it on behind the key
-  // (up to the stage's top) and behind the card sheet (down to its bottom).
-  const [stageFrame, setStageFrame] = useState({ height: 0, areaY: 0, mapY: 0, mapH: 0 });
-  const mapTop = stageFrame.areaY + stageFrame.mapY;
-  const mapBleed = {
-    top: mapTop,
-    bottom: Math.max(0, stageFrame.height - mapTop - stageFrame.mapH),
+  // Where the map's box sits in the stage, for drawing it on the whole
+  // stage: behind the key above it and the card sheet below. The canvas
+  // stays the stage's size as the box moves (see ParkMap's `canvas`).
+  const [stageFrame, setStageFrame] = useState({ height: 0, areaY: 0, mapY: 0 });
+  const mapCanvas = {
+    top: stageFrame.areaY + stageFrame.mapY,
+    height: stageFrame.height,
   };
   const spacers = useRef({ above: 0, below: 0 });
   function measureSpare(which: 'above' | 'below', height: number) {
@@ -733,13 +733,9 @@ export default function ExploreScreen() {
             // Your visits show every visited pin; the other views tuck a
             // completed region's pins behind its stamp.
             tuckCompleted={scope !== 'visited'}
-            bleed={mapBleed}
-            onFrame={(y, height) =>
-              setStageFrame((f) =>
-                Math.abs(f.mapY - y) > 1 || Math.abs(f.mapH - height) > 1
-                  ? { ...f, mapY: y, mapH: height }
-                  : f,
-              )
+            canvas={mapCanvas}
+            onFrame={(y) =>
+              setStageFrame((f) => (Math.abs(f.mapY - y) > 1 ? { ...f, mapY: y } : f))
             }
             style={[
               styles.map,

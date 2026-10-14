@@ -172,12 +172,15 @@ export function FeatureGlyph({
   cy,
   size,
   color,
+  opacity,
 }: {
   feature: Feature;
   cx: number;
   cy: number;
   size: number;
   color: string;
+  /** Set on each stroke rather than a group: cheaper to draw on Android. */
+  opacity?: number;
 }) {
   const k = size / 24;
   return (
@@ -191,6 +194,7 @@ export function FeatureGlyph({
           strokeWidth={STROKE}
           strokeLinecap="round"
           strokeLinejoin="round"
+          opacity={opacity}
         />
       ))}
     </G>
