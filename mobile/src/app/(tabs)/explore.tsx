@@ -717,7 +717,12 @@ export default function ExploreScreen() {
             // What the map is showing, now that the scope button is an icon.
             // With the sheet down the map sits lower, so lift the title a
             // touch to keep it close under the key.
-            <View style={[styles.mapTitle, !sheetOpen && styles.mapTitleRaised]}>
+            <View
+              style={[
+                styles.mapTitle,
+                sheetOpen ? styles.mapTitleOpen : styles.mapTitleRaised,
+              ]}
+            >
               <Heading size={14}>
                 {scopeLabel.charAt(0).toUpperCase() + scopeLabel.slice(1)}
               </Heading>
@@ -1552,6 +1557,10 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
     backgroundColor: colors.neutral[100],
     ...shadow.sm,
+  },
+  // Open, close under the collapsed key, to give the map the room.
+  mapTitleOpen: {
+    marginTop: space[1],
   },
   mapTitleRaised: {
     // Nudged down towards the map; it's drawn above it (zIndex).

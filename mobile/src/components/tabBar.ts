@@ -15,9 +15,12 @@ export const RAISE = 18;
 /**
  * Space under the bar: half the bottom inset, so it sits partly in the
  * home-indicator zone, but never under 16, which clears the indicator line
- * on both iOS and Android (its top sits about 13 up from the edge).
+ * on both iOS and Android (its top sits about 13 up from the edge). With no
+ * inset at all, the app ends above the system's own bar (Android's
+ * three-button navigation), so there's no line to clear: a small gap does.
  */
 export function tabBarBottom(insetBottom: number): number {
+  if (insetBottom < 1) return 6;
   return Math.max(insetBottom / 2, 16);
 }
 
