@@ -37,6 +37,11 @@ export type TripEntry = {
   /** Friends who were there: their ids and, so the entry reads the same
    *  if they're later removed, their emails as they were. */
   with: { id: number; email: string }[];
+  /** How it was, 1 to 5 stars; null if not rated. */
+  rating: number | null;
+  /** The location stamp: a trail or spot they loved, shown on the entry
+   *  and in friends' feeds. Null if none. */
+  stamp: string | null;
   createdAt: string;
 };
 
@@ -72,10 +77,13 @@ function parse(raw: string | null): TripEntry[] {
   try {
     const parsed = JSON.parse(raw) as unknown;
     if (!Array.isArray(parsed)) return [];
-    return parsed.filter(
-      (e): e is TripEntry =>
-        !!e && typeof e === 'object' && typeof e.id === 'string' && typeof e.siteId === 'string',
-    );
+    return parsed
+      .filter(
+        (e): e is TripEntry =>
+          !!e && typeof e === 'object' && typeof e.id === 'string' && typeof e.siteId === 'string',
+      )
+      // Entries saved before ratings and stamps existed.
+      .map((e) => ({ ...e, rating: e.rating ?? null, stamp: e.stamp ?? null }));
   } catch {
     return [];
   }

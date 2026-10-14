@@ -1,7 +1,8 @@
 /**
  * The prototype's "New journal entry" sheet: the park visited (searched
- * from every site, national parks first), the month, a title, notes, who
- * was with you (your friends) and photos from your library.
+ * from every site, national parks first), the month, a title, notes, a
+ * star rating, a location stamp (a trail or spot you loved, suggested from
+ * the park's own trails), who was with you (your friends) and photos.
  *
  * Saving logs the visit: the park becomes visited across the app.
  *
@@ -25,6 +26,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
 
 import { displayName } from '../../api/friends';
+import { fetchParkMap } from '../../api/parkMaps';
 import { listSites } from '../../api/parks';
 import { useFriends } from '../../friends/useFriends';
 import { colors, radius, shadow, space } from '../../theme';
@@ -75,6 +77,8 @@ export function NewEntrySheet({
   const [month, setMonth] = useState(thisMonth);
   const [title, setTitle] = useState('');
   const [notes, setNotes] = useState('');
+  const [rating, setRating] = useState<number | null>(null);
+  const [stamp, setStamp] = useState('');
   const [withIds, setWithIds] = useState<number[]>([]);
   const [photos, setPhotos] = useState<string[]>([]);
   const [problem, setProblem] = useState<string | null>(null);
@@ -82,6 +86,22 @@ export function NewEntrySheet({
 
   const chosen = sites.find((s) => s.id === siteId);
   const shownQuery = query ?? chosen?.name ?? '';
+
+  // The chosen park's trails, as suggestions for the location stamp. Same
+  // query as the park map screen, so it's often already loaded.
+  const { data: parkMap } = useQuery({
+    queryKey: ['parkMap', chosen?.id],
+    queryFn: () => fetchParkMap(chosen!.id),
+    enabled: !!chosen?.isNamedPark,
+    staleTime: Infinity,
+  });
+  const trailSuggestions = useMemo(() => {
+    const needle = stamp.trim().toLowerCase();
+    const names = parkMap?.trailNames ?? [];
+    return (needle ? names.filter((n) => n.toLowerCase().includes(needle)) : names)
+      .filter((n) => n !== stamp)
+      .slice(0, 8);
+  }, [parkMap, stamp]);
   const results = useMemo(() => {
     const needle = (query ?? '').trim().toLowerCase();
     return sites
@@ -121,6 +141,8 @@ export function NewEntrySheet({
         notes: notes.trim(),
         photos,
         with: friends.filter((f) => withIds.includes(f.user.id)).map((f) => f.user),
+        rating,
+        stamp: stamp.trim() || null,
       });
       onSaved(entry);
     } catch {
@@ -225,6 +247,57 @@ export function NewEntrySheet({
               multiline
               style={styles.notes}
             />
+
+            <Label>How was it?</Label>
+            <View style={styles.stars} accessibilityRole="adjustable">
+              {[1, 2, 3, 4, 5].map((n) => (
+                <Pressable
+                  key={n}
+                  // Tapping the current rating again clears it.
+                  onPress={() => setRating((r) => (r === n ? null : n))}
+                  hitSlop={4}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${n} ${n === 1 ? 'star' : 'stars'}`}
+                  accessibilityState={{ selected: rating !== null && n <= rating }}
+                >
+                  <StarIcon filled={rating !== null && n <= rating} />
+                </Pressable>
+              ))}
+              <BodyText size={12} color={colors.neutral[600]} style={styles.ratingText}>
+                {rating === null ? 'Optional' : RATING_WORDS[rating - 1]}
+              </BodyText>
+            </View>
+
+            <Label>Location stamp</Label>
+            <BodyText size={12} lineHeightRatio={1.45} color={colors.neutral[600]} style={styles.hint}>
+              A trail or spot you loved. It&apos;s stamped on your entry and shows in your friends&apos;
+              feed.
+            </BodyText>
+            <TextField
+              label="Location stamp"
+              hideLabel
+              value={stamp}
+              onChangeText={setStamp}
+              placeholder={chosen?.isNamedPark ? 'Pick a trail below or type a spot' : 'Type a trail or spot'}
+            />
+            {trailSuggestions.length > 0 ? (
+              <View style={[styles.chips, styles.suggestions]}>
+                {trailSuggestions.map((name) => (
+                  <Pressable
+                    key={name}
+                    onPress={() => setStamp(name)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Stamp ${name}`}
+                    style={({ pressed }) => [styles.suggestion, pressed && styles.suggestionPressed]}
+                  >
+                    <PinIcon />
+                    <BodyText size={12} weight="semibold" color={colors.neutral[800]} numberOfLines={1}>
+                      {name}
+                    </BodyText>
+                  </Pressable>
+                ))}
+              </View>
+            ) : null}
 
             <Label>Who was with you</Label>
             {friends.length > 0 ? (
@@ -350,6 +423,39 @@ function StepButton({
   );
 }
 
+const RATING_WORDS = ['Not great', 'Okay', 'Good', 'Great', 'Unforgettable'];
+
+/** A star for the rating: filled orange when on, outlined when off. */
+export function StarIcon({ filled, size = 28 }: { filled: boolean; size?: number }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24">
+      <Path
+        d="M12 2.8l2.8 5.7 6.3.9-4.5 4.4 1 6.2L12 17l-5.6 3 1-6.2L2.9 9.4l6.3-.9z"
+        fill={filled ? colors.accent : 'none'}
+        stroke={filled ? colors.accent : colors.neutral[500]}
+        strokeWidth={1.8}
+        strokeLinejoin="round"
+      />
+    </Svg>
+  );
+}
+
+/** A map pin, for the location stamp. */
+export function PinIcon({ color = colors.accentRamp[700], size = 13 }: { color?: string; size?: number }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24">
+      <Path
+        d="M12 21s-6.5-6.2-6.5-11.2a6.5 6.5 0 0 1 13 0C18.5 14.8 12 21 12 21z"
+        fill="none"
+        stroke={color}
+        strokeWidth={2.4}
+        strokeLinejoin="round"
+      />
+      <Path d="M12 7.6a2.2 2.2 0 1 1 0 4.4 2.2 2.2 0 0 1 0-4.4z" fill={color} />
+    </Svg>
+  );
+}
+
 function PlusIcon() {
   return (
     <Svg width={19} height={19} viewBox="0 0 24 24">
@@ -447,6 +553,33 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     paddingTop: 10,
     textAlignVertical: 'top',
+  },
+  stars: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  ratingText: {
+    marginLeft: space[2],
+  },
+  hint: {
+    marginBottom: space[2],
+  },
+  suggestions: {
+    marginTop: space[2],
+  },
+  suggestion: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    maxWidth: '100%',
+    paddingVertical: 6,
+    paddingHorizontal: 11,
+    borderRadius: radius.pill,
+    backgroundColor: colors.neutral[200],
+  },
+  suggestionPressed: {
+    backgroundColor: colors.accentRamp[200],
   },
   chips: {
     flexDirection: 'row',

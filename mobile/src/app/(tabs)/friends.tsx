@@ -194,8 +194,8 @@ export default function FriendsScreen() {
               Your friends&apos; trips will show up here
             </BodyText>
             <BodyText size={13} lineHeightRatio={1.5} color={colors.neutral[700]}>
-              When friends log a trip, you&apos;ll see their photos and notes here, and can react
-              and comment. This arrives with Trips.
+              When friends log a trip, you&apos;ll see their photos, notes and location stamps
+              here, and can react and comment. This arrives with the trips backend.
             </BodyText>
           </View>
         </View>

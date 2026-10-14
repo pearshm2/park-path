@@ -1,8 +1,9 @@
 /**
  * One journal entry in the Trips rail, as in the prototype: its lead photo
- * (or the park's terrain colour without one), the park and month, the
- * title and notes, then tags for the region, the park's feature, how many
- * photos and who was there.
+ * (or the park's terrain colour without one), the park and month, its
+ * star rating, the title, its location stamp (a trail or spot they loved),
+ * the notes, then tags for the region, the park's feature, how many photos
+ * and who was there.
  *
  * Cards either side of the centred one turn away a little in 3D, shrink
  * and fade, following the rail's scroll position as you swipe.
@@ -26,6 +27,7 @@ import { monthLabel, type TripEntry } from '../../trips/TripsContext';
 import { Tag } from '../Tag';
 import { TerrainIcon, terrainTone } from '../TerrainIcon';
 import { BodyText, Heading } from '../Typography';
+import { PinIcon, StarIcon } from './NewEntrySheet';
 
 export const MEDIA_HEIGHT = 150;
 
@@ -96,13 +98,35 @@ export function TripCard({
           >
             {(site?.name ?? entry.siteId).toUpperCase()}
           </BodyText>
-          <BodyText size={11.5} weight="medium" color={colors.neutral[600]}>
-            {monthLabel(entry.date)}
-          </BodyText>
+          <View style={styles.when}>
+            {entry.rating ? (
+              <View
+                style={styles.rating}
+                accessibilityLabel={`Rated ${entry.rating} out of 5`}
+                accessible
+              >
+                {[1, 2, 3, 4, 5].map((n) => (
+                  <StarIcon key={n} filled={n <= entry.rating!} size={11} />
+                ))}
+              </View>
+            ) : null}
+            <BodyText size={11.5} weight="medium" color={colors.neutral[600]}>
+              {monthLabel(entry.date)}
+            </BodyText>
+          </View>
         </View>
         <Heading size={19} style={styles.title} numberOfLines={2}>
           {entry.title}
         </Heading>
+        {entry.stamp ? (
+          // Set at a slight angle, like a stamp in a passport.
+          <View style={styles.stamp} accessibilityLabel={`Location stamp: ${entry.stamp}`} accessible>
+            <PinIcon />
+            <BodyText size={12} weight="bold" color={colors.accentRamp[700]} numberOfLines={1}>
+              {entry.stamp}
+            </BodyText>
+          </View>
+        ) : null}
         <BodyText
           size={13.5}
           lineHeightRatio={1.5}
@@ -183,8 +207,33 @@ const styles = StyleSheet.create({
     flexShrink: 1,
     letterSpacing: 1,
   },
+  when: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  rating: {
+    flexDirection: 'row',
+    gap: 1,
+  },
   title: {
     marginTop: space[2],
+  },
+  stamp: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: 5,
+    maxWidth: '100%',
+    marginTop: space[2],
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+    borderRadius: radius.sm,
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
+    borderColor: colors.accentRamp[500],
+    backgroundColor: colors.accentRamp[100],
+    transform: [{ rotate: '-1.5deg' }],
   },
   notes: {
     marginTop: space[2],
