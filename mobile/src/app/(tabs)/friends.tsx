@@ -25,24 +25,12 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { displayName, initials, type Friend, type Person } from '../../api/friends';
+import { displayName, type Friend } from '../../api/friends';
 import { useAuth } from '../../auth/AuthContext';
 import { BodyText, Button, Heading, TextField, useTabBarSpace } from '../../components';
+import { Avatar } from '../../components/Avatar';
 import { useFriends } from '../../friends/useFriends';
 import { colors, radius, shadow, space } from '../../theme';
-
-/** Avatar colours, picked by person so each friend keeps theirs. */
-const AVATAR_TONES = [
-  { bg: colors.accentRamp[200], fg: colors.accentRamp[800], ring: colors.accentRamp[400] },
-  { bg: colors.accent2Ramp[200], fg: colors.accent2Ramp[800], ring: colors.accent2Ramp[400] },
-  { bg: '#d9e6f2', fg: '#2f4a63', ring: '#9fbad3' },
-  { bg: '#efe2c2', fg: '#6b5320', ring: '#d3b979' },
-  { bg: colors.neutral[300], fg: colors.neutral[800], ring: colors.neutral[500] },
-];
-
-function toneFor(person: Person) {
-  return AVATAR_TONES[person.id % AVATAR_TONES.length];
-}
 
 /** "Oct 2026" from an ISO date. */
 function monthYear(iso: string | null): string | null {
@@ -218,29 +206,6 @@ export default function FriendsScreen() {
   );
 }
 
-/** A person's initials in their colour, ringed in the friends row. */
-function Avatar({ person, size, ring = false }: { person: Person; size: number; ring?: boolean }) {
-  const tone = toneFor(person);
-  return (
-    <View
-      style={[
-        styles.avatar,
-        {
-          width: size,
-          height: size,
-          backgroundColor: tone.bg,
-          borderColor: ring ? tone.ring : 'transparent',
-          borderWidth: ring ? 2.75 : 0,
-        },
-      ]}
-    >
-      <BodyText size={Math.round(size * 0.32)} weight="bold" color={tone.fg}>
-        {initials(person.email)}
-      </BodyText>
-    </View>
-  );
-}
-
 /** Add a friend by email: a sheet from the bottom with one field. */
 function InviteSheet({
   visible,
@@ -384,11 +349,6 @@ const styles = StyleSheet.create({
   },
   pressed: {
     opacity: 0.7,
-  },
-  avatar: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: radius.pill,
   },
   section: {
     marginTop: space[6],

@@ -25,6 +25,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { AuthProvider, useAuth } from '../auth/AuthContext';
 import { QuizProvider, useQuiz } from '../quiz/QuizContext';
+import { TripsProvider } from '../trips/TripsContext';
 import { colors, TextSizeProvider, useAppFonts } from '../theme';
 
 SplashScreen.preventAutoHideAsync().catch(() => {
@@ -60,10 +61,12 @@ export default function RootLayout() {
         <QueryClientProvider client={queryClient}>
           <AuthProvider>
             <QuizProvider>
-              <TextSizeProvider>
-                <StatusBar style="dark" />
-                <SessionGate />
-              </TextSizeProvider>
+              <TripsProvider>
+                <TextSizeProvider>
+                  <StatusBar style="dark" />
+                  <SessionGate />
+                </TextSizeProvider>
+              </TripsProvider>
             </QuizProvider>
           </AuthProvider>
         </QueryClientProvider>

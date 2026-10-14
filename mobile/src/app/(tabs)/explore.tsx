@@ -78,7 +78,7 @@ import {
   type FeedFilters,
 } from '../../components';
 import type { Site, SiteStatus } from '../../data/parks';
-import { visitSummary } from '../../data/visits';
+import { useTrips, type TripEntry } from '../../trips/TripsContext';
 import {
   completedRegions,
   REGIONS,
@@ -255,13 +255,18 @@ export default function ExploreScreen() {
   // wishlist is applied here, once, and everything below (map pins, cards,
   // the wishlist view) reads it from site.status. Visited outranks it.
   const { ids: wishlistIds, toggle: toggleWishlist } = useWishlist();
+  // Visited comes from your trip journal: a park with an entry is visited.
+  const { visitedIds, visitSummary } = useTrips();
   const withStatus = useCallback(
     (site: Site): Site => {
-      if (site.status === 'visited') return site;
-      const status: SiteStatus = wishlistIds.has(site.id) ? 'wishlist' : 'new';
+      const status: SiteStatus = visitedIds.has(site.id)
+        ? 'visited'
+        : wishlistIds.has(site.id)
+          ? 'wishlist'
+          : 'new';
       return status === site.status ? site : { ...site, status };
     },
-    [wishlistIds],
+    [wishlistIds, visitedIds],
   );
   const parks = useMemo(() => sharedParks.map(withStatus), [sharedParks, withStatus]);
   const allSites = useMemo(() => sharedSites.map(withStatus), [sharedSites, withStatus]);
@@ -321,7 +326,7 @@ export default function ExploreScreen() {
         .sort((a, b) =>
           (visitSummary(b.id)?.last ?? '').localeCompare(visitSummary(a.id)?.last ?? ''),
         ),
-    [allSites],
+    [allSites, visitSummary],
   );
 
   /** The wishlist and visits views show just that list. */
@@ -472,11 +477,14 @@ export default function ExploreScreen() {
   }
 
   /**
-   * A card's trip link. Trips isn't built yet, so for now it opens the
-   * Trips tab; later it opens that trip.
+   * A visited card's trip link: its journal entry in Trips, or (with none)
+   * a new entry for that park.
    */
-  function openTrip() {
-    router.navigate('/trips');
+  function openTrip(site: Site, entry: TripEntry | undefined) {
+    router.navigate({
+      pathname: '/trips',
+      params: entry ? { entry: entry.id } : { add: site.id },
+    });
   }
 
   /** What the search panel searches, in words: the parks the map shows. */
@@ -764,7 +772,7 @@ export default function ExploreScreen() {
                   rank={item.rank}
                   // The full decks mix saved parks in with everything else.
                   markWishlist={scope === 'parks' || scope === 'all'}
-                  onOpenTrip={openTrip}
+                  onOpenTrip={(entry) => openTrip(item.site, entry)}
                   saved={wishlistIds.has(item.site.id)}
                   onToggleSave={() => toggleWishlist(item.site.id)}
                   // Setting aside is about recommendations, so only on the full decks.

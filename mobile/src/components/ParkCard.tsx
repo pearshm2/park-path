@@ -20,7 +20,7 @@ import Svg, { Path } from 'react-native-svg';
 
 import type { Site } from '../data/parks';
 import { crowdLabel, factRows } from '../data/siteFacts';
-import { visitMonth, visitSummary, type Trip } from '../data/visits';
+import { monthLabel, useTrips, type TripEntry } from '../trips/TripsContext';
 import { regionForState } from '../data/regions';
 import { colors, radius, shadow, space } from '../theme';
 import { STATUS_DOT } from './ParkMap';
@@ -57,7 +57,7 @@ export function ParkCard({
   /** Flags a wishlist park on the band, for decks that mix them with others. */
   markWishlist?: boolean;
   /** The visited card's trip link: open that trip, or log one if none. */
-  onOpenTrip?: (trip: Trip | undefined) => void;
+  onOpenTrip?: (entry: TripEntry | undefined) => void;
   /** Whether the park is on your wishlist; drives the save button. */
   saved?: boolean;
   /** Shows the save button, which adds the park to or removes it from the wishlist. */
@@ -75,6 +75,7 @@ export function ParkCard({
 }) {
   const tone = terrainTone(site.group);
   const region = regionForState(site.state);
+  const { visitSummary } = useTrips();
   const visits = site.status === 'visited' ? visitSummary(site.id) : undefined;
   // The Features and Facts tabs, as on the park's page; the tags above
   // already give its effort, main feature and crowds.
@@ -121,7 +122,7 @@ export function ParkCard({
               <BodyText size={10.5} weight="bold" color={VISITED_GOLD} numberOfLines={1}>
                 {[
                   'Visited',
-                  visits && visitMonth(visits.last),
+                  visits && monthLabel(visits.last),
                   visits && visits.count > 1 && `×${visits.count}`,
                 ]
                   .filter(Boolean)
@@ -214,17 +215,17 @@ export function ParkCard({
           {/* A visited park links to the trip it was part of, or asks for one. */}
           {site.status === 'visited' ? (
             <Pressable
-              onPress={onOpenTrip ? () => onOpenTrip(visits?.trip) : undefined}
+              onPress={onOpenTrip ? () => onOpenTrip(visits?.entry) : undefined}
               disabled={!onOpenTrip}
               hitSlop={6}
               accessibilityRole="link"
               style={({ pressed }) => [styles.tripLink, pressed && styles.tripLinkPressed]}
             >
-              {visits?.trip ? (
+              {visits?.entry ? (
                 <BodyText size={12} color={colors.neutral[700]} numberOfLines={1}>
                   {'From your trip: '}
                   <BodyText size={12} weight="semibold" color={colors.accentRamp[700]}>
-                    {`${visits.trip.title} →`}
+                    {`${visits.entry.title} →`}
                   </BodyText>
                 </BodyText>
               ) : (
