@@ -43,8 +43,13 @@ function findAdb() {
 
 const adb = findAdb();
 
+/** adb, but giving up after a while: a stuck adb server otherwise hangs silently. */
+function run(args) {
+  return execFileSync(adb, args, { encoding: 'utf8', timeout: 20_000 });
+}
+
 function devices() {
-  const out = execFileSync(adb, ['devices'], { encoding: 'utf8' });
+  const out = run(['devices']);
   return out
     .split('\n')
     .slice(1)
@@ -52,11 +57,18 @@ function devices() {
     .filter(([serial, state]) => serial && state);
 }
 
+console.log('Looking for Android devices...');
 let listed;
 try {
   listed = devices();
-} catch {
-  console.error(`Couldn't run adb (${adb}). Is Android Studio's SDK installed?`);
+} catch (error) {
+  console.error(
+    error.code === 'ETIMEDOUT'
+      ? "adb isn't responding (its server is stuck). Restart it, then try again:
+" +
+          '  taskkill //F //IM adb.exe   (Git Bash; in PowerShell: taskkill /F /IM adb.exe)'
+      : `Couldn't run adb (${adb}). Is Android Studio's SDK installed?`,
+  );
   process.exit(1);
 }
 
@@ -74,7 +86,7 @@ if (ready.length === 0) {
 
 for (const [serial] of ready) {
   for (const port of PORTS) {
-    execFileSync(adb, ['-s', serial, 'reverse', `tcp:${port}`, `tcp:${port}`]);
+    run(['-s', serial, 'reverse', `tcp:${port}`, `tcp:${port}`]);
   }
   console.log(`${serial}: linked to this computer on ports ${PORTS.join(' and ')}`);
 }
