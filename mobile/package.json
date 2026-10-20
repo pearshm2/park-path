@@ -54,7 +54,8 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "lint": "expo lint",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "api:types": "npx --yes openapi-typescript@7.13.0 ../api/openapi.json -o src/api/schema.ts"
   },
   "private": true
 }

@@ -14,29 +14,12 @@ import type { EffortLevel, Season, Site, TerrainGroup } from '../data/parks';
 import { STATE_FIPS } from '../data/regions';
 import { US_STATES } from '../data/usStates';
 import { request } from './client';
+import type { components } from './schema';
 
 export type SiteScope = 'parks' | 'all';
 
-/** One site as GET /sites returns it (api/app/schemas.py, SiteOut). */
-type SiteOut = {
-  park_code: string;
-  name: string;
-  designation: string | null;
-  states: string | null;
-  latitude: number | null;
-  longitude: number | null;
-  description: string | null;
-  nps_url: string | null;
-  image_url: string | null;
-  is_named_park: boolean;
-  terrain_group: string | null;
-  feature: string | null;
-  effort: number | null;
-  typical_days: number | null;
-  seasons: string[] | null;
-  permit_required: boolean | null;
-  annual_visits_millions: number | null;
-};
+/** One site as GET /sites returns it. Generated from the API; see src/api/schema.ts. */
+type SiteOut = components['schemas']['SiteOut'];
 
 /** NPS writes some names in title case all the way: "Gates Of The Arctic". */
 const SMALL_WORDS = /(?<=\s)(Of|The|And|In|On|At|To|For)(?=\s)/g;

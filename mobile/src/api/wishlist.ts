@@ -7,8 +7,10 @@
  */
 
 import { request } from './client';
+import type { components } from './schema';
 
-type WishlistItemOut = { park_code: string; added_at: string };
+/** Generated from the API; see src/api/schema.ts. */
+type WishlistItemOut = components['schemas']['WishlistItemOut'];
 
 /** GET /wishlist — the saved park codes, newest first. */
 export async function fetchWishlist(token: string): Promise<string[]> {

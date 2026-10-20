@@ -1,0 +1,1819 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "ParkPath API",
+    "description": "Backend for the ParkPath capstone project.",
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/": {
+      "get": {
+        "tags": [
+          "meta"
+        ],
+        "summary": "Root",
+        "operationId": "root__get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "tags": [
+          "meta"
+        ],
+        "summary": "Health",
+        "description": "Liveness check \u2014 does the process respond at all. No DB dependency.",
+        "operationId": "health_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health/db": {
+      "get": {
+        "tags": [
+          "meta"
+        ],
+        "summary": "Health Db",
+        "description": "Readiness check \u2014 can we actually reach Postgres. Deploy platforms\n(Render/Railway) and future CI smoke tests should hit this, not just /health.",
+        "operationId": "health_db_health_db_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/signup": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Signup",
+        "operationId": "signup_auth_signup_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UserCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Token"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/login": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Login",
+        "operationId": "login_auth_login_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UserLogin"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Token"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/me": {
+      "get": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Read Current User",
+        "description": "Example of a protected route. Halie/Dylan: this is the pattern to\ncopy for any route that needs to know who's logged in \u2014 add\n`current_user: User = Depends(get_current_user)` as a parameter.",
+        "operationId": "read_current_user_auth_me_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserOut"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      }
+    },
+    "/sites": {
+      "get": {
+        "tags": [
+          "sites"
+        ],
+        "summary": "List Sites",
+        "operationId": "list_sites_sites_get",
+        "parameters": [
+          {
+            "name": "scope",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "parks",
+                "all"
+              ],
+              "type": "string",
+              "description": "`parks` for the 63 national parks only, `all` for every NPS site",
+              "default": "all",
+              "title": "Scope"
+            },
+            "description": "`parks` for the 63 national parks only, `all` for every NPS site"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SiteOut"
+                  },
+                  "title": "Response List Sites Sites Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/sites/boundaries": {
+      "get": {
+        "tags": [
+          "sites"
+        ],
+        "summary": "List Boundaries",
+        "description": "Every national park's outline, coarsened to ~100 m (3 decimal places),\nfor the app to tell on the device whether you're inside one: it never\nsends its location here. Declared before /{park_code} so \"boundaries\"\nisn't read as a park code.",
+        "operationId": "list_boundaries_sites_boundaries_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ParkBoundaryOut"
+                  },
+                  "type": "array",
+                  "title": "Response List Boundaries Sites Boundaries Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/sites/{park_code}": {
+      "get": {
+        "tags": [
+          "sites"
+        ],
+        "summary": "Read Site",
+        "operationId": "read_site_sites__park_code__get",
+        "parameters": [
+          {
+            "name": "park_code",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Park Code"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SiteOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/sites/{park_code}/map": {
+      "get": {
+        "tags": [
+          "sites"
+        ],
+        "summary": "Read Park Map",
+        "description": "A national park's boundary, roads and trails, for drawing its own map.\nFilled by `python -m app.park_map_sync`; 404 until that has run for\nthe park (or if the NPS has no map data for it).",
+        "operationId": "read_park_map_sites__park_code__map_get",
+        "parameters": [
+          {
+            "name": "park_code",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Park Code"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ParkMapOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/sites/{park_code}/brochures/{position}": {
+      "get": {
+        "tags": [
+          "sites"
+        ],
+        "summary": "Read Brochure Map",
+        "description": "One of the park's official brochure maps, as a JPEG (see app/brochure_maps.py).",
+        "operationId": "read_brochure_map_sites__park_code__brochures__position__get",
+        "parameters": [
+          {
+            "name": "park_code",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Park Code"
+            }
+          },
+          {
+            "name": "position",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Position"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "image/jpeg": {}
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/friends/requests": {
+      "post": {
+        "tags": [
+          "friends"
+        ],
+        "summary": "Send Request",
+        "operationId": "send_request_friends_requests_post",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FriendRequestCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FriendshipOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "friends"
+        ],
+        "summary": "List Requests",
+        "operationId": "list_requests_friends_requests_get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "direction",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "incoming",
+                "outgoing"
+              ],
+              "type": "string",
+              "description": "`incoming` to answer, `outgoing` to see what you've sent",
+              "default": "incoming",
+              "title": "Direction"
+            },
+            "description": "`incoming` to answer, `outgoing` to see what you've sent"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/FriendshipOut"
+                  },
+                  "title": "Response List Requests Friends Requests Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/friends/requests/{request_id}/accept": {
+      "post": {
+        "tags": [
+          "friends"
+        ],
+        "summary": "Accept Request",
+        "operationId": "accept_request_friends_requests__request_id__accept_post",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "request_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Request Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FriendshipOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/friends/requests/{request_id}": {
+      "delete": {
+        "tags": [
+          "friends"
+        ],
+        "summary": "Decline Or Cancel Request",
+        "description": "Recipient declines, sender cancels. Either way the row goes, so it can be re-sent.",
+        "operationId": "decline_or_cancel_request_friends_requests__request_id__delete",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "request_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Request Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/friends": {
+      "get": {
+        "tags": [
+          "friends"
+        ],
+        "summary": "List Friends",
+        "operationId": "list_friends_friends_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/FriendOut"
+                  },
+                  "type": "array",
+                  "title": "Response List Friends Friends Get"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      }
+    },
+    "/friends/{user_id}": {
+      "get": {
+        "tags": [
+          "friends"
+        ],
+        "summary": "Read Friend",
+        "description": "A friend's profile. Strangers (and pending requests) get 404, not 403.",
+        "operationId": "read_friend_friends__user_id__get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "User Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "friends"
+        ],
+        "summary": "Unfriend",
+        "operationId": "unfriend_friends__user_id__delete",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "User Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/recommendations": {
+      "post": {
+        "tags": [
+          "recommendations"
+        ],
+        "summary": "Recommend",
+        "description": "Every site, best match first. Sites with no curated data come last, unscored.",
+        "operationId": "recommend_recommendations_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecommendationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/RecommendationOut"
+                  },
+                  "type": "array",
+                  "title": "Response Recommend Recommendations Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/wishlist": {
+      "get": {
+        "tags": [
+          "wishlist"
+        ],
+        "summary": "List Wishlist",
+        "operationId": "list_wishlist_wishlist_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/WishlistItemOut"
+                  },
+                  "type": "array",
+                  "title": "Response List Wishlist Wishlist Get"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      }
+    },
+    "/wishlist/{park_code}": {
+      "put": {
+        "tags": [
+          "wishlist"
+        ],
+        "summary": "Save To Wishlist",
+        "operationId": "save_to_wishlist_wishlist__park_code__put",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "park_code",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Park Code"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WishlistItemOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "wishlist"
+        ],
+        "summary": "Remove From Wishlist",
+        "operationId": "remove_from_wishlist_wishlist__park_code__delete",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "park_code",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Park Code"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "BrochureMapOut": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "url": {
+            "type": "string",
+            "title": "Url"
+          },
+          "width": {
+            "type": "integer",
+            "title": "Width"
+          },
+          "height": {
+            "type": "integer",
+            "title": "Height"
+          },
+          "visitor_centers": {
+            "items": {
+              "$ref": "#/components/schemas/MapLabelOut"
+            },
+            "type": "array",
+            "title": "Visitor Centers"
+          }
+        },
+        "type": "object",
+        "required": [
+          "title",
+          "url",
+          "width",
+          "height",
+          "visitor_centers"
+        ],
+        "title": "BrochureMapOut",
+        "description": "One of the park's official brochure maps, as a JPEG at `url`."
+      },
+      "FriendOut": {
+        "properties": {
+          "friendship_id": {
+            "type": "integer",
+            "title": "Friendship Id"
+          },
+          "user": {
+            "$ref": "#/components/schemas/UserOut"
+          },
+          "since": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Since"
+          }
+        },
+        "type": "object",
+        "required": [
+          "friendship_id",
+          "user",
+          "since"
+        ],
+        "title": "FriendOut",
+        "description": "One entry in the signed-in user's friends list: the *other* person."
+      },
+      "FriendRequestCreate": {
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email",
+            "title": "Email"
+          }
+        },
+        "type": "object",
+        "required": [
+          "email"
+        ],
+        "title": "FriendRequestCreate"
+      },
+      "FriendshipOut": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "accepted"
+            ],
+            "title": "Status"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "accepted_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Accepted At"
+          },
+          "requester": {
+            "$ref": "#/components/schemas/UserOut"
+          },
+          "addressee": {
+            "$ref": "#/components/schemas/UserOut"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "status",
+          "created_at",
+          "accepted_at",
+          "requester",
+          "addressee"
+        ],
+        "title": "FriendshipOut",
+        "description": "A friend request, pending or accepted, with both people named."
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "Location": {
+        "properties": {
+          "lat": {
+            "type": "number",
+            "maximum": 90.0,
+            "minimum": -90.0,
+            "title": "Lat"
+          },
+          "lon": {
+            "type": "number",
+            "maximum": 180.0,
+            "minimum": -180.0,
+            "title": "Lon"
+          }
+        },
+        "type": "object",
+        "required": [
+          "lat",
+          "lon"
+        ],
+        "title": "Location",
+        "description": "Where the person starts, already converted from their zip code by the app."
+      },
+      "MapLabelOut": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "x": {
+            "type": "integer",
+            "title": "X"
+          },
+          "y": {
+            "type": "integer",
+            "title": "Y"
+          },
+          "width": {
+            "type": "integer",
+            "title": "Width"
+          },
+          "height": {
+            "type": "integer",
+            "title": "Height"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "x",
+          "y",
+          "width",
+          "height"
+        ],
+        "title": "MapLabelOut",
+        "description": "Where a label is printed on a brochure map, in the image's pixels."
+      },
+      "ParkBoundaryOut": {
+        "properties": {
+          "park_code": {
+            "type": "string",
+            "title": "Park Code"
+          },
+          "bbox": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Bbox"
+          },
+          "rings": {
+            "items": {
+              "items": {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              "type": "array"
+            },
+            "type": "array",
+            "title": "Rings"
+          }
+        },
+        "type": "object",
+        "required": [
+          "park_code",
+          "bbox",
+          "rings"
+        ],
+        "title": "ParkBoundaryOut",
+        "description": "A park's outline, for working out on the device whether you're in it."
+      },
+      "ParkMapOut": {
+        "properties": {
+          "park_code": {
+            "type": "string",
+            "title": "Park Code"
+          },
+          "boundary": {
+            "items": {
+              "items": {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              "type": "array"
+            },
+            "type": "array",
+            "title": "Boundary"
+          },
+          "roads": {
+            "items": {
+              "$ref": "#/components/schemas/RoadOut"
+            },
+            "type": "array",
+            "title": "Roads"
+          },
+          "trails": {
+            "items": {
+              "$ref": "#/components/schemas/TrailOut"
+            },
+            "type": "array",
+            "title": "Trails"
+          },
+          "places": {
+            "items": {
+              "$ref": "#/components/schemas/PlaceOut"
+            },
+            "type": "array",
+            "title": "Places"
+          },
+          "brochures": {
+            "items": {
+              "$ref": "#/components/schemas/BrochureMapOut"
+            },
+            "type": "array",
+            "title": "Brochures"
+          },
+          "official_map_url": {
+            "type": "string",
+            "title": "Official Map Url"
+          },
+          "synced_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Synced At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "park_code",
+          "boundary",
+          "roads",
+          "trails",
+          "places",
+          "brochures",
+          "official_map_url",
+          "synced_at"
+        ],
+        "title": "ParkMapOut"
+      },
+      "PlaceOut": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "visitor_center"
+            ],
+            "const": "visitor_center",
+            "title": "Kind"
+          },
+          "point": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Point"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "kind",
+          "point"
+        ],
+        "title": "PlaceOut"
+      },
+      "QuizAnswers": {
+        "properties": {
+          "terrains": {
+            "items": {
+              "type": "string",
+              "enum": [
+                "mountain",
+                "canyon",
+                "desert",
+                "forest",
+                "coast",
+                "water"
+              ]
+            },
+            "type": "array",
+            "minItems": 1,
+            "title": "Terrains"
+          },
+          "seasons": {
+            "items": {
+              "type": "string",
+              "enum": [
+                "winter",
+                "spring",
+                "summer",
+                "fall"
+              ]
+            },
+            "type": "array",
+            "maxItems": 4,
+            "title": "Seasons"
+          },
+          "crowds": {
+            "type": "string",
+            "enum": [
+              "icons",
+              "either",
+              "quiet"
+            ],
+            "title": "Crowds"
+          }
+        },
+        "type": "object",
+        "required": [
+          "terrains",
+          "seasons",
+          "crowds"
+        ],
+        "title": "QuizAnswers",
+        "description": "The onboarding quiz, as the app sends it. Every question is required."
+      },
+      "RecommendationOut": {
+        "properties": {
+          "park_code": {
+            "type": "string",
+            "title": "Park Code"
+          },
+          "score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "signals": {
+            "$ref": "#/components/schemas/SignalScores"
+          }
+        },
+        "type": "object",
+        "required": [
+          "park_code",
+          "score",
+          "reason",
+          "signals"
+        ],
+        "title": "RecommendationOut"
+      },
+      "RecommendationRequest": {
+        "properties": {
+          "answers": {
+            "$ref": "#/components/schemas/QuizAnswers"
+          },
+          "location": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Location"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "answers"
+        ],
+        "title": "RecommendationRequest"
+      },
+      "RoadOut": {
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "primary",
+              "secondary",
+              "local",
+              "4wd"
+            ],
+            "title": "Kind"
+          },
+          "paths": {
+            "items": {
+              "items": {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              "type": "array"
+            },
+            "type": "array",
+            "title": "Paths"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "kind",
+          "paths"
+        ],
+        "title": "RoadOut"
+      },
+      "SignalScores": {
+        "properties": {
+          "distance": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Distance"
+          },
+          "terrain": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Terrain"
+          },
+          "season": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Season"
+          },
+          "crowds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Crowds"
+          }
+        },
+        "type": "object",
+        "required": [
+          "distance",
+          "terrain",
+          "season",
+          "crowds"
+        ],
+        "title": "SignalScores",
+        "description": "Each signal's match from 0 to 1, or null when it isn't in use."
+      },
+      "SiteOut": {
+        "properties": {
+          "park_code": {
+            "type": "string",
+            "title": "Park Code"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "designation": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Designation"
+          },
+          "states": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "States"
+          },
+          "latitude": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latitude"
+          },
+          "longitude": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Longitude"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "nps_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nps Url"
+          },
+          "image_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image Url"
+          },
+          "is_named_park": {
+            "type": "boolean",
+            "title": "Is Named Park"
+          },
+          "terrain_group": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Terrain Group"
+          },
+          "feature": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Feature"
+          },
+          "effort": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effort"
+          },
+          "typical_days": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Typical Days"
+          },
+          "seasons": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seasons"
+          },
+          "permit_required": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Permit Required"
+          },
+          "annual_visits_millions": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Annual Visits Millions"
+          }
+        },
+        "type": "object",
+        "required": [
+          "park_code",
+          "name",
+          "designation",
+          "states",
+          "latitude",
+          "longitude",
+          "description",
+          "nps_url",
+          "image_url",
+          "is_named_park",
+          "terrain_group",
+          "feature",
+          "effort",
+          "typical_days",
+          "seasons",
+          "permit_required",
+          "annual_visits_millions"
+        ],
+        "title": "SiteOut",
+        "description": "One NPS site. Curated fields are null for sites nobody has filled in\nyet (most of the non-park units), so clients must handle missing values."
+      },
+      "Token": {
+        "properties": {
+          "access_token": {
+            "type": "string",
+            "title": "Access Token"
+          },
+          "token_type": {
+            "type": "string",
+            "title": "Token Type",
+            "default": "bearer"
+          }
+        },
+        "type": "object",
+        "required": [
+          "access_token"
+        ],
+        "title": "Token"
+      },
+      "TrailOut": {
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "uses": {
+            "items": {
+              "type": "string",
+              "enum": [
+                "hike",
+                "horse",
+                "bike",
+                "motorized"
+              ]
+            },
+            "type": "array",
+            "title": "Uses"
+          },
+          "surface": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Surface"
+          },
+          "closed": {
+            "type": "boolean",
+            "title": "Closed"
+          },
+          "length_miles": {
+            "type": "number",
+            "title": "Length Miles"
+          },
+          "paths": {
+            "items": {
+              "items": {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              "type": "array"
+            },
+            "type": "array",
+            "title": "Paths"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "uses",
+          "surface",
+          "closed",
+          "length_miles",
+          "paths"
+        ],
+        "title": "TrailOut"
+      },
+      "UserCreate": {
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email",
+            "title": "Email"
+          },
+          "password": {
+            "type": "string",
+            "title": "Password"
+          }
+        },
+        "type": "object",
+        "required": [
+          "email",
+          "password"
+        ],
+        "title": "UserCreate"
+      },
+      "UserLogin": {
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email",
+            "title": "Email"
+          },
+          "password": {
+            "type": "string",
+            "title": "Password"
+          }
+        },
+        "type": "object",
+        "required": [
+          "email",
+          "password"
+        ],
+        "title": "UserLogin"
+      },
+      "UserOut": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "title": "Email"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "email"
+        ],
+        "title": "UserOut"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      },
+      "WishlistItemOut": {
+        "properties": {
+          "park_code": {
+            "type": "string",
+            "title": "Park Code"
+          },
+          "added_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Added At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "park_code",
+          "added_at"
+        ],
+        "title": "WishlistItemOut",
+        "description": "One saved site. The app already has the site details from GET /sites."
+      }
+    },
+    "securitySchemes": {
+      "OAuth2PasswordBearer": {
+        "type": "oauth2",
+        "flows": {
+          "password": {
+            "scopes": {},
+            "tokenUrl": "/auth/login"
+          }
+        }
+      }
+    }
+  }
+}

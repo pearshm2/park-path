@@ -10,18 +10,13 @@
  */
 
 import { request } from './client';
+import type { components } from './schema';
 import { listSites, type SiteScope } from './parks';
 import type { Site } from '../data/parks';
 import { engineRequest, isComplete, type QuizAnswers } from '../data/quizSpec';
 
-/** One site in the engine's response. */
-type RecommendationOut = {
-  park_code: string;
-  /** 0–1; null for sites with no curated data to score on. */
-  score: number | null;
-  reason: string | null;
-  signals: Record<'distance' | 'terrain' | 'season' | 'crowds', number | null>;
-};
+/** One site in the engine's response. Generated from the API; see src/api/schema.ts. */
+type RecommendationOut = components['schemas']['RecommendationOut'];
 
 export type Recommendation = {
   site: Site;

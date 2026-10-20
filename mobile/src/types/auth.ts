@@ -1,24 +1,16 @@
 /**
- * Auth types mirroring the FastAPI schemas in api/app/schemas.py.
- *
- * Keep these in step with that file — if the backend's response shape
- * changes, this is the one place the app needs editing.
+ * Auth types, generated from the FastAPI schemas in api/app/schemas.py
+ * (see src/api/schema.ts). When the backend changes, regenerate with
+ * `npm run api:types` instead of editing these by hand; CI checks that.
  */
 
+import type { components } from '../api/schema';
+
 /** api/app/schemas.py :: Token */
-export type TokenResponse = {
-  access_token: string;
-  token_type: string;
-};
+export type TokenResponse = components['schemas']['Token'];
 
 /** api/app/schemas.py :: UserOut */
-export type User = {
-  id: number;
-  email: string;
-};
+export type User = components['schemas']['UserOut'];
 
 /** api/app/schemas.py :: UserCreate / UserLogin */
-export type Credentials = {
-  email: string;
-  password: string;
-};
+export type Credentials = components['schemas']['UserLogin'];
