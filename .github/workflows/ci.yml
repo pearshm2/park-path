@@ -80,3 +80,64 @@ jobs:
 
       - name: Run pytest
         run: pytest -v
+  # ---------------------------------------------------------------
+  # Job 3: The mobile app, and the contract between app and API.
+  #
+  # The API's contract is api/openapi.json (FastAPI's description of
+  # every route and response). The app's TypeScript types for API
+  # responses are generated from it into mobile/src/api/schema.ts.
+  # This job fails if either file is out of date, or if the app no
+  # longer type-checks against the API's real shapes.
+  # See docs/api-contract.md.
+  # ---------------------------------------------------------------
+  app:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: api/requirements.txt
+
+      - name: Install API dependencies
+        run: pip install -r api/requirements.txt
+
+      # Only reads the code; no database needed.
+      - name: Check api/openapi.json is up to date
+        working-directory: api
+        run: |
+          python -m app.export_openapi
+          git diff --exit-code openapi.json || {
+            echo "::error::api/openapi.json is out of date. In api/, run: python -m app.export_openapi (then npm run api:types in mobile/) and commit both files."
+            exit 1
+          }
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+
+      - name: Install app dependencies
+        working-directory: mobile
+        run: npm ci
+
+      - name: Check generated API types are up to date
+        working-directory: mobile
+        run: |
+          npm run api:types
+          git diff --exit-code src/api/schema.ts || {
+            echo "::error::mobile/src/api/schema.ts is out of date. In mobile/, run: npm run api:types and commit it."
+            exit 1
+          }
+
+      # Fails if the app's code no longer matches the API's real shapes.
+      - name: Type-check the app
+        working-directory: mobile
+        run: npm run typecheck
+
+      - name: Lint the app
+        working-directory: mobile
+        run: npm run lint

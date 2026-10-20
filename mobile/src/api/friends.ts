@@ -7,6 +7,7 @@
  */
 
 import { request } from './client';
+import type { components } from './schema';
 
 export type Person = { id: number; email: string };
 
@@ -20,14 +21,9 @@ export type FriendRequest = {
   addressee: Person;
 };
 
-type FriendshipOut = {
-  id: number;
-  status: 'pending' | 'accepted';
-  created_at: string;
-  accepted_at: string | null;
-  requester: Person;
-  addressee: Person;
-};
+/** Generated from the API; see src/api/schema.ts. */
+type FriendshipOut = components['schemas']['FriendshipOut'];
+type FriendOut = components['schemas']['FriendOut'];
 
 function toRequest(raw: FriendshipOut): FriendRequest {
   return {
@@ -41,7 +37,7 @@ function toRequest(raw: FriendshipOut): FriendRequest {
 
 /** GET /friends — newest friendship first. */
 export async function fetchFriends(token: string): Promise<Friend[]> {
-  const rows = await request<{ friendship_id: number; user: Person; since: string | null }[]>(
+  const rows = await request<FriendOut[]>(
     '/friends',
     { token },
   );
