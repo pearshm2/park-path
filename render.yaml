@@ -1,15 +1,26 @@
-# Render "Blueprint" — this file MUST live at the repo root (not inside
-# api/), that's the only place Render looks for it. Since the actual
-# FastAPI project lives in the api/ subfolder, rootDir + dockerfilePath
-# below point Render at it explicitly.
-# Commit this at repo root and click "New > Blueprint" on Render. It
-# provisions both services together. Render terminates TLS for you
-# automatically; the app itself just needs to listen on $PORT (handled
-# in api/Dockerfile's CMD).
+# Render "Blueprint": this file MUST live at the repo root; that's the only
+# place Render looks for it. It describes the whole deployment, the API
+# and its database, so Render can create both in one go
+# (Dashboard -> New -> Blueprint).
+#
+# The FastAPI project lives in api/. Render reads dockerfilePath and
+# dockerContext relative to the repo root, so both point into api/
+# explicitly. buildFilter means only changes inside api/ trigger a
+# redeploy (app-only changes don't rebuild the API).
+#
+# Free plan notes (see docs/deploy.md):
+# - the API sleeps after 15 minutes without requests; the first request
+#   after that takes about a minute
+# - the free database is deleted 30 days after it's created
+#
+# Render terminates HTTPS for you; the app only has to listen on $PORT
+# (api/Dockerfile's CMD does that, after running the database migrations).
 
 databases:
   - name: parkpath-db
     plan: free
+    region: virginia # must match the API's region
+    postgresMajorVersion: "16" # same as docker-compose.yml
     databaseName: parkpath
     user: parkpath
 
@@ -18,8 +29,13 @@ services:
     name: parkpath-api
     runtime: docker
     plan: free
-    rootDir: api
+    region: virginia
     dockerfilePath: ./api/Dockerfile
+    dockerContext: ./api
+    buildFilter:
+      paths:
+        - api/**
+    healthCheckPath: /health
     envVars:
       - key: DATABASE_URL
         fromDatabase:
@@ -28,7 +44,8 @@ services:
       - key: ENVIRONMENT
         value: production
       - key: CORS_ORIGINS
-        value: "*" # tighten once the app's real origin/scheme is known
+        value: "*" # the mobile app isn't a browser, so CORS doesn't restrict it
       - key: SECRET_KEY
         generateValue: true # Render generates and stores a real random secret
-    healthCheckPath: /health
+      - key: NPS_API_KEY
+        sync: false # entered by hand in the dashboard; never committed
