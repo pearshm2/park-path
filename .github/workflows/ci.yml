@@ -120,9 +120,11 @@ jobs:
           cache: npm
           cache-dependency-path: mobile/package-lock.json
 
+      # npm install, not npm ci: lock files made on Windows leave out some
+      # Linux-only packages (an npm bug), and npm ci refuses to run then.
       - name: Install app dependencies
         working-directory: mobile
-        run: npm ci
+        run: npm install --no-audit --no-fund
 
       - name: Check generated API types are up to date
         working-directory: mobile
