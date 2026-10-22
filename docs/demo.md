@@ -183,8 +183,13 @@ emulator, say yes. The first load takes a minute or two.
 1. **Sign up** with a made-up email and password. This goes app → API →
    database, so it proves the whole stack is connected.
 2. **Take the quiz.**
-3. **Show the tabs.** Explore, Trips, Passport, and Friends are placeholders
-   for upcoming weeks.
+3. **Show the tabs.**
+   - **Trips:** your memories as bubbles. Tap one to dive in and relive it;
+     **Relive all** plays every trip as a story. In a development build, a new
+     account's empty Trips has **Load sample trips** to fill it.
+   - **Passport:** a stamp for each national park you've logged, and
+     achievements.
+   - **Explore** and **Friends** work against the API.
 
 ### Behind the scenes
 

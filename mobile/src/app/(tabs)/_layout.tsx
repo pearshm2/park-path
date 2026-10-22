@@ -9,8 +9,9 @@
  * every icon in the system.
  */
 
-import { Redirect, Tabs } from 'expo-router';
-import type { ComponentProps } from 'react';
+import { Redirect, Tabs, useFocusEffect } from 'expo-router';
+import { setStatusBarStyle } from 'expo-status-bar';
+import { useCallback, type ComponentProps } from 'react';
 import { Pressable, StyleSheet, Text, View, type ColorValue } from 'react-native';
 import Svg, { Circle, Path } from 'react-native-svg';
 
@@ -110,6 +111,10 @@ function SettingsIcon({ color }: { color: ColorValue }) {
 export default function TabsLayout() {
   const { status } = useAuth();
   const { completed } = useQuiz();
+  // Back on the tabs from Relive (dark, with a light status bar): dark
+  // status bar again. Set here rather than trusting Relive's to undo
+  // itself, which a dive's full-screen layer can leave stuck on light.
+  useFocusEffect(useCallback(() => setStatusBarStyle('dark'), []));
 
   if (status !== 'signedIn') return <Redirect href="/sign-in" />;
   // The app's content is keyed off the quiz answers, so there is nothing
