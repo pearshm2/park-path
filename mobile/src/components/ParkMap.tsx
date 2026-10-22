@@ -33,6 +33,14 @@
  * outlines; pins are placed in screen space instead, so they keep their
  * size and spread apart as the map grows.
  *
+ * The view (zoom and position) lives on the UI thread, in shared values:
+ * pinching, dragging and easing onto a region move the outlines and every
+ * pin there, frame by frame, without React redrawing the map. React only
+ * hears about a move when it starts and ends, and re-places the feature
+ * badges then. The outlines are projected once per width; the box's height
+ * (which changes as the key and the card sheet open and close) is part of
+ * the view, so it costs a move, not a new projection.
+ *
  * A consequence of Albers USA worth knowing: it has no projection for
  * territories, so American Samoa and the Virgin Islands return null and
  * are absent from the map. The prototype notes the same limitation.
@@ -45,7 +53,15 @@ import {
   type GeoPath,
   type GeoProjection,
 } from 'd3-geo';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  memo,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ComponentType,
+  type ReactNode,
+} from 'react';
 import {
   Pressable,
   StyleSheet,
@@ -55,7 +71,15 @@ import {
   type ViewStyle,
 } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import Svg, { Circle, G, Path, Text as SvgText } from 'react-native-svg';
+import Animated, {
+  Easing,
+  useAnimatedProps,
+  useSharedValue,
+  withTiming,
+  type SharedValue,
+} from 'react-native-reanimated';
+import Svg, { Circle, G, Path, Text as SvgText, type GProps } from 'react-native-svg';
+import { scheduleOnRN } from 'react-native-worklets';
 
 import type { Site, SiteStatus } from '../data/parks';
 import { REGIONS, regionForState, STATE_REGION, type RegionId } from '../data/regions';
@@ -91,7 +115,7 @@ export const PICK_FILL = colors.accent;
 /** A park that matches the active filters. Shared with the map key. */
 export const MATCH_DOT = { fill: colors.accent2Ramp[600], stroke: colors.neutral[100] };
 
-/** Small dots are hard to hit with a finger, so each gets a wider invisible target. */
+/** Small dots are hard to hit with a finger, so taps reach this far from one. */
 const HIT_RADIUS = 11;
 
 /** How far in the map must be zoomed before feature badges replace dots. */
@@ -113,19 +137,23 @@ const HALO = 9;
  */
 const CROWD_SHARE = 0.3;
 
+/** Room left round the whole country, so coastlines aren't flush to the edge. */
+const FIT_PADDING = 8;
 /** Room left around a zoomed region, and the most it may be magnified. */
 const ZOOM_PADDING = 22;
 const ZOOM_PADDING_X = 40;
 const MAX_ZOOM = 4;
-const ZOOM_MS = 380;
+const ZOOM_EASE = { duration: 380, easing: Easing.inOut(Easing.cubic) };
 
-/** Limits on pinching: never smaller than the whole country, up to 8x. */
+/** Limits on pinching, against the whole country: never smaller, up to 8x. */
 const PINCH_MIN = 1;
 const PINCH_MAX = 8;
 
 /** Scale then translate, applied to projected map coordinates. */
 type View2D = { k: number; tx: number; ty: number };
 const IDENTITY: View2D = { k: 1, tx: 0, ty: 0 };
+/** The view as the UI thread holds it. */
+type LiveView = { k: SharedValue<number>; tx: SharedValue<number>; ty: SharedValue<number> };
 
 type ParkMapProps = {
   sites: Site[];
@@ -147,6 +175,13 @@ type ParkMapProps = {
    * notch or status bar (the full-screen view).
    */
   controlInset?: { top?: number; right?: number; bottom?: number };
+  /**
+   * How much of the box's bottom is covered (Explore's open card sheet).
+   * The whole country still fills the box, running on under the cover,
+   * but a region in focus is framed in the part left showing, and the
+   * expand button sits above the cover.
+   */
+  obscuredBottom?: number;
   onSelectSite?: (site: Site) => void;
   /** Regions to mark as completed: every national park in them visited. */
   completedRegions?: ReadonlySet<RegionId>;
@@ -160,6 +195,17 @@ type ParkMapProps = {
   /** Tapping a region's land (not a pin), while no region is in focus. */
   onSelectRegion?: (region: RegionId) => void;
   style?: StyleProp<ViewStyle>;
+  /**
+   * Draw the map on a taller canvas than its box: `top` px above it and
+   * `height` tall in all, so that zoomed in it slides behind what's laid
+   * over it (Explore's key and card sheet) rather than stopping at a hard
+   * edge. The whole map still fits the box at rest, and only the box takes
+   * touches. Keep `height` steady as the box moves: on Android a new canvas
+   * size rebuilds every outline, a stall of a tenth of a second.
+   */
+  canvas?: { top: number; height: number };
+  /** The box's y and height within its parent, when they change. */
+  onFrame?: (y: number, height: number) => void;
 };
 
 export function ParkMap({
@@ -172,34 +218,46 @@ export function ParkMap({
   iconsAtAnyZoom = false,
   onExpand,
   controlInset,
+  obscuredBottom = 0,
   onSelectSite,
   onSelectRegion,
   completedRegions,
   revealedRegion,
   tuckCompleted = true,
   style,
+  canvas,
+  onFrame,
 }: ParkMapProps) {
   const [size, setSize] = useState({ width: 0, height: 0 });
 
+  // Zooming back out of a region, only that region is drawn until the zoom
+  // ends, and the rest of the country comes in then: on Android each frame
+  // of the whole country is slow to draw, and the region alone is quick.
+  const [lastFocus, setLastFocus] = useState(focusRegion ?? null);
+  const [leaving, setLeaving] = useState<RegionId | null>(null);
+  if ((focusRegion ?? null) !== lastFocus) {
+    setLastFocus(focusRegion ?? null);
+    setLeaving(focusRegion == null ? lastFocus : null);
+  }
+  /** The region drawn alone, if any: the one in focus, or being left. */
+  const shownRegion = focusRegion ?? leaving;
+
   function onLayout(event: LayoutChangeEvent) {
-    const { width, height } = event.nativeEvent.layout;
+    const { width, height, y } = event.nativeEvent.layout;
+    onFrame?.(y, height);
     // Avoid re-projecting on sub-pixel layout jitter.
     if (Math.abs(width - size.width) > 1 || Math.abs(height - size.height) > 1) {
       setSize({ width, height });
     }
   }
 
+  // Projected for the box's width alone: the box's height is fitted by the
+  // view (`base`), so the key or the card sheet changing it doesn't re-run
+  // the projection and redraw every outline.
   const projected = useMemo(() => {
-    if (size.width < 1 || size.height < 1) return null;
+    if (size.width < 1) return null;
 
-    // A little padding so coastal outlines are not flush to the edge.
-    const projection = geoAlbersUsa().fitExtent(
-      [
-        [8, 8],
-        [size.width - 8, size.height - 8],
-      ],
-      FIT_COLLECTION,
-    );
+    const projection = geoAlbersUsa().fitWidth(size.width - FIT_PADDING * 2, FIT_COLLECTION);
     const toPath = geoPath(projection);
 
     const statePaths = US_STATES.flatMap((feature) => {
@@ -214,70 +272,201 @@ export function ParkMap({
       return [{ site, x: point[0], y: point[1] }];
     });
 
-    return { projection, toPath, statePaths, dots };
-  }, [size.width, size.height, sites]);
+    return { projection, toPath, statePaths, dots, bounds: toPath.bounds(FIT_COLLECTION) };
+  }, [size.width, sites]);
+
+  /** The whole country, fitted to the box. Pinch limits are against this. */
+  const base = useMemo<View2D>(() => {
+    if (!projected || size.height < 1) return IDENTITY;
+    return frameBounds(projected.bounds, size, FIT_PADDING, FIT_PADDING, Infinity);
+  }, [projected, size]);
 
   /** Where the map should end up: the whole country, or framed on a region. */
   const target = useMemo<View2D>(() => {
     const region = REGIONS.find((r) => r.id === focusRegion);
-    if (!projected || !region) return IDENTITY;
+    if (!projected || !region || size.height < 1) return base;
 
     const { toPath } = projected;
-    const [[x0, y0], [x1, y1]] = toPath.bounds({
+    const bounds = toPath.bounds({
       type: 'FeatureCollection',
       features: US_STATES.filter((feature) => region.states.includes(feature.id)).map(
         (feature) => mainLand(feature, toPath),
       ),
     });
-    const k = Math.min(
-      // Wider at the sides: an edge park's badge (and the expand button in
-      // the corner) needs the room.
-      (size.width - ZOOM_PADDING_X * 2) / Math.max(x1 - x0, 1),
-      (size.height - ZOOM_PADDING * 2) / Math.max(y1 - y0, 1),
-      MAX_ZOOM,
-    );
-    return {
-      k,
-      tx: size.width / 2 - k * ((x0 + x1) / 2),
-      ty: size.height / 2 - k * ((y0 + y1) / 2),
+    // Wider at the sides: an edge park's badge (and the expand button in
+    // the corner) needs the room.
+    const showing = {
+      width: size.width,
+      height: Math.max(size.height - obscuredBottom, size.height / 2),
     };
-  }, [projected, focusRegion, size.width, size.height]);
+    return frameBounds(bounds, showing, ZOOM_PADDING_X, ZOOM_PADDING, base.k * MAX_ZOOM);
+  }, [projected, focusRegion, size, base, obscuredBottom]);
 
-  const { view, moved, beginGesture, pinchTo, panBy, reset } = useMapView(target, size);
+  // The live view, on the UI thread.
+  const k = useSharedValue(1);
+  const tx = useSharedValue(0);
+  const ty = useSharedValue(0);
+  const live: LiveView = { k, tx, ty };
 
-  // Callbacks run on the JS thread (runOnJS) because the view is React
-  // state; the map is light enough for that to keep up.
+  /** The target the user last pinched or dragged away from, if any. */
+  const [movedFrom, setMovedFrom] = useState<View2D | null>(null);
+  /** Where the last pinch or drag left the map. */
+  const [gestureView, setGestureView] = useState<View2D>(IDENTITY);
+  // A new target (another park, or none) clears the Reset button by itself.
+  const moved = movedFrom === target;
+  /**
+   * The view React draws the badges for: where the map rests, or is easing
+   * to. While a finger moves it, the badges ride along where they were.
+   */
+  const settled = moved ? gestureView : target;
+  // How far above the box the drawing starts, and how tall it is.
+  const lift = canvas && canvas.height > 0 ? canvas.top : 0;
+  const drawHeight = canvas && canvas.height > 0 ? Math.round(canvas.height) : size.height;
+
+  // Ease onto a newly focused region, or back out of one. A new target for
+  // the same focus means the box changed size (the key or the card sheet
+  // opened or closed), and the map goes straight to its new fit: on
+  // Android each frame of the whole country costs tens of milliseconds to
+  // draw, so one jump looks better than an ease that stutters. (If an ease
+  // is still under way, as when a tap focuses a region and opens the sheet
+  // together, it's re-aimed for the time it has left.) The first target,
+  // once the box is measured, is where the map starts.
+  const placedFocus = useRef<RegionId | null | undefined>(undefined);
+  const easingUntil = useRef(0);
+  useEffect(() => {
+    if (!projected || size.height < 1) return;
+    const focus = focusRegion ?? null;
+    const now = Date.now();
+    let duration = 0;
+    if (placedFocus.current !== undefined && placedFocus.current !== focus) {
+      duration = ZOOM_EASE.duration;
+      easingUntil.current = now + duration;
+    } else if (now < easingUntil.current) {
+      duration = easingUntil.current - now;
+    }
+    placedFocus.current = focus;
+    if (duration === 0) {
+      k.set(target.k);
+      tx.set(target.tx);
+      ty.set(target.ty);
+      return;
+    }
+    const ease = { ...ZOOM_EASE, duration };
+    k.set(
+      withTiming(target.k, ease, (finished) => {
+        'worklet';
+        if (finished) scheduleOnRN(setLeaving, null);
+      }),
+    );
+    tx.set(withTiming(target.tx, ease));
+    ty.set(withTiming(target.ty, ease));
+  }, [target, focusRegion, projected, size.height, k, tx, ty]);
+
+  function reset() {
+    setMovedFrom(null);
+    k.set(withTiming(target.k, ZOOM_EASE));
+    tx.set(withTiming(target.tx, ZOOM_EASE));
+    ty.set(withTiming(target.ty, ZOOM_EASE));
+  }
+  function beginMove(atK: number, atX: number, atY: number) {
+    setLeaving(null);
+    setMovedFrom(target);
+    setGestureView({ k: atK, tx: atX, ty: atY });
+  }
+  function endMove(atK: number, atX: number, atY: number) {
+    setGestureView({ k: atK, tx: atX, ty: atY });
+  }
+
+  // What a pinch or drag may do, as plain numbers for the UI thread: zoom
+  // between the whole country and PINCH_MAX, and keep the middle of the
+  // box on the map (where the whole country's box is, at that zoom).
+  const minK = base.k * PINCH_MIN;
+  const maxK = base.k * PINCH_MAX;
+  const halfW = size.width / 2;
+  const halfH = size.height / 2;
+  const left = -base.tx / base.k;
+  const right = (size.width - base.tx) / base.k;
+  const top = -base.ty / base.k;
+  const bottom = (size.height - base.ty) / base.k;
+  const gestureStart = useSharedValue({ k: 1, tx: 0, ty: 0, focalX: 0, focalY: 0 });
+
+  // Gesture callbacks run on the UI thread and move the shared values, so
+  // the map follows the fingers without waiting on React.
   const pinch = Gesture.Pinch()
-    .runOnJS(true)
-    .onStart((event) => beginGesture(event.focalX, event.focalY))
-    .onUpdate((event) => pinchTo(event.scale, event.focalX, event.focalY));
+    .onStart((event) => {
+      gestureStart.set({
+        k: k.get(),
+        tx: tx.get(),
+        ty: ty.get(),
+        focalX: event.focalX,
+        focalY: event.focalY,
+      });
+      scheduleOnRN(beginMove, k.get(), tx.get(), ty.get());
+    })
+    .onUpdate((event) => {
+      const start = gestureStart.get();
+      const nextK = Math.min(Math.max(start.k * event.scale, minK), maxK);
+      const ratio = nextK / start.k;
+      // Keep the point under the fingers fixed, and follow the fingers as they move.
+      k.set(nextK);
+      tx.set(
+        Math.min(
+          Math.max(event.focalX - (start.focalX - start.tx) * ratio, halfW - nextK * right),
+          halfW - nextK * left,
+        ),
+      );
+      ty.set(
+        Math.min(
+          Math.max(event.focalY - (start.focalY - start.ty) * ratio, halfH - nextK * bottom),
+          halfH - nextK * top,
+        ),
+      );
+    })
+    .onEnd(() => {
+      scheduleOnRN(endMove, k.get(), tx.get(), ty.get());
+    });
 
   const pan = Gesture.Pan()
-    .runOnJS(true)
     .maxPointers(1)
     // At full-country size a drag belongs to the page, so it can scroll.
-    .enabled(view.k > 1.05)
-    .onStart(() => beginGesture(0, 0))
-    .onUpdate((event) => panBy(event.translationX, event.translationY));
+    .enabled(settled.k > base.k * 1.05)
+    .onStart(() => {
+      gestureStart.set({ k: k.get(), tx: tx.get(), ty: ty.get(), focalX: 0, focalY: 0 });
+      scheduleOnRN(beginMove, k.get(), tx.get(), ty.get());
+    })
+    .onUpdate((event) => {
+      const start = gestureStart.get();
+      tx.set(
+        Math.min(Math.max(start.tx + event.translationX, halfW - start.k * right), halfW - start.k * left),
+      );
+      ty.set(
+        Math.min(Math.max(start.ty + event.translationY, halfH - start.k * bottom), halfH - start.k * top),
+      );
+    })
+    .onEnd(() => {
+      scheduleOnRN(endMove, k.get(), tx.get(), ty.get());
+    });
 
   const regionsTappable = onSelectRegion != null && focusRegion == null;
 
-  // Built once per layout, so each frame of a zoom only moves the group.
-  // While a region is in focus the others are left out entirely.
+  // Built once per layout and drawn at the live view's zoom, so moving the
+  // map never rebuilds them. While a region is in focus the others are
+  // hidden, not removed: on Android an outline drawn for the first time
+  // (or again, after being removed) has its shape rebuilt, a stall when
+  // most of the country comes back at once.
   //
-  // Completed regions go in three layers: the other states, then a wide
-  // gold stroke round each completed state, then the completed states'
-  // fills on top. The fills cover the gold everywhere but the region's
-  // outer edge (where states inside it meet, both sides are filled), so
-  // the gold rings the region as a whole, not each state in it.
+  // Completed regions go in three layers: their gold-edged region groups
+  // go after the others, and in each, a wide gold stroke round each state
+  // with the states' fills on top. The fills cover the gold everywhere but
+  // the region's outer edge (where states inside it meet, both sides are
+  // filled), so the gold rings the region as a whole, not each state in it.
   const stateShapes = useMemo(() => {
     if (!projected) return [];
-    const shown = projected.statePaths.flatMap((state) => {
+    const states = projected.statePaths.map((state) => {
       const region = STATE_REGION[state.id];
-      if (focusRegion != null && region?.id !== focusRegion) return [];
-      return [{ ...state, region, earned: region != null && completedRegions?.has(region.id) }];
+      return { ...state, region, earned: region != null && completedRegions?.has(region.id) };
     });
-    const land = (state: (typeof shown)[number]) => (
+    const land = (state: (typeof states)[number]) => (
       <Path
         key={state.id}
         d={state.d}
@@ -287,23 +476,33 @@ export function ParkMap({
         vectorEffect="non-scaling-stroke"
       />
     );
-    const earned = shown.filter((state) => state.earned);
-    return [
-      ...shown.filter((state) => !state.earned).map(land),
-      ...earned.map((state) => (
-        <Path
-          key={`edge-${state.id}`}
-          d={state.d}
-          fill="none"
-          stroke={EARNED_EDGE}
-          strokeWidth={EARNED_EDGE_WIDTH}
-          strokeLinejoin="round"
-          vectorEffect="non-scaling-stroke"
-        />
-      )),
-      ...earned.map(land),
-    ];
-  }, [projected, focusRegion, completedRegions]);
+    const edge = (state: (typeof states)[number]) => (
+      <Path
+        key={`edge-${state.id}`}
+        d={state.d}
+        fill="none"
+        stroke={EARNED_EDGE}
+        strokeWidth={EARNED_EDGE_WIDTH}
+        strokeLinejoin="round"
+        vectorEffect="non-scaling-stroke"
+      />
+    );
+    const groups = [...REGIONS.map((region) => region.id), null].map((id) => {
+      const inGroup = states.filter((state) => (state.region?.id ?? null) === id);
+      const earned = inGroup.some((state) => state.earned);
+      return { id, earned, inGroup };
+    });
+    // Completed regions last, so their gold edge sits over their neighbours.
+    groups.sort((a, b) => Number(a.earned) - Number(b.earned));
+    return groups.map(({ id, earned, inGroup }) => (
+      <G
+        key={id ?? 'none'}
+        display={shownRegion != null && id !== shownRegion ? 'none' : undefined}
+      >
+        {earned ? [...inGroup.map(edge), ...inGroup.map(land)] : inGroup.map(land)}
+      </G>
+    ));
+  }, [projected, shownRegion, completedRegions]);
 
   /** Where each completed region's stamp goes, in map coordinates. */
   const stampSpots = useMemo(() => {
@@ -314,11 +513,12 @@ export function ParkMap({
     }));
   }, [projected, completedRegions]);
 
-  if (!projected) {
+  if (!projected || size.height < 1) {
     return <View style={[styles.container, style]} onLayout={onLayout} />;
   }
 
-  const place = ({ x, y }: PlacedDot) => ({
+  /** Where a point in map coordinates lands in the box, at a view. */
+  const place = ({ x, y }: Point, view: View2D = settled) => ({
     x: x * view.k + view.tx,
     y: y * view.k + view.ty,
   });
@@ -330,17 +530,17 @@ export function ParkMap({
     return (
       region != null &&
       completedRegions?.has(region) === true &&
-      region !== focusRegion &&
+      region !== shownRegion &&
       region !== revealedRegion &&
       dot.site.id !== selectedId
     );
   };
   // While a region is in focus, only its pins (and the selected one) show.
   const visible = (
-    focusRegion
+    shownRegion
       ? projected.dots.filter(
           (dot) =>
-            dot.site.id === selectedId || regionForState(dot.site.state)?.id === focusRegion,
+            dot.site.id === selectedId || regionForState(dot.site.state)?.id === shownRegion,
         )
       : projected.dots
   ).filter((dot) => !tucked(dot));
@@ -363,8 +563,10 @@ export function ParkMap({
       at.y >= -BADGE_R && at.y <= size.height + BADGE_R;
     return inView && featureForPark(dot.site.id) ? [{ id: dot.site.id, ...at }] : [];
   });
-  const pinchedIn = moved && view.k >= ICON_ZOOM && !crowded(onScreen);
+  const pinchedIn = moved && settled.k >= base.k * ICON_ZOOM && !crowded(onScreen);
   const showIcons = featureIcons && (iconsAtAnyZoom || focusRegion != null || pinchedIn);
+  /** How far the parks that aren't picks or matches fade back. */
+  const othersFade = filtering ? 0.35 : hasPicks && !showIcons ? 0.6 : 1;
   const badged = new Set(showIcons ? onScreen.map((spot) => spot.id) : []);
   /** The park's feature, when it's on screen with badges showing and has one. */
   const badgeFor = (site: Site) => (badged.has(site.id) ? featureForPark(site.id) : undefined);
@@ -372,6 +574,33 @@ export function ParkMap({
   const badgeSpots = showIcons
     ? spreadBadges(onScreen, selectedId, size)
     : new Map<string, Point>();
+  /** How far a park's badge was nudged off it, which holds while the map moves. */
+  const nudgeFor = (dot: PlacedDot): Point | undefined => {
+    const spot = badgeSpots.get(dot.site.id);
+    if (!spot) return undefined;
+    const at = place(dot);
+    return { x: spot.x - at.x, y: spot.y - at.y };
+  };
+  /** What a pin draws, as plain values: a pin whose values are unchanged isn't re-rendered. */
+  const pinProps = (dot: PlacedDot, kind: PinKind) => {
+    const nudge = nudgeFor(dot);
+    return {
+      site: dot.site,
+      x: dot.x,
+      y: dot.y,
+      k,
+      tx,
+      ty,
+      lift,
+      kind,
+      selected: dot.site.id === selectedId,
+      rank: kind === 'pick' ? rankById?.get(dot.site.id) : undefined,
+      feature: badgeFor(dot.site),
+      nudgeX: nudge?.x,
+      nudgeY: nudge?.y,
+      fade: kind === 'other' ? othersFade : 1,
+    };
+  };
   // Draw #1 last so it sits on top where pins overlap.
   picks.sort((a, b) => rankById!.get(b.site.id)! - rankById!.get(a.site.id)!);
   // The selected park goes on top of its own group, glow and all.
@@ -386,14 +615,16 @@ export function ParkMap({
   // drawn while zoomed, so after zooming in and back out a tap landed on
   // whichever state used to be under the finger. Working from the current
   // view is exact at any zoom.
-  const showStamps = focusRegion == null && tuckCompleted;
+  const showStamps = shownRegion == null && tuckCompleted;
   /** The pin under a tap, nearest first; badges and numbered pins are bigger targets. */
-  function siteAt(x: number, y: number): Site | undefined {
+  function siteAt(x: number, y: number, view: View2D): Site | undefined {
     let hit: Site | undefined;
     let nearest = Infinity;
     for (const dot of visible) {
-      const spot = badgeSpots.get(dot.site.id) ?? place(dot);
-      const reach = badgeSpots.has(dot.site.id)
+      const at = place(dot, view);
+      const nudge = nudgeFor(dot);
+      const spot = nudge ? { x: at.x + nudge.x, y: at.y + nudge.y } : at;
+      const reach = nudge
         ? BADGE_R + 4
         : rankById?.has(dot.site.id)
           ? 13
@@ -407,11 +638,11 @@ export function ParkMap({
     return hit;
   }
   /** The region under a tap: a completed region's stamp, or the state it lands in. */
-  function regionAt(x: number, y: number): RegionId | undefined {
+  function regionAt(x: number, y: number, view: View2D): RegionId | undefined {
     if (showStamps) {
       for (const spot of stampSpots) {
         if (spot.region === revealedRegion) continue;
-        const at = { x: spot.x * view.k + view.tx, y: spot.y * view.k + view.ty };
+        const at = place(spot, view);
         if (Math.hypot(at.x - x, at.y - y) <= STAMP_R) return spot.region;
       }
     }
@@ -427,186 +658,63 @@ export function ParkMap({
     .maxDistance(10)
     .onEnd((event, success) => {
       if (!success) return;
-      const site = siteAt(event.x, event.y);
+      // Where the map is right now, which may be mid-ease.
+      const view = { k: k.get(), tx: tx.get(), ty: ty.get() };
+      const site = siteAt(event.x, event.y, view);
       if (site) {
         onSelectSite?.(site);
         return;
       }
-      const region = regionAt(event.x, event.y);
+      const region = regionAt(event.x, event.y, view);
       if (region && onSelectRegion) onSelectRegion(region);
     });
   const gesture = Gesture.Simultaneous(pinch, pan, tap);
 
   return (
-    <View style={[styles.container, style]} onLayout={onLayout}>
+    <View
+      style={[styles.container, lift !== 0 && styles.bleeding, style]}
+      onLayout={onLayout}
+    >
       <GestureDetector gesture={gesture}>
-        <Svg width={size.width} height={size.height}>
-          <G transform={`translate(${view.tx} ${view.ty}) scale(${view.k})`}>{stateShapes}</G>
+        {/* Touches are taken by the box, not the Svg, which moves against
+            it as the box moves on the canvas. */}
+        <View style={StyleSheet.absoluteFill} collapsable={false}>
+        <Svg
+          width={size.width}
+          height={drawHeight}
+          // Out of the layout, so drawing past the box never changes its size
+          // (which would feed back into the screen's layout).
+          style={
+            lift !== 0 ? { position: 'absolute', top: -lift, left: 0 } : undefined
+          }
+        >
+          {/* Everything is drawn in the box's coordinates, moved down by the
+              canvas above it (`lift`). */}
+          <Zoomed view={live} lift={lift}>
+            {stateShapes}
+          </Zoomed>
 
           {/* Stamps on the completed regions, while their pins are tucked away. */}
-          {focusRegion == null && tuckCompleted
+          {showStamps
             ? stampSpots
                 .filter((spot) => spot.region !== revealedRegion)
                 .map((spot) => (
-                  <CompleteStamp
-                    key={spot.region}
-                    x={spot.x * view.k + view.tx}
-                    y={spot.y * view.k + view.ty}
-                  />
+                  <Pinned key={spot.region} at={spot} view={live} lift={lift}>
+                    <CompleteStamp />
+                  </Pinned>
                 ))
             : null}
 
-          {/* Unmatched parks recede further while a filter is on. */}
-          {/* Badges stay at full strength: the picks' numbers already stand out. */}
-          <G opacity={filtering ? 0.35 : hasPicks && !showIcons ? 0.6 : 1}>
-            {others.map((dot) => {
-              const { site } = dot;
-              const { x, y } = place(dot);
-              const selected = site.id === selectedId;
-              const look = STATUS_DOT[site.status];
-              const feature = badgeFor(site);
-              if (feature) {
-                const ring = site.status === 'new' ? look.stroke : STATUS_RING[site.status];
-                return (
-                  <G key={site.id}>
-                    <FeatureBadge
-                      site={site}
-                      x={x}
-                      y={y}
-                      at={badgeSpots.get(site.id)}
-                      feature={feature}
-                      ring={ring}
-                      selected={selected}
-                    />
-                  </G>
-                );
-              }
-              return (
-                <G key={site.id}>
-                  <Circle cx={x} cy={y} r={HIT_RADIUS} fill="transparent" />
-                  <Circle
-                    cx={x}
-                    cy={y}
-                    r={selected ? 7 : 4}
-                    fill={look.fill}
-                    stroke={selected ? colors.text : look.stroke}
-                    strokeWidth={selected ? 2.5 : 1.5}
-                  />
-                </G>
-              );
-            })}
-          </G>
-
-          <G>
-            {matched.map((dot) => {
-              const { site } = dot;
-              const { x, y } = place(dot);
-              const selected = site.id === selectedId;
-              const feature = badgeFor(site);
-              if (feature) {
-                return (
-                  <G key={site.id}>
-                    <FeatureBadge
-                      site={site}
-                      x={x}
-                      y={y}
-                      at={badgeSpots.get(site.id)}
-                      feature={feature}
-                      ring={MATCH_DOT.fill}
-                      selected={selected}
-                    />
-                  </G>
-                );
-              }
-              return (
-                <G key={site.id}>
-                  <Circle cx={x} cy={y} r={HIT_RADIUS} fill="transparent" />
-                  <Circle
-                    cx={x}
-                    cy={y}
-                    r={selected ? 8 : 6}
-                    fill={MATCH_DOT.fill}
-                    stroke={selected ? colors.text : MATCH_DOT.stroke}
-                    strokeWidth={selected ? 2.5 : 1.75}
-                  />
-                </G>
-              );
-            })}
-          </G>
-
-          <G>
-            {picks.map((dot) => {
-              const { site } = dot;
-              const { x, y } = place(dot);
-              const selected = site.id === selectedId;
-              const rank = rankById!.get(site.id)!;
-              const feature = badgeFor(site);
-              if (feature) {
-                const r = selected ? BADGE_R + 2 : BADGE_R;
-                const spot = badgeSpots.get(site.id) ?? { x, y };
-                // The number rides on the badge's upper-right edge.
-                const nx = spot.x + r * 0.75;
-                const ny = spot.y - r * 0.75;
-                return (
-                  <G key={site.id}>
-                    <FeatureBadge
-                      site={site}
-                      x={x}
-                      y={y}
-                      at={badgeSpots.get(site.id)}
-                      feature={feature}
-                      ring={PICK_FILL}
-                      selected={selected}
-                    />
-                    <Circle
-                      cx={nx}
-                      cy={ny}
-                      r={7.5}
-                      fill={PICK_FILL}
-                      stroke={colors.neutral[100]}
-                      strokeWidth={1.5}
-                    />
-                    <SvgText
-                      x={nx}
-                      y={ny + 3.2}
-                      textAnchor="middle"
-                      fontSize={9.5}
-                      fontFamily={fonts.bodyBold}
-                      fontWeight="bold"
-                      fill={colors.neutral[100]}
-                    >
-                      {String(rank)}
-                    </SvgText>
-                  </G>
-                );
-              }
-              return (
-                <G key={site.id}>
-                  <Circle
-                    cx={x}
-                    cy={y}
-                    r={selected ? 12 : 10}
-                    fill={selected ? colors.accentRamp[700] : PICK_FILL}
-                    stroke={colors.neutral[100]}
-                    strokeWidth={2}
-                  />
-                  <SvgText
-                    x={x}
-                    // SVG text sits on its baseline; nudge down to centre it.
-                    y={y + 3.8}
-                    textAnchor="middle"
-                    fontSize={11}
-                    fontFamily={fonts.bodyBold}
-                    fontWeight="bold"
-                    fill={colors.neutral[100]}
-                  >
-                    {String(rank)}
-                  </SvgText>
-                </G>
-              );
-            })}
-          </G>
+          {/* Unmatched parks recede further while a filter is on. Badges
+              stay at full strength: the picks' numbers already stand out.
+              The fade is set on each shape, not on a group around them: on
+              Android a translucent group is drawn through a whole extra
+              canvas-sized bitmap, on every frame the map moves. */}
+          <G>{others.map((dot) => <ParkPin key={dot.site.id} {...pinProps(dot, 'other')} />)}</G>
+          <G>{matched.map((dot) => <ParkPin key={dot.site.id} {...pinProps(dot, 'match')} />)}</G>
+          <G>{picks.map((dot) => <ParkPin key={dot.site.id} {...pinProps(dot, 'pick')} />)}</G>
         </Svg>
+        </View>
       </GestureDetector>
 
       {onExpand ? (
@@ -617,9 +725,9 @@ export function ParkMap({
           accessibilityLabel="Open the map full screen"
           style={({ pressed }) => [
             styles.expand,
-            controlInset && {
-              bottom: 8 + (controlInset.bottom ?? 0),
-              right: 12 + (controlInset.right ?? 0),
+            (controlInset || obscuredBottom > 0) && {
+              bottom: 8 + (controlInset?.bottom ?? 0) + obscuredBottom,
+              right: 12 + (controlInset?.right ?? 0),
             },
             pressed && styles.resetPressed,
           ]}
@@ -650,6 +758,207 @@ export function ParkMap({
       ) : null}
     </View>
   );
+}
+
+const AnimatedG = Animated.createAnimatedComponent(
+  // `matrix` is the native group's transform, which the animated props set
+  // directly; G's own props only describe it as `transform`.
+  G as unknown as ComponentType<GProps & { matrix?: number[] }>,
+);
+
+/**
+ * The state outlines at the live view's zoom. The transform is set on the
+ * UI thread each frame; React never re-renders it for a move.
+ */
+function Zoomed({ view, lift, children }: { view: LiveView; lift: number; children: ReactNode }) {
+  const animatedProps = useAnimatedProps(() => {
+    const scale = view.k.get();
+    return { matrix: [scale, 0, 0, scale, view.tx.get(), view.ty.get() + lift] };
+  });
+  return <AnimatedG animatedProps={animatedProps}>{children}</AnimatedG>;
+}
+
+type PinKind = 'other' | 'match' | 'pick';
+
+/**
+ * One park's pin: a dot (styled by visit status, or the match colour), a
+ * numbered pick, or a feature badge. Memoised on plain values, so opening
+ * the card sheet or selecting a park re-renders only the pins that change;
+ * re-rendering all of them (each with its UI-thread position) cost a
+ * noticeable pause before the map moved.
+ */
+const ParkPin = memo(function ParkPin({
+  site,
+  x,
+  y,
+  k,
+  tx,
+  ty,
+  lift,
+  kind,
+  selected,
+  rank,
+  feature,
+  nudgeX,
+  nudgeY,
+  fade,
+}: {
+  site: Site;
+  x: number;
+  y: number;
+  k: SharedValue<number>;
+  tx: SharedValue<number>;
+  ty: SharedValue<number>;
+  lift: number;
+  kind: PinKind;
+  selected: boolean;
+  rank?: number;
+  feature?: Feature;
+  nudgeX?: number;
+  nudgeY?: number;
+  fade: number;
+}) {
+  const nudge = nudgeX != null && nudgeY != null ? { x: nudgeX, y: nudgeY } : undefined;
+  let body: ReactNode;
+  if (feature) {
+    const ring =
+      kind === 'pick'
+        ? PICK_FILL
+        : kind === 'match'
+          ? MATCH_DOT.fill
+          : site.status === 'new'
+            ? STATUS_DOT.new.stroke
+            : STATUS_RING[site.status];
+    const r = selected ? BADGE_R + 2 : BADGE_R;
+    // A pick's number rides on the badge's upper-right edge.
+    const nx = (nudge?.x ?? 0) + r * 0.75;
+    const ny = (nudge?.y ?? 0) - r * 0.75;
+    body = (
+      <>
+        <FeatureBadge
+          site={site}
+          nudge={nudge}
+          feature={feature}
+          ring={ring}
+          selected={selected}
+          opacity={fade}
+        />
+        {kind === 'pick' ? (
+          <>
+            <Circle
+              cx={nx}
+              cy={ny}
+              r={7.5}
+              fill={PICK_FILL}
+              stroke={colors.neutral[100]}
+              strokeWidth={1.5}
+            />
+            <SvgText
+              x={nx}
+              y={ny + 3.2}
+              textAnchor="middle"
+              fontSize={9.5}
+              fontFamily={fonts.bodyBold}
+              fontWeight="bold"
+              fill={colors.neutral[100]}
+            >
+              {String(rank)}
+            </SvgText>
+          </>
+        ) : null}
+      </>
+    );
+  } else if (kind === 'pick') {
+    body = (
+      <>
+        <Circle
+          r={selected ? 12 : 10}
+          fill={selected ? colors.accentRamp[700] : PICK_FILL}
+          stroke={colors.neutral[100]}
+          strokeWidth={2}
+        />
+        <SvgText
+          // SVG text sits on its baseline; nudge down to centre it.
+          y={3.8}
+          textAnchor="middle"
+          fontSize={11}
+          fontFamily={fonts.bodyBold}
+          fontWeight="bold"
+          fill={colors.neutral[100]}
+        >
+          {String(rank)}
+        </SvgText>
+      </>
+    );
+  } else if (kind === 'match') {
+    body = (
+      <Circle
+        r={selected ? 8 : 6}
+        fill={MATCH_DOT.fill}
+        stroke={selected ? colors.text : MATCH_DOT.stroke}
+        strokeWidth={selected ? 2.5 : 1.75}
+      />
+    );
+  } else {
+    const look = STATUS_DOT[site.status];
+    body = (
+      <Circle
+        r={selected ? 7 : 4}
+        fill={look.fill}
+        stroke={selected ? colors.text : look.stroke}
+        strokeWidth={selected ? 2.5 : 1.5}
+        opacity={fade}
+      />
+    );
+  }
+  return (
+    <Pinned at={{ x, y }} view={{ k, tx, ty }} lift={lift}>
+      {body}
+    </Pinned>
+  );
+});
+
+/**
+ * Something drawn round its own origin and kept at a map point as the map
+ * moves: a pin keeps its size while the land under it zooms.
+ */
+function Pinned({
+  at,
+  view,
+  lift,
+  children,
+}: {
+  at: Point;
+  view: LiveView;
+  lift: number;
+  children: ReactNode;
+}) {
+  const { x, y } = at;
+  const animatedProps = useAnimatedProps(() => {
+    const scale = view.k.get();
+    return { matrix: [1, 0, 0, 1, x * scale + view.tx.get(), y * scale + view.ty.get() + lift] };
+  });
+  return <AnimatedG animatedProps={animatedProps}>{children}</AnimatedG>;
+}
+
+/** The view that fits `bounds` (in map coordinates) into the box, padded and capped. */
+function frameBounds(
+  [[x0, y0], [x1, y1]]: [[number, number], [number, number]],
+  size: { width: number; height: number },
+  padX: number,
+  padY: number,
+  maxK: number,
+): View2D {
+  const k = Math.min(
+    (size.width - padX * 2) / Math.max(x1 - x0, 1),
+    (size.height - padY * 2) / Math.max(y1 - y0, 1),
+    maxK,
+  );
+  return {
+    k,
+    tx: size.width / 2 - k * ((x0 + x1) / 2),
+    ty: size.height / 2 - k * ((y0 + y1) / 2),
+  };
 }
 
 /** The badge ring for parks you've been to or saved; a plain white edge otherwise. */
@@ -732,38 +1041,42 @@ function spreadBadges(
 }
 
 /**
- * A park's feature glyph on its terrain colour, ringed to show its status.
- * When the badge has been nudged off its park (`at`), a thin line and a
- * dot mark where the park really is.
+ * A park's feature glyph on its terrain colour, ringed to show its status,
+ * drawn round the park (the origin). When the badge has been nudged off its
+ * park (`nudge`), a thin line and a dot mark where the park really is.
  */
 function FeatureBadge({
   site,
-  x,
-  y,
-  at,
+  nudge,
   feature,
   ring,
   selected,
+  opacity = 1,
 }: {
   site: Site;
-  x: number;
-  y: number;
-  at?: Point;
+  nudge?: Point;
   feature: Feature;
   ring: string;
   selected: boolean;
+  /** Set on each shape, not a group (see where the pins fade). */
+  opacity?: number;
 }) {
   const tone = terrainTone(site.group);
   const r = selected ? BADGE_R + 2 : BADGE_R;
-  const bx = at?.x ?? x;
-  const by = at?.y ?? y;
-  const nudged = Math.hypot(bx - x, by - y) > 3;
+  const bx = nudge?.x ?? 0;
+  const by = nudge?.y ?? 0;
+  const nudged = Math.hypot(bx, by) > 3;
   return (
     <>
       {nudged ? (
         <>
-          <Path d={`M${x} ${y}L${bx} ${by}`} stroke={tone.ink} strokeWidth={1.25} opacity={0.6} />
-          <Circle cx={x} cy={y} r={2.25} fill={tone.ink} />
+          <Path
+            d={`M0 0L${bx} ${by}`}
+            stroke={tone.ink}
+            strokeWidth={1.25}
+            opacity={0.6 * opacity}
+          />
+          <Circle r={2.25} fill={tone.ink} opacity={opacity} />
         </>
       ) : null}
       {selected ? (
@@ -781,113 +1094,18 @@ function FeatureBadge({
         fill={tone.band}
         stroke={selected ? colors.text : ring}
         strokeWidth={selected ? 3 : 2.5}
+        opacity={opacity}
       />
-      <FeatureGlyph feature={feature} cx={bx} cy={by} size={GLYPH_SIZE} color={tone.ink} />
+      <FeatureGlyph
+        feature={feature}
+        cx={bx}
+        cy={by}
+        size={GLYPH_SIZE}
+        color={tone.ink}
+        opacity={opacity}
+      />
     </>
   );
-}
-
-/**
- * The map's current view. Eases to `target` whenever it changes; pinch and
- * pan move it directly, and `reset` eases back to `target`.
- */
-function useMapView(target: View2D, size: { width: number; height: number }) {
-  const [view, setViewState] = useState(target);
-  /** The target the user last pinched or dragged away from, if any. */
-  const [movedFrom, setMovedFrom] = useState<View2D | null>(null);
-  const current = useRef(target);
-  const frame = useRef(0);
-  const gestureStart = useRef({ view: IDENTITY, focalX: 0, focalY: 0 });
-
-  const setView = useCallback((next: View2D) => {
-    cancelAnimationFrame(frame.current);
-    current.current = next;
-    setViewState(next);
-  }, []);
-
-  /** Keeps the map from being dragged or pinched entirely out of the box. */
-  const clamp = useCallback(
-    (next: View2D): View2D => {
-      const k = Math.min(Math.max(next.k, PINCH_MIN), PINCH_MAX);
-      const { width: w, height: h } = size;
-      return {
-        k,
-        tx: Math.min(Math.max(next.tx, w / 2 - w * k), w / 2),
-        ty: Math.min(Math.max(next.ty, h / 2 - h * k), h / 2),
-      };
-    },
-    [size],
-  );
-
-  const animateTo = useCallback((to: View2D) => {
-    cancelAnimationFrame(frame.current);
-    const from = current.current;
-    const start = Date.now();
-
-    const step = () => {
-      const t = Math.min((Date.now() - start) / ZOOM_MS, 1);
-      const ease = t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2; // ease-in-out cubic
-      const next = {
-        k: from.k + (to.k - from.k) * ease,
-        tx: from.tx + (to.tx - from.tx) * ease,
-        ty: from.ty + (to.ty - from.ty) * ease,
-      };
-      current.current = next;
-      setViewState(next);
-      if (t < 1) frame.current = requestAnimationFrame(step);
-    };
-
-    frame.current = requestAnimationFrame(step);
-  }, []);
-
-  useEffect(() => {
-    animateTo(target);
-  }, [target, animateTo]);
-
-  useEffect(() => () => cancelAnimationFrame(frame.current), []);
-
-  const beginGesture = useCallback(
-    (focalX: number, focalY: number) => {
-      gestureStart.current = { view: current.current, focalX, focalY };
-      setMovedFrom(target);
-    },
-    [target],
-  );
-
-  const pinchTo = useCallback(
-    (scale: number, focalX: number, focalY: number) => {
-      const start = gestureStart.current;
-      const k = Math.min(Math.max(start.view.k * scale, PINCH_MIN), PINCH_MAX);
-      const ratio = k / start.view.k;
-      // Keep the point under the fingers fixed, and follow the fingers as they move.
-      setView(
-        clamp({
-          k,
-          tx: focalX - (start.focalX - start.view.tx) * ratio,
-          ty: focalY - (start.focalY - start.view.ty) * ratio,
-        }),
-      );
-    },
-    [clamp, setView],
-  );
-
-  const panBy = useCallback(
-    (dx: number, dy: number) => {
-      const start = gestureStart.current.view;
-      setView(clamp({ k: start.k, tx: start.tx + dx, ty: start.ty + dy }));
-    },
-    [clamp, setView],
-  );
-
-  const reset = useCallback(() => {
-    setMovedFrom(null);
-    animateTo(target);
-  }, [animateTo, target]);
-
-  // A new target (another park, or none) clears the Reset button by itself.
-  const moved = movedFrom === target;
-
-  return { view, moved, beginGesture, pinchTo, panBy, reset };
 }
 
 type PlacedDot = { site: Site; x: number; y: number };
@@ -896,10 +1114,10 @@ type PlacedDot = { site: Site; x: number; y: number };
  * A passport-style stamp for a completed region: a gold double ring, the
  * inner one dashed, round a check mark, set at a slight tilt.
  */
-function CompleteStamp({ x, y }: { x: number; y: number }) {
+function CompleteStamp() {
   const r = STAMP_R;
   return (
-    <G transform={`translate(${x} ${y}) rotate(-12)`}>
+    <G transform="rotate(-12)">
       <Circle r={r} fill={colors.neutral[100]} opacity={0.92} />
       <Circle r={r} fill="none" stroke={EARNED_EDGE} strokeWidth={2.5} />
       <Circle
@@ -982,6 +1200,12 @@ const styles = StyleSheet.create({
   container: {
     backgroundColor: colors.bg,
     overflow: 'hidden',
+  },
+  // Drawing past the box (see `canvas`): let it, and let what's beyond show
+  // through, since the page around it is the same colour.
+  bleeding: {
+    overflow: 'visible',
+    backgroundColor: 'transparent',
   },
   reset: {
     position: 'absolute',

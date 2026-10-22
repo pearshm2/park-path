@@ -12,9 +12,9 @@
  * `add` starts a new one for that park.
  */
 
-import { useQuery } from "@tanstack/react-query";
-import { useLocalSearchParams, useRouter } from "expo-router";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useQuery } from '@tanstack/react-query';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   Pressable,
@@ -23,37 +23,28 @@ import {
   View,
   useWindowDimensions,
   type FlatList,
-} from "react-native";
-import Animated, {
-  useAnimatedScrollHandler,
-  useSharedValue,
-} from "react-native-reanimated";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
-import Svg, { Path } from "react-native-svg";
+} from 'react-native';
+import Animated, { useAnimatedScrollHandler, useSharedValue } from 'react-native-reanimated';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Svg, { Path } from 'react-native-svg';
 
-import { listSites } from "../../api/parks";
-import { useAuth } from "../../auth/AuthContext";
-import {
-  BodyText,
-  Button,
-  Heading,
-  Toast,
-  useTabBarSpace,
-} from "../../components";
-import { Avatar } from "../../components/Avatar";
-import { NewEntrySheet } from "../../components/trips/NewEntrySheet";
-import { TripCard } from "../../components/trips/TripCard";
-import type { Site } from "../../data/parks";
-import { regionForState } from "../../data/regions";
-import { colors, radius, space } from "../../theme";
-import { useTrips, type TripEntry } from "../../trips/TripsContext";
+import { listSites } from '../../api/parks';
+import { useAuth } from '../../auth/AuthContext';
+import { BodyText, Button, Heading, Toast, useTabBarSpace } from '../../components';
+import { Avatar } from '../../components/Avatar';
+import { NewEntrySheet } from '../../components/trips/NewEntrySheet';
+import { TripCard } from '../../components/trips/TripCard';
+import type { Site } from '../../data/parks';
+import { regionForState } from '../../data/regions';
+import { colors, radius, space } from '../../theme';
+import { useTrips, type TripEntry } from '../../trips/TripsContext';
 
-type Sort = "new" | "old" | "region";
+type Sort = 'new' | 'old' | 'region';
 
 const SORTS: { value: Sort; label: string }[] = [
-  { value: "new", label: "Newest first" },
-  { value: "old", label: "Oldest first" },
-  { value: "region", label: "By region" },
+  { value: 'new', label: 'Newest first' },
+  { value: 'old', label: 'Oldest first' },
+  { value: 'region', label: 'By region' },
 ];
 
 /** Space between cards in the rail. */
@@ -68,7 +59,7 @@ export default function TripsScreen() {
   const { entries, visitedIds, remove } = useTrips();
   const params = useLocalSearchParams<{ entry?: string; add?: string }>();
 
-  const [sort, setSort] = useState<Sort>("new");
+  const [sort, setSort] = useState<Sort>('new');
   const [index, setIndex] = useState(0);
   const [sheet, setSheet] = useState<{ open: boolean; siteId?: string }>({
     open: false,
@@ -78,8 +69,8 @@ export default function TripsScreen() {
   const scrollX = useSharedValue(0);
 
   const { data: sites = [] } = useQuery({
-    queryKey: ["sites", "all"],
-    queryFn: () => listSites("all"),
+    queryKey: ['sites', 'all'],
+    queryFn: () => listSites('all'),
   });
   const siteById = useMemo(() => new Map(sites.map((s) => [s.id, s])), [sites]);
 
@@ -90,11 +81,11 @@ export default function TripsScreen() {
 
   const sorted = useMemo(() => {
     const list = entries.slice();
-    if (sort === "old") return list.reverse();
-    if (sort === "region") {
+    if (sort === 'old') return list.reverse();
+    if (sort === 'region') {
       const regionOf = (e: TripEntry) => {
         const site = siteById.get(e.siteId);
-        return (site && regionForState(site.state)?.label) ?? "~";
+        return (site && regionForState(site.state)?.label) ?? '~';
       };
       return list.sort((a, b) => regionOf(a).localeCompare(regionOf(b)));
     }
@@ -137,26 +128,22 @@ export default function TripsScreen() {
 
   function confirmDelete(entry: TripEntry, site: Site | undefined) {
     Alert.alert(entry.title, site?.name, [
-      { text: "Cancel", style: "cancel" },
+      { text: 'Cancel', style: 'cancel' },
       {
-        text: "Delete entry",
-        style: "destructive",
+        text: 'Delete entry',
+        style: 'destructive',
         onPress: () =>
-          Alert.alert(
-            "Delete this entry?",
-            "Its photos and notes go with it.",
-            [
-              { text: "Keep", style: "cancel" },
-              {
-                text: "Delete",
-                style: "destructive",
-                onPress: async () => {
-                  await remove(entry.id);
-                  setIndex((i) => Math.max(0, Math.min(i, sorted.length - 2)));
-                },
+          Alert.alert('Delete this entry?', 'Its photos and notes go with it.', [
+            { text: 'Keep', style: 'cancel' },
+            {
+              text: 'Delete',
+              style: 'destructive',
+              onPress: async () => {
+                await remove(entry.id);
+                setIndex((i) => Math.max(0, Math.min(i, sorted.length - 2)));
               },
-            ],
-          ),
+            },
+          ]),
       },
     ]);
   }
@@ -172,12 +159,8 @@ export default function TripsScreen() {
         <View style={[styles.header, styles.gutter]}>
           <View style={styles.headerText}>
             <Heading size={26}>Trips</Heading>
-            <BodyText
-              size={12}
-              color={colors.neutral[600]}
-              style={styles.subtitle}
-            >
-              {`${entries.length} ${entries.length === 1 ? "entry" : "entries"} · ${visitedIds.size} ${visitedIds.size === 1 ? "park" : "parks"} logged`}
+            <BodyText size={12} color={colors.neutral[600]} style={styles.subtitle}>
+              {`${entries.length} ${entries.length === 1 ? 'entry' : 'entries'} · ${visitedIds.size} ${visitedIds.size === 1 ? 'park' : 'parks'} logged`}
             </BodyText>
           </View>
           <Button
@@ -235,9 +218,7 @@ export default function TripsScreen() {
               onScroll={onScroll}
               scrollEventThrottle={16}
               onMomentumScrollEnd={(event) =>
-                setIndex(
-                  Math.round(event.nativeEvent.contentOffset.x / interval),
-                )
+                setIndex(Math.round(event.nativeEvent.contentOffset.x / interval))
               }
               getItemLayout={(_data, i) => ({
                 length: interval,
@@ -257,20 +238,14 @@ export default function TripsScreen() {
                   interval={interval}
                   width={cardWidth}
                   scrollX={scrollX}
-                  onDelete={() =>
-                    confirmDelete(item, siteById.get(item.siteId))
-                  }
+                  onDelete={() => confirmDelete(item, siteById.get(item.siteId))}
                 />
               )}
             />
 
             {sorted.length > 1 ? (
               <View style={styles.nav}>
-                <Arrow
-                  direction="back"
-                  onPress={() => goTo(index - 1)}
-                  disabled={index === 0}
-                />
+                <Arrow direction="back" onPress={() => goTo(index - 1)} disabled={index === 0} />
                 <View style={styles.dots}>
                   {sorted.map((entry, i) => (
                     <Pressable
@@ -293,14 +268,9 @@ export default function TripsScreen() {
         ) : (
           <View style={[styles.empty, styles.gutterMargin]}>
             <Heading size={18}>No trips yet</Heading>
-            <BodyText
-              size={13}
-              lineHeightRatio={1.5}
-              color={colors.neutral[700]}
-            >
-              Log a park you&apos;ve been to: a title, a few notes, who was with
-              you and some photos. Each entry marks that park visited on your
-              map and in your Passport.
+            <BodyText size={13} lineHeightRatio={1.5} color={colors.neutral[700]}>
+              Log a park you&apos;ve been to: a title, a few notes, who was with you and some
+              photos. Each entry marks that park visited on your map and in your Passport.
             </BodyText>
             <Button
               label="Write your first entry"
@@ -317,16 +287,14 @@ export default function TripsScreen() {
           onClose={closeSheet}
           onSaved={(entry) => {
             closeSheet();
-            setSort("new");
+            setSort('new');
             // The new entry is newest unless it's for an earlier month.
             const at = Math.max(
               0,
               entries.findIndex((e) => e.date < entry.date),
             );
             requestAnimationFrame(() => goTo(at, false));
-            flash(
-              `Entry saved. ${siteById.get(entry.siteId)?.name ?? "The park"} is now visited.`,
-            );
+            flash(`Entry saved. ${siteById.get(entry.siteId)?.name ?? 'The park'} is now visited.`);
           }}
         />
       ) : null}
@@ -339,7 +307,7 @@ function Arrow({
   disabled,
   onPress,
 }: {
-  direction: "back" | "forward";
+  direction: 'back' | 'forward';
   disabled: boolean;
   onPress: () => void;
 }) {
@@ -348,9 +316,7 @@ function Arrow({
       onPress={onPress}
       disabled={disabled}
       accessibilityRole="button"
-      accessibilityLabel={
-        direction === "back" ? "Previous entry" : "Next entry"
-      }
+      accessibilityLabel={direction === 'back' ? 'Previous entry' : 'Next entry'}
       style={({ pressed }) => [
         styles.arrow,
         pressed && styles.arrowPressed,
@@ -359,9 +325,7 @@ function Arrow({
     >
       <Svg width={16} height={16} viewBox="0 0 24 24">
         <Path
-          d={
-            direction === "back" ? "M14.5 5L8 12l6.5 7" : "M9.5 5L16 12l-6.5 7"
-          }
+          d={direction === 'back' ? 'M14.5 5L8 12l6.5 7' : 'M9.5 5L16 12l-6.5 7'}
           fill="none"
           stroke={colors.neutral[700]}
           strokeWidth={2.75}
@@ -385,8 +349,8 @@ const styles = StyleSheet.create({
     marginHorizontal: space[4],
   },
   header: {
-    flexDirection: "row",
-    alignItems: "center",
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: space[2],
   },
   headerText: {
@@ -401,7 +365,7 @@ const styles = StyleSheet.create({
   },
   toastSlot: {
     minHeight: 8,
-    alignItems: "center",
+    alignItems: 'center',
   },
   sorts: {
     gap: 6,
@@ -419,17 +383,17 @@ const styles = StyleSheet.create({
     borderColor: colors.accent,
   },
   nav: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
     gap: space[3],
     marginTop: space[2],
   },
   arrow: {
     width: 34,
     height: 34,
-    alignItems: "center",
-    justifyContent: "center",
+    alignItems: 'center',
+    justifyContent: 'center',
     borderRadius: radius.pill,
     borderWidth: 1.5,
     borderColor: colors.neutral[400],
@@ -441,8 +405,8 @@ const styles = StyleSheet.create({
     opacity: 0.35,
   },
   dots: {
-    flexDirection: "row",
-    alignItems: "center",
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: 5,
   },
   dot: {
@@ -463,7 +427,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.neutral[100],
   },
   emptyButton: {
-    alignSelf: "flex-start",
+    alignSelf: 'flex-start',
     marginTop: space[2],
   },
 });

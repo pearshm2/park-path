@@ -28,6 +28,39 @@ Work through the steps below in order.
 These steps are written for **Windows** using **Git Bash**, the same as
 [demo.md](demo.md).
 
+> **On campus Wi-Fi, or for a demo:** skip the Wi-Fi steps and use a USB
+> cable instead (Android). See [Over a USB cable](#over-a-usb-cable-android)
+> below. University networks usually stop devices reaching each other, so
+> the Wi-Fi route below won't work there.
+
+---
+
+## Over a USB cable (Android)
+
+The phone talks to your computer through the cable, so no Wi-Fi is
+involved: it works on any network, campus included, and nothing is exposed
+on the network.
+
+1. **Once:** turn on USB debugging on the phone. Settings → About phone →
+   tap **Build number** 7 times, then Settings → Developer options →
+   **USB debugging** on.
+2. Plug the phone in and tap **Allow** when it asks about USB debugging.
+3. In `mobile/.env`:
+   ```
+   EXPO_PUBLIC_API_URL=http://localhost:8000
+   ```
+4. Start the API and database (Step 1 below), then from `mobile/`:
+   ```bash
+   npm run usb
+   ```
+   It links the phone (and the emulator, if it's running) to your computer
+   and starts Expo. Add ` -- -c` to clear Expo's cache after changing
+   `.env`: `npm run usb -- -c`.
+5. Press **`a`** in that terminal to open the app on the phone.
+
+Run `npm run usb` again after unplugging the phone or restarting it; the
+link doesn't survive either.
+
 ---
 
 ## Step 1: Start the API and database

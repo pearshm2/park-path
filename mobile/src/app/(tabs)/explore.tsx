@@ -89,7 +89,7 @@ import {
 import { useQuiz } from '../../quiz/QuizContext';
 import { useSnoozed } from '../../wishlist/useSnoozed';
 import { useWishlist } from '../../wishlist/useWishlist';
-import { colors, radius, shadow, space, useTextScale } from '../../theme';
+import { CapTextScale, colors, radius, shadow, space, useTextScale } from '../../theme';
 
 /** How many recommendations get a numbered pin and a card. */
 const TOP_N = 10;
@@ -534,7 +534,7 @@ export default function ExploreScreen() {
   // The arrow on a card raises the whole deck to show more about the park.
   const [moreOpen, setMoreOpen] = useState(false);
   const deckExtra = SECTION_PEEK + (moreOpen ? MORE_ROOM : 0);
-  const { deck: deckHeight } = useSheetSize(deckExtra);
+  const { deck: deckHeight, sheet: openSheetHeight } = useSheetSize(deckExtra);
   // The map keeps its usual room; the raised deck just covers more of it.
   const { sheet: sheetHeight } = useSheetSize(SECTION_PEEK);
   function toggleMore() {
@@ -549,6 +549,23 @@ export default function ExploreScreen() {
   // spare with the sheet down. The spacers around it measure that spare,
   // and the key opens out by part of it so the gaps don't just grow.
   const [keyRoom, setKeyRoom] = useState(0);
+  // Where the map's box sits in the stage, for drawing it on the whole
+  // stage: behind the key above it and the card sheet below. The canvas
+  // stays the stage's size as the box moves (see ParkMap's `canvas`).
+  const [stageFrame, setStageFrame] = useState({ height: 0, areaY: 0, mapY: 0 });
+  const mapCanvas = {
+    top: stageFrame.areaY + stageFrame.mapY,
+    height: stageFrame.height,
+  };
+  // The map keeps the size it has with the sheet down: opening the sheet
+  // slides it up under the key rather than shrinking it (which shrank its
+  // pins too), and its bottom runs on behind the sheet.
+  const [mapHeight, setMapHeight] = useState(0);
+  const openSheetTop = stageFrame.height - openSheetHeight - DECK_GAP - tabSpace;
+  const mapCovered =
+    sheetOpen && mapHeight > 0
+      ? Math.max(0, mapCanvas.top + mapHeight - openSheetTop + DECK_GAP)
+      : 0;
   const spacers = useRef({ above: 0, below: 0 });
   function measureSpare(which: 'above' | 'below', height: number) {
     spacers.current[which] = height;
@@ -634,35 +651,62 @@ export default function ExploreScreen() {
         </View>
       </View>
 
-      {/* The stage: key and map, with the card sheet over its bottom edge. */}
-      <View style={styles.stage}>
+      {/* The stage: key and map, with the card sheet over its bottom edge.
+          The map draws behind the key and the sheet (its bleed), so zoomed
+          in it slides under them; the stage clips it at the key's top. */}
+      <View
+        style={styles.stage}
+        onLayout={(event) => {
+          const { height } = event.nativeEvent.layout;
+          setStageFrame((f) => (Math.abs(f.height - height) > 1 ? { ...f, height } : f));
+        }}
+      >
         <Animated.View
           // The layout transition keeps a stale height when the key's
-          // content grows on its own (the filter swatch adds a line), so
-          // remount it whenever that swatch comes or goes.
-          key={matchIds.size > 0 ? 'key-with-matches' : 'key'}
+          // content grows on its own (the filter swatch adds a line, or the
+          // spare room is measured), so remount it whenever either changes.
+          key={`${matchIds.size > 0 ? 'key-with-matches' : 'key'}-${keyRoom}`}
           layout={LinearTransition.duration(SHEET_MS)}
-          style={styles.keyWrap}
+          // Collapsed, the key moves up a little to give the map the room.
+          style={[styles.keyWrap, sheetOpen && styles.keyWrapOpen]}
         >
-          <MapKey
-            collapsed={sheetOpen && !keyOpen}
-            room={keyRoom}
-            showMatches={matchIds.size > 0}
-            onToggle={sheetOpen ? () => setKeyOpen((open) => !open) : undefined}
-          />
+          {/* The key is a legend: kept a little smaller than Large text, so it
+              doesn't crowd out the map it explains. */}
+          <CapTextScale max={1.1}>
+            <MapKey
+              collapsed={sheetOpen && !keyOpen}
+              room={keyRoom}
+              showMatches={matchIds.size > 0}
+              onToggle={sheetOpen ? () => setKeyOpen((open) => !open) : undefined}
+            />
+          </CapTextScale>
         </Animated.View>
 
         {/* Deliberately not a layout-animated view: the map has to be told
             its new size when the sheet opens, or it overflows under it. */}
-        <View style={[styles.mapArea, {
-              paddingBottom: (sheetOpen ? sheetHeight + DECK_GAP : SHEET_BAR) + tabSpace,
-            }]}>
+        <View
+          style={[
+            styles.mapArea,
+            { paddingBottom: (sheetOpen ? sheetHeight + DECK_GAP : SHEET_BAR) + tabSpace },
+            // Open, the map is taller than the room above the sheet: stack
+            // it from the top (centred, it rode up under the key) and let
+            // its bottom run on behind the sheet.
+            sheetOpen && styles.mapAreaOpen,
+          ]}
+          onLayout={(event) => {
+            const { y } = event.nativeEvent.layout;
+            setStageFrame((f) => (Math.abs(f.areaY - y) > 1 ? { ...f, areaY: y } : f));
+          }}
+        >
           {!sheetOpen ? (
             <View
               style={{ flex: SPARE_ABOVE }}
               onLayout={(event) => measureSpare('above', event.nativeEvent.layout.height)}
             />
           ) : null}
+          {/* The title and the map slide (rather than jump) to where the
+              sheet leaves them, in step with the sheet and the key. */}
+          <Animated.View layout={LinearTransition.duration(SHEET_MS)} style={styles.titleSlot}>
           {focusRegion ? (
             <RegionTitle
               region={focusRegion}
@@ -673,12 +717,37 @@ export default function ExploreScreen() {
             // What the map is showing, now that the scope button is an icon.
             // With the sheet down the map sits lower, so lift the title a
             // touch to keep it close under the key.
-            <View style={[styles.mapTitle, !sheetOpen && styles.mapTitleRaised]}>
+            <View
+              style={[
+                styles.mapTitle,
+                sheetOpen ? styles.mapTitleOpen : styles.mapTitleRaised,
+              ]}
+            >
               <Heading size={14}>
                 {scopeLabel.charAt(0).toUpperCase() + scopeLabel.slice(1)}
               </Heading>
             </View>
           )}
+          </Animated.View>
+          <Animated.View
+            layout={LinearTransition.duration(SHEET_MS)}
+            style={[
+              styles.map,
+              // Open, the map's empty top margin tucks under its title.
+              sheetOpen && styles.mapOpen,
+              sheetOpen && mapHeight > 0
+                ? { flex: 0, height: mapHeight }
+                : { maxHeight: windowWidth / MAP_ASPECT },
+              // Closed, the map fills to its full height before the spare
+              // room goes to the spacers around it.
+              !sheetOpen && styles.mapFirst,
+            ]}
+            onLayout={(event) => {
+              const { y, height } = event.nativeEvent.layout;
+              setStageFrame((f) => (Math.abs(f.mapY - y) > 1 ? { ...f, mapY: y } : f));
+              if (!sheetOpen) setMapHeight((h) => (Math.abs(h - height) > 1 ? height : h));
+            }}
+          >
           <ParkMap
             sites={mapSites}
             rankById={rankById}
@@ -707,14 +776,11 @@ export default function ExploreScreen() {
             // Your visits show every visited pin; the other views tuck a
             // completed region's pins behind its stamp.
             tuckCompleted={scope !== 'visited'}
-            style={[
-              styles.map,
-              { maxHeight: windowWidth / MAP_ASPECT },
-              // Closed, the map fills to its full height before the spare
-              // room goes to the spacers around it.
-              !sheetOpen && styles.mapFirst,
-            ]}
+            canvas={mapCanvas}
+            obscuredBottom={mapCovered}
+            style={styles.mapFill}
           />
+          </Animated.View>
           {!sheetOpen ? (
             <>
               <Pressable
@@ -1436,15 +1502,27 @@ const styles = StyleSheet.create({
   },
   stage: {
     flex: 1,
-    // A little more air above and below the key.
-    marginTop: space[4],
+    // A little more air above and below the key. Padding, not margin: the
+    // collapsed key moves up into it (keyWrapOpen), inside the clip.
+    paddingTop: space[4],
     // The closed sheet's deck sits below this edge and stays hidden.
     overflow: 'hidden',
+  },
+  keyWrapOpen: {
+    marginTop: -space[2],
+  },
+  mapAreaOpen: {
+    justifyContent: 'flex-start',
+  },
+  mapOpen: {
+    marginTop: -space[3],
   },
   keyWrap: {
     marginHorizontal: space[4],
     marginBottom: space[2],
     overflow: 'hidden',
+    // Over the map, which slides behind it when zoomed in.
+    zIndex: 2,
   },
   mapArea: {
     flex: 1,
@@ -1480,6 +1558,10 @@ const styles = StyleSheet.create({
     backgroundColor: colors.neutral[100],
     ...shadow.sm,
   },
+  // Open, close under the collapsed key, to give the map the room.
+  mapTitleOpen: {
+    marginTop: space[1],
+  },
   mapTitleRaised: {
     // Nudged down towards the map; it's drawn above it (zIndex).
     transform: [{ translateY: space[1] }],
@@ -1508,6 +1590,14 @@ const styles = StyleSheet.create({
     gap: space[2],
     marginTop: space[3],
     marginHorizontal: space[4],
+    // Over the map, which slides behind it when zoomed in, on a backing so
+    // it stays readable there.
+    zIndex: 1,
+    elevation: 1,
+    paddingVertical: 4,
+    paddingHorizontal: space[3],
+    borderRadius: radius.pill,
+    backgroundColor: colors.bg,
   },
   regionTitleSwatch: {
     width: 14,
@@ -1584,6 +1674,13 @@ const styles = StyleSheet.create({
     flex: 1,
     width: '100%',
     marginTop: space[2],
+  },
+  mapFill: {
+    flex: 1,
+  },
+  // Holds the map's title; it overlaps the map's top edge (see mapTitle).
+  titleSlot: {
+    zIndex: 1,
   },
   // Far outweighs the spacers, so the map takes its maxHeight first and
   // the spacers split only what's left over.

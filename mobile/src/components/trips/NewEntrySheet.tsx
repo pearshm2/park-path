@@ -11,7 +11,6 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { Image } from 'expo-image';
-import DateTimePicker, { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
 import * as ImagePicker from 'expo-image-picker';
 import { useMemo, useState } from 'react';
 import {
@@ -33,22 +32,12 @@ import { useFriends } from '../../friends/useFriends';
 import { colors, radius, shadow, space } from '../../theme';
 import { dateLabel, useTrips, type TripEntry } from '../../trips/TripsContext';
 import { Avatar } from '../Avatar';
+import { Calendar, toDay } from '../Calendar';
 import { Button } from '../Button';
 import { TextField } from '../TextField';
 import { BodyText, Heading } from '../Typography';
 
 const MAX_PHOTOS = 8;
-
-/** A local date as YYYY-MM-DD (not via ISO, which would shift it to UTC). */
-function toDay(date: Date): string {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-}
-
-/** YYYY-MM-DD back to a local Date, for the picker. */
-function fromDay(day: string): Date {
-  const [year, month, date] = day.split('-').map(Number);
-  return new Date(year, month - 1, date);
-}
 
 export function NewEntrySheet({
   initialSiteId,
@@ -74,6 +63,7 @@ export function NewEntrySheet({
   const [query, setQuery] = useState<string | null>(null);
   const [listOpen, setListOpen] = useState(false);
   const [day, setDay] = useState(() => toDay(new Date()));
+  const [calendarOpen, setCalendarOpen] = useState(false);
   const [title, setTitle] = useState('');
   const [notes, setNotes] = useState('');
   const [rating, setRating] = useState<number | null>(null);
@@ -211,42 +201,36 @@ export function NewEntrySheet({
             ) : null}
 
             <Label>When</Label>
-            {Platform.OS === 'ios' ? (
-              // iOS's compact picker: the date as a button that opens a calendar.
-              <DateTimePicker
-                value={fromDay(day)}
-                mode="date"
-                display="compact"
-                maximumDate={new Date()}
-                accentColor={colors.accent}
-                onChange={(_event, picked) => picked && setDay(toDay(picked))}
-                style={styles.iosDate}
+            {/* The app's own calendar, so it matches the rest of the app. */}
+            <Pressable
+              onPress={() => setCalendarOpen((open) => !open)}
+              accessibilityRole="button"
+              accessibilityState={{ expanded: calendarOpen }}
+              accessibilityLabel={`Date visited, ${dateLabel(day)}. ${calendarOpen ? 'Close calendar' : 'Change'}`}
+              style={({ pressed }) => [
+                styles.date,
+                calendarOpen && styles.dateOpen,
+                pressed && styles.datePressed,
+              ]}
+            >
+              <CalendarIcon />
+              <BodyText size={14} weight="semibold" style={styles.dateText}>
+                {dateLabel(day)}
+              </BodyText>
+              <BodyText size={12} weight="semibold" color={colors.accentRamp[700]}>
+                {calendarOpen ? 'Done' : 'Change'}
+              </BodyText>
+            </Pressable>
+            {calendarOpen ? (
+              <Calendar
+                value={day}
+                maxDate={toDay(new Date())}
+                onChange={(picked) => {
+                  setDay(picked);
+                  setCalendarOpen(false);
+                }}
               />
-            ) : (
-              <Pressable
-                onPress={() =>
-                  DateTimePickerAndroid.open({
-                    value: fromDay(day),
-                    mode: 'date',
-                    maximumDate: new Date(),
-                    onChange: (event, picked) => {
-                      if (event.type === 'set' && picked) setDay(toDay(picked));
-                    },
-                  })
-                }
-                accessibilityRole="button"
-                accessibilityLabel={`Date visited, ${dateLabel(day)}. Change`}
-                style={({ pressed }) => [styles.date, pressed && styles.datePressed]}
-              >
-                <CalendarIcon />
-                <BodyText size={14} weight="semibold" style={styles.dateText}>
-                  {dateLabel(day)}
-                </BodyText>
-                <BodyText size={12} weight="semibold" color={colors.accentRamp[700]}>
-                  Change
-                </BodyText>
-              </Pressable>
-            )}
+            ) : null}
 
             <Label>Title</Label>
             <TextField
@@ -547,8 +531,8 @@ const styles = StyleSheet.create({
   dateText: {
     flex: 1,
   },
-  iosDate: {
-    alignSelf: 'flex-start',
+  dateOpen: {
+    borderColor: colors.accent,
   },
   notes: {
     minHeight: 84,
