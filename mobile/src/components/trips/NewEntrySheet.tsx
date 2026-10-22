@@ -1,18 +1,28 @@
 /**
  * The prototype's "New journal entry" sheet: the park visited (searched
  * from every site, national parks first), the exact date, a title, notes, a
- * star rating, a location stamp (a trail or spot you loved, suggested from
- * the park's own trails), who was with you (your friends) and photos.
+ * star rating, trails and spots you loved (any number: the park's own
+ * trails as chips to toggle, plus any typed in), who was with you (your
+ * friends), and photos and videos, each with its own caption for Relive.
  *
  * Saving logs the visit: the park becomes visited across the app.
  *
- * Mounted only while open, so each opening starts with a fresh draft.
+ * Given `editing`, it edits that entry instead: filled in with it, saved
+ * back over it, and with no draft kept. So closing it with changes made
+ * asks first whether to discard them.
+ *
+ * What's typed is kept as a draft (trips/TripsContext.tsx) as you go, so
+ * closing the sheet by accident (a tap outside it, the back button,
+ * Cancel) doesn't lose it: it comes back next time, for a week. Saving
+ * the entry or Start over clears it. A draft for one park isn't restored
+ * when the sheet is opened for another.
  */
 
 import { useQuery } from '@tanstack/react-query';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
-import { useMemo, useState } from 'react';
+import { File } from 'expo-file-system';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   KeyboardAvoidingView,
   Modal,
@@ -30,54 +40,132 @@ import { fetchParkMap } from '../../api/parkMaps';
 import { listSites } from '../../api/parks';
 import { useFriends } from '../../friends/useFriends';
 import { colors, radius, shadow, space } from '../../theme';
-import { dateLabel, useTrips, type TripEntry } from '../../trips/TripsContext';
+import {
+  dateLabel,
+  useTrips,
+  type EntryDraft,
+  type TripEntry,
+  type TripMedia,
+} from '../../trips/TripsContext';
 import { Avatar } from '../Avatar';
 import { Calendar, toDay } from '../Calendar';
+import { Dialog } from '../Dialog';
 import { Button } from '../Button';
 import { TextField } from '../TextField';
 import { BodyText, Heading } from '../Typography';
 
-const MAX_PHOTOS = 8;
+const MAX_MEDIA = 8;
+/** The longest video that can be added, in ms: a story-length clip. */
+const MAX_VIDEO_MS = 60_000;
 
 export function NewEntrySheet({
   initialSiteId,
+  editing,
   onClose,
   onSaved,
 }: {
   /** Opened from a park's card: start with that park chosen. */
   initialSiteId?: string;
+  /** An entry to edit, rather than writing a new one. */
+  editing?: TripEntry;
   onClose: () => void;
   onSaved: (entry: TripEntry) => void;
 }) {
   const insets = useSafeAreaInsets();
-  const { add } = useTrips();
+  const { add, update, getDraft, setDraft } = useTrips();
   const { friends } = useFriends();
   const { data: sites = [] } = useQuery({
     queryKey: ['sites', 'all'],
     queryFn: () => listSites('all'),
   });
 
-  const [siteId, setSiteId] = useState<string | null>(initialSiteId ?? null);
+  // The draft left from last time, unless it's for a different park than
+  // the one this was opened for.
+  const [restored, setRestored] = useState(() => {
+    if (editing) return null;
+    const draft = getDraft();
+    if (!draft) return null;
+    if (initialSiteId && draft.siteId && draft.siteId !== initialSiteId) return null;
+    return { ...draft, media: draft.media.filter((m) => mediaExists(m.uri)) };
+  });
+  const blank = blankDraft(initialSiteId);
+  const start = editing ? fromEntry(editing) : (restored ?? blank);
+
+  const [siteId, setSiteId] = useState<string | null>(start.siteId ?? initialSiteId ?? null);
   // What's typed in the park field; until something is typed it shows the
   // chosen park's name.
   const [query, setQuery] = useState<string | null>(null);
   const [listOpen, setListOpen] = useState(false);
-  const [day, setDay] = useState(() => toDay(new Date()));
+  const [day, setDay] = useState(start.date);
   const [calendarOpen, setCalendarOpen] = useState(false);
-  const [title, setTitle] = useState('');
-  const [notes, setNotes] = useState('');
-  const [rating, setRating] = useState<number | null>(null);
-  const [stamp, setStamp] = useState('');
-  const [withIds, setWithIds] = useState<number[]>([]);
-  const [photos, setPhotos] = useState<string[]>([]);
+  const [title, setTitle] = useState(start.title);
+  const [notes, setNotes] = useState(start.notes);
+  const [rating, setRating] = useState<number | null>(start.rating);
+  const [trails, setTrails] = useState<string[]>(start.trails);
+  /** A trail or spot being typed, not yet added. */
+  const [trailText, setTrailText] = useState('');
+  const [withIds, setWithIds] = useState<number[]>(start.withIds);
+  const [media, setMedia] = useState<TripMedia[]>(start.media);
+  /** Why a picked video was left out (too long), until the next pick. */
+  const [mediaNote, setMediaNote] = useState<string | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+
+  // Keep the draft as it's typed: a moment after each change, and at once
+  // if the sheet closes first. Nothing is written until something changes,
+  // so opening and closing the sheet leaves an earlier draft alone.
+  const fields = { siteId, date: day, title, notes, rating, trails, withIds, media };
+  const fieldsJson = JSON.stringify(fields);
+  const [openedWith] = useState(fieldsJson);
+  const pending = useRef<EntryDraft | null | undefined>(undefined);
+
+  function flushDraft() {
+    if (pending.current === undefined) return;
+    setDraft(pending.current);
+    pending.current = undefined;
+  }
+
+  useEffect(() => {
+    // Edits are saved or dropped; only new entries keep a draft.
+    if (editing || fieldsJson === openedWith) return;
+    const current = JSON.parse(fieldsJson) as Omit<EntryDraft, 'savedAt'>;
+    pending.current = hasContent(current, blank) ? { ...current, savedAt: new Date().toISOString() } : null;
+    const timer = setTimeout(flushDraft, 400);
+    return () => clearTimeout(timer);
+    // `blank` only differs by today's date, and flushDraft reads refs.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fieldsJson, openedWith]);
+  useEffect(() => flushDraft, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Closing an edit with changes made asks first; anything else just closes.
+  const [confirmDiscard, setConfirmDiscard] = useState(false);
+  function requestClose() {
+    if (editing && fieldsJson !== openedWith) setConfirmDiscard(true);
+    else onClose();
+  }
+
+  function startOver() {
+    pending.current = undefined;
+    setDraft(null);
+    setRestored(null);
+    setSiteId(blank.siteId);
+    setQuery(null);
+    setDay(blank.date);
+    setTitle('');
+    setNotes('');
+    setRating(null);
+    setTrails([]);
+    setTrailText('');
+    setWithIds([]);
+    setMedia([]);
+    setProblem(null);
+  }
 
   const chosen = sites.find((s) => s.id === siteId);
   const shownQuery = query ?? chosen?.name ?? '';
 
-  // The chosen park's trails, as suggestions for the location stamp. Same
-  // query as the park map screen, so it's often already loaded.
+  // The chosen park's trails, as suggestions. Same query as the park map
+  // screen, so it's often already loaded.
   const { data: parkMap } = useQuery({
     queryKey: ['parkMap', chosen?.id],
     queryFn: () => fetchParkMap(chosen!.id),
@@ -85,12 +173,25 @@ export function NewEntrySheet({
     staleTime: Infinity,
   });
   const trailSuggestions = useMemo(() => {
-    const needle = stamp.trim().toLowerCase();
+    const needle = trailText.trim().toLowerCase();
     const names = parkMap?.trailNames ?? [];
     return (needle ? names.filter((n) => n.toLowerCase().includes(needle)) : names)
-      .filter((n) => n !== stamp)
-      .slice(0, 8);
-  }, [parkMap, stamp]);
+      .filter((n) => !trails.includes(n))
+      .slice(0, 10);
+  }, [parkMap, trailText, trails]);
+
+  function toggleTrail(name: string) {
+    setTrails((list) => (list.includes(name) ? list.filter((t) => t !== name) : [...list, name]));
+  }
+
+  /** Add what's typed as a trail or spot of its own. */
+  function addTypedTrail() {
+    const name = trailText.trim();
+    if (name && !trails.some((t) => t.toLowerCase() === name.toLowerCase())) {
+      setTrails((list) => [...list, name]);
+    }
+    setTrailText('');
+  }
   const results = useMemo(() => {
     const needle = (query ?? '').trim().toLowerCase();
     return sites
@@ -99,17 +200,36 @@ export function NewEntrySheet({
       .slice(0, 8);
   }, [sites, query]);
 
-  async function pickPhotos() {
+  async function pickMedia() {
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
+      mediaTypes: ['images', 'videos'],
       allowsMultipleSelection: true,
-      selectionLimit: MAX_PHOTOS - photos.length,
+      selectionLimit: MAX_MEDIA - media.length,
       quality: 0.85,
     });
     if (result.canceled) return;
-    setPhotos((current) =>
-      [...current, ...result.assets.map((asset) => asset.uri)].slice(0, MAX_PHOTOS),
+    // Videos over a minute are left out, with a note saying how to fit one in.
+    const tooLong = result.assets.filter(
+      (asset) => asset.type === 'video' && (asset.duration ?? 0) > MAX_VIDEO_MS,
     );
+    setMediaNote(
+      tooLong.length === 0
+        ? null
+        : tooLong.length === 1
+          ? `That video is ${clock(tooLong[0].duration!)}. Clips up to 1 minute can be added. Trim it in your Photos app first.`
+          : `${tooLong.length} videos are longer than 1 minute and weren't added. Trim them in your Photos app first.`,
+    );
+    const picked: TripMedia[] = result.assets.filter((asset) => !tooLong.includes(asset)).map((asset) => ({
+      uri: asset.uri,
+      kind: asset.type === 'video' ? 'video' : 'photo',
+      caption: '',
+      ...(asset.type === 'video' && asset.duration ? { duration: asset.duration } : {}),
+    }));
+    setMedia((current) => [...current, ...picked].slice(0, MAX_MEDIA));
+  }
+
+  function setCaption(uri: string, caption: string) {
+    setMedia((list) => list.map((m) => (m.uri === uri ? { ...m, caption } : m)));
   }
 
   async function save() {
@@ -123,16 +243,29 @@ export function NewEntrySheet({
     }
     setSaving(true);
     try {
-      const entry = await add({
+      const details = {
         siteId: chosen.id,
         date: day,
         title: title.trim(),
         notes: notes.trim(),
-        photos,
-        with: friends.filter((f) => withIds.includes(f.user.id)).map((f) => f.user),
+        media: media.map((m) => ({ ...m, caption: m.caption.trim() })),
+        with: [
+          ...friends.filter((f) => withIds.includes(f.user.id)).map((f) => f.user),
+          // Someone tagged before who's no longer a friend stays tagged.
+          ...(editing?.with ?? []).filter(
+            (p) => withIds.includes(p.id) && !friends.some((f) => f.user.id === p.id),
+          ),
+        ],
         rating,
-        stamp: stamp.trim() || null,
-      });
+        // Something typed but not added yet still counts.
+        trails: trailText.trim() && !trails.includes(trailText.trim()) ? [...trails, trailText.trim()] : trails,
+      };
+      const entry = editing ? await update(editing.id, details) : await add(details);
+      if (!entry) throw new Error('Entry not found');
+      if (!editing) {
+        pending.current = undefined;
+        setDraft(null);
+      }
       onSaved(entry);
     } catch {
       setProblem("Couldn't save the entry. Try again.");
@@ -143,19 +276,31 @@ export function NewEntrySheet({
 
 
   return (
-    <Modal visible transparent animationType="slide" onRequestClose={onClose}>
+    <Modal visible transparent animationType="slide" onRequestClose={requestClose}>
       <KeyboardAvoidingView
         style={styles.overlay}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel="Close" />
+        <Pressable style={StyleSheet.absoluteFill} onPress={requestClose} accessibilityLabel="Close" />
         <View style={styles.sheet}>
           <View style={styles.grabber} />
           <ScrollView
             contentContainerStyle={[styles.sheetContent, { paddingBottom: insets.bottom + space[4] }]}
             keyboardShouldPersistTaps="handled"
           >
-            <Heading size={21}>New journal entry</Heading>
+            <Heading size={21}>{editing ? 'Edit memory' : 'New journal entry'}</Heading>
+            {restored ? (
+              <View style={styles.restored}>
+                <BodyText size={12.5} color={colors.neutral[700]} style={styles.restoredText}>
+                  {`Picked up your draft from ${dateLabel(toDay(new Date(restored.savedAt)))}.`}
+                </BodyText>
+                <Pressable onPress={startOver} hitSlop={8} accessibilityRole="button">
+                  <BodyText size={12.5} weight="semibold" color={colors.accentRamp[700]}>
+                    Start over
+                  </BodyText>
+                </Pressable>
+              </View>
+            ) : null}
 
             <Label>Park visited</Label>
             <TextField
@@ -275,26 +420,67 @@ export function NewEntrySheet({
               </BodyText>
             </View>
 
-            <Label>Location stamp</Label>
+            <Label>Trails &amp; spots</Label>
             <BodyText size={12} lineHeightRatio={1.45} color={colors.neutral[600]} style={styles.hint}>
-              A trail or spot you loved. It&apos;s stamped on your entry and shows in your friends&apos;
-              feed.
+              Every trail or spot you loved. They&apos;re stamped on your entry and show in your
+              friends&apos; feed.
             </BodyText>
-            <TextField
-              label="Location stamp"
-              hideLabel
-              value={stamp}
-              onChangeText={setStamp}
-              placeholder={chosen?.isNamedPark ? 'Pick a trail below or type a spot' : 'Type a trail or spot'}
-            />
+            {trails.length > 0 ? (
+              <View style={[styles.chips, styles.chosenTrails]}>
+                {trails.map((name) => (
+                  <Pressable
+                    key={name}
+                    onPress={() => toggleTrail(name)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Remove ${name}`}
+                    style={({ pressed }) => [styles.trailOn, pressed && styles.trailOnPressed]}
+                  >
+                    <PinIcon color={colors.neutral[100]} />
+                    <BodyText size={12} weight="semibold" color={colors.neutral[100]} numberOfLines={1}>
+                      {name}
+                    </BodyText>
+                    <BodyText size={11} weight="bold" color={colors.neutral[100]}>
+                      ✕
+                    </BodyText>
+                  </Pressable>
+                ))}
+              </View>
+            ) : null}
+            <View style={styles.trailInput}>
+              <TextField
+                label="Add a trail or spot"
+                hideLabel
+                value={trailText}
+                onChangeText={setTrailText}
+                onSubmitEditing={addTypedTrail}
+                returnKeyType="done"
+                placeholder={chosen?.isNamedPark ? 'Search trails or type a spot' : 'Type a trail or spot'}
+                containerStyle={styles.trailField}
+              />
+              {trailText.trim() ? (
+                <Pressable
+                  onPress={addTypedTrail}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Add ${trailText.trim()}`}
+                  style={({ pressed }) => [styles.trailAdd, pressed && styles.trailAddPressed]}
+                >
+                  <BodyText size={13} weight="semibold" color={colors.neutral[100]}>
+                    Add
+                  </BodyText>
+                </Pressable>
+              ) : null}
+            </View>
             {trailSuggestions.length > 0 ? (
               <View style={[styles.chips, styles.suggestions]}>
                 {trailSuggestions.map((name) => (
                   <Pressable
                     key={name}
-                    onPress={() => setStamp(name)}
+                    onPress={() => {
+                      toggleTrail(name);
+                      setTrailText('');
+                    }}
                     accessibilityRole="button"
-                    accessibilityLabel={`Stamp ${name}`}
+                    accessibilityLabel={`Add ${name}`}
                     style={({ pressed }) => [styles.suggestion, pressed && styles.suggestionPressed]}
                   >
                     <PinIcon />
@@ -341,33 +527,65 @@ export function NewEntrySheet({
               </BodyText>
             )}
 
-            <Label>Photos</Label>
+            <Label>Photos &amp; videos</Label>
             <Pressable
-              onPress={pickPhotos}
-              disabled={photos.length >= MAX_PHOTOS}
+              onPress={pickMedia}
+              disabled={media.length >= MAX_MEDIA}
               accessibilityRole="button"
               style={({ pressed }) => [styles.addPhotos, pressed && styles.addPhotosPressed]}
             >
               <PlusIcon />
               <BodyText size={13} weight="semibold" color={colors.accentRamp[800]} style={styles.addText}>
-                {photos.length >= MAX_PHOTOS ? `Up to ${MAX_PHOTOS} photos` : 'Add photos'}
+                {media.length >= MAX_MEDIA ? `Up to ${MAX_MEDIA} photos and videos` : 'Add photos or videos'}
+              </BodyText>
+              <BodyText size={11} color={colors.accentRamp[700]}>
+                Videos up to 1 min
               </BodyText>
             </Pressable>
-            {photos.length > 0 ? (
-              <View style={styles.thumbs}>
-                {photos.map((uri) => (
-                  <View key={uri} style={styles.thumb}>
-                    <Image source={{ uri }} style={StyleSheet.absoluteFill} contentFit="cover" />
-                    <Pressable
-                      onPress={() => setPhotos((list) => list.filter((u) => u !== uri))}
-                      hitSlop={6}
-                      accessibilityLabel="Remove photo"
-                      style={styles.thumbRemove}
-                    >
-                      <BodyText size={11} weight="bold" color={colors.neutral[100]}>
-                        ✕
-                      </BodyText>
-                    </Pressable>
+            {mediaNote ? (
+              <BodyText size={12.5} weight="medium" color={colors.accentRamp[800]} style={styles.mediaNote}>
+                {mediaNote}
+              </BodyText>
+            ) : null}
+            {media.length > 0 ? (
+              <View style={styles.mediaList}>
+                {media.map((m, i) => (
+                  <View key={m.uri} style={styles.mediaRow}>
+                    <View style={[styles.thumb, m.kind === 'video' && styles.videoThumb]}>
+                      <Image source={{ uri: m.uri }} style={StyleSheet.absoluteFill} contentFit="cover" />
+                      {m.kind === 'video' ? (
+                        <View style={styles.videoBadge} pointerEvents="none">
+                          <Svg width={10} height={10} viewBox="0 0 24 24">
+                            <Path d="M7 4.5v15l12-7.5z" fill={colors.neutral[100]} />
+                          </Svg>
+                          {m.duration ? (
+                            <BodyText size={10} weight="bold" color={colors.neutral[100]}>
+                              {clock(m.duration)}
+                            </BodyText>
+                          ) : null}
+                        </View>
+                      ) : null}
+                      <Pressable
+                        onPress={() => setMedia((list) => list.filter((x) => x.uri !== m.uri))}
+                        hitSlop={6}
+                        accessibilityLabel={m.kind === 'video' ? 'Remove video' : 'Remove photo'}
+                        style={styles.thumbRemove}
+                      >
+                        <BodyText size={11} weight="bold" color={colors.neutral[100]}>
+                          ✕
+                        </BodyText>
+                      </Pressable>
+                    </View>
+                    <TextField
+                      label={`Caption for ${m.kind} ${i + 1}`}
+                      hideLabel
+                      value={m.caption}
+                      onChangeText={(text) => setCaption(m.uri, text)}
+                      placeholder={m.kind === 'video' ? 'Say something about this video' : 'Say something about this photo'}
+                      multiline
+                      containerStyle={styles.captionBox}
+                      style={styles.caption}
+                    />
                   </View>
                 ))}
               </View>
@@ -380,14 +598,89 @@ export function NewEntrySheet({
             ) : null}
 
             <View style={styles.actions}>
-              <Button label="Cancel" variant="secondary" onPress={onClose} />
-              <Button label="Save entry" block onPress={save} loading={saving} style={styles.save} />
+              <Button label="Cancel" variant="secondary" onPress={requestClose} />
+              <Button
+                label={editing ? 'Save changes' : 'Save entry'}
+                block
+                onPress={save}
+                loading={saving}
+                style={styles.save}
+              />
             </View>
           </ScrollView>
         </View>
       </KeyboardAvoidingView>
+      <Dialog
+        visible={confirmDiscard}
+        title="Discard your changes?"
+        message="The changes you've made to this memory won't be saved."
+        actions={[
+          { label: 'Discard changes', tone: 'danger', onPress: onClose },
+          { label: 'Keep editing', tone: 'cancel', onPress: () => setConfirmDiscard(false) },
+        ]}
+        onDismiss={() => setConfirmDiscard(false)}
+        placement="bottom"
+      />
     </Modal>
   );
+}
+
+/** An entry's details, to fill the sheet in for editing it. */
+function fromEntry(entry: TripEntry): Omit<EntryDraft, 'savedAt'> {
+  return {
+    siteId: entry.siteId,
+    date: entry.date,
+    title: entry.title,
+    notes: entry.notes,
+    rating: entry.rating,
+    trails: entry.trails,
+    withIds: entry.with.map((p) => p.id),
+    media: entry.media,
+  };
+}
+
+/** The empty entry the sheet opens with when there's no draft. */
+function blankDraft(initialSiteId: string | undefined): Omit<EntryDraft, 'savedAt'> {
+  return {
+    siteId: initialSiteId ?? null,
+    date: toDay(new Date()),
+    title: '',
+    notes: '',
+    rating: null,
+    trails: [],
+    withIds: [],
+    media: [],
+  };
+}
+
+/** Whether anything's been filled in beyond what the sheet opens with. */
+function hasContent(draft: Omit<EntryDraft, 'savedAt'>, blank: Omit<EntryDraft, 'savedAt'>): boolean {
+  return (
+    !!draft.title.trim() ||
+    !!draft.notes.trim() ||
+    draft.trails.length > 0 ||
+    draft.rating !== null ||
+    draft.withIds.length > 0 ||
+    draft.media.length > 0 ||
+    draft.siteId !== blank.siteId ||
+    draft.date !== blank.date
+  );
+}
+
+/** "1:05", a video's length. */
+function clock(ms: number): string {
+  const seconds = Math.round(ms / 1000);
+  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
+}
+
+/** The picker's copies of photos and videos can be cleared by the phone. */
+function mediaExists(uri: string): boolean {
+  if (/^https?:/.test(uri)) return true;
+  try {
+    return new File(uri).exists;
+  } catch {
+    return false;
+  }
 }
 
 function Label({ children }: { children: string }) {
@@ -415,7 +708,7 @@ export function StarIcon({ filled, size = 28 }: { filled: boolean; size?: number
   );
 }
 
-/** A map pin, for the location stamp. */
+/** A map pin, for trails and spots. */
 export function PinIcon({ color = colors.accentRamp[700], size = 13 }: { color?: string; size?: number }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24">
@@ -605,11 +898,75 @@ const styles = StyleSheet.create({
   addText: {
     flex: 1,
   },
-  thumbs: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: space[2],
+  mediaNote: {
     marginTop: space[2],
+  },
+  mediaList: {
+    gap: space[3],
+    marginTop: space[3],
+  },
+  mediaRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: space[3],
+  },
+  captionBox: {
+    flex: 1,
+  },
+  caption: {
+    minHeight: 64,
+    borderRadius: radius.md,
+    paddingTop: 10,
+    textAlignVertical: 'top',
+  },
+  // Behind a video's first frame, or in its place where the phone can't draw one.
+  videoThumb: {
+    backgroundColor: colors.neutral[800],
+  },
+  videoBadge: {
+    position: 'absolute',
+    left: 4,
+    bottom: 4,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingVertical: 2,
+    paddingHorizontal: 5,
+    borderRadius: radius.pill,
+    backgroundColor: 'rgba(20, 17, 15, 0.7)',
+  },
+  chosenTrails: {
+    marginBottom: space[2],
+  },
+  trailOn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    maxWidth: '100%',
+    paddingVertical: 6,
+    paddingHorizontal: 11,
+    borderRadius: radius.pill,
+    backgroundColor: colors.accent,
+  },
+  trailOnPressed: {
+    backgroundColor: colors.accentRamp[600],
+  },
+  trailInput: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space[2],
+  },
+  trailField: {
+    flex: 1,
+  },
+  trailAdd: {
+    paddingVertical: 11,
+    paddingHorizontal: 16,
+    borderRadius: radius.pill,
+    backgroundColor: colors.accent,
+  },
+  trailAddPressed: {
+    backgroundColor: colors.accentRamp[600],
   },
   thumb: {
     width: 64,
@@ -628,6 +985,19 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderRadius: radius.pill,
     backgroundColor: 'rgba(46, 43, 37, 0.7)',
+  },
+  restored: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space[3],
+    marginTop: space[2],
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: radius.md,
+    backgroundColor: colors.accentRamp[100],
+  },
+  restoredText: {
+    flex: 1,
   },
   problem: {
     marginTop: space[3],

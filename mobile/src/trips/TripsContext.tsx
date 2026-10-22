@@ -7,8 +7,12 @@
  * Kept on the device for now, per account (like the quiz answers), until
  * the trips backend exists (Sebastian, week 5): then `add` and `remove`
  * call the API and photos upload, and nothing above this file changes.
- * Photos are copied into the app's own documents folder, since the
- * picker's copies can be cleared by the phone.
+ * Photos and videos are copied into the app's own documents folder, since
+ * the picker's copies can be cleared by the phone.
+ *
+ * Entries saved before captions, videos and several trails existed are
+ * read in the current shape: their photos with blank captions, their one
+ * trail as a list of one.
  */
 
 import { Directory, File, Paths } from 'expo-file-system';
@@ -18,12 +22,13 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from 'react';
 
 import { useAuth } from '../auth/AuthContext';
-import { getItem, setItem } from '../lib/storage';
+import { getItem, removeItem, setItem } from '../lib/storage';
 
 export type TripEntry = {
   id: string;
@@ -33,20 +38,56 @@ export type TripEntry = {
   date: string;
   title: string;
   notes: string;
-  /** Photo file URIs in the app's documents folder. */
-  photos: string[];
+  /** Photos and videos, in order, each with its own caption. */
+  media: TripMedia[];
   /** Friends who were there: their ids and, so the entry reads the same
    *  if they're later removed, their emails as they were. */
   with: { id: number; email: string }[];
   /** How it was, 1 to 5 stars; null if not rated. */
   rating: number | null;
-  /** The location stamp: a trail or spot they loved, shown on the entry
-   *  and in friends' feeds. Null if none. */
-  stamp: string | null;
+  /** Trails or spots they loved, shown on the entry and in friends' feeds. */
+  trails: string[];
   createdAt: string;
 };
 
+/** A photo or video in an entry. */
+export type TripMedia = {
+  /** A file in the app's documents folder (or, for the samples, a web link). */
+  uri: string;
+  kind: 'photo' | 'video';
+  /** Words shown over it in Relive; may be empty. */
+  caption: string;
+  /** A video's length in ms, when known. */
+  duration?: number;
+};
+
+/** The photo to show for an entry: its first photo, skipping videos. */
+export function leadPhoto(entry: Pick<TripEntry, 'media'>): string | null {
+  return entry.media.find((m) => m.kind === 'photo')?.uri ?? null;
+}
+
 export type TripDraft = Omit<TripEntry, 'id' | 'createdAt'>;
+
+/**
+ * A new entry that was started but not saved, kept so closing the sheet
+ * by accident doesn't lose what was typed. Its media are the picker's
+ * URIs, not yet copied into the app's folder.
+ */
+export type EntryDraft = {
+  siteId: string | null;
+  date: string;
+  title: string;
+  notes: string;
+  rating: number | null;
+  trails: string[];
+  withIds: number[];
+  media: TripMedia[];
+  /** When it was last changed, as an ISO timestamp. */
+  savedAt: string;
+};
+
+/** How long an untouched draft is kept. */
+const DRAFT_DAYS = 7;
 
 /** What a park's card shows about your visits to it. */
 export type VisitSummary = {
@@ -64,12 +105,53 @@ type TripsValue = {
   visitSummary: (siteId: string) => VisitSummary | undefined;
   add: (draft: TripDraft) => Promise<TripEntry>;
   remove: (id: string) => Promise<void>;
+  /** Replace an entry's details, keeping its id and when it was made. */
+  update: (id: string, draft: TripDraft) => Promise<TripEntry | undefined>;
+  /** Add ready-made entries as they are (the sample trips): their photos
+   *  are left where they are rather than copied. */
+  addEntries: (entries: TripEntry[]) => Promise<void>;
+  /** The unsaved new entry, if there is one. */
+  getDraft: () => EntryDraft | null;
+  /** Keep a draft, or pass null to drop it. Not state: typing in the
+   *  sheet doesn't re-render everything that reads trips. */
+  setDraft: (draft: EntryDraft | null) => void;
 };
 
 const TripsContext = createContext<TripsValue | null>(null);
 
 function storageKey(userId: string): string {
   return `parkpath.trips.${userId}`;
+}
+
+function draftKey(userId: string): string {
+  return `parkpath.tripDraft.${userId}`;
+}
+
+/** A stored draft, if it's still recent enough to keep. */
+function parseDraft(raw: string | null): EntryDraft | null {
+  if (!raw) return null;
+  try {
+    const draft = JSON.parse(raw) as EntryDraft & OldShape;
+    if (!draft || typeof draft.savedAt !== 'string' || typeof draft.date !== 'string') return null;
+    const age = Date.now() - new Date(draft.savedAt).getTime();
+    if (age >= DRAFT_DAYS * 24 * 60 * 60 * 1000) return null;
+    // Drafts kept before captions and several trails.
+    const { photos, stamp, ...rest } = draft;
+    return {
+      ...rest,
+      media: draft.media ?? (photos ?? []).map(asPhoto),
+      trails: draft.trails ?? (stamp?.trim() ? [stamp.trim()] : []),
+    };
+  } catch {
+    return null;
+  }
+}
+
+/** What entries and drafts held before media and trails replaced these. */
+type OldShape = { photos?: string[]; stamp?: string | null };
+
+function asPhoto(uri: string): TripMedia {
+  return { uri, kind: 'photo', caption: '' };
 }
 
 /** Stored JSON is untrusted: anything that isn't an entry is dropped. */
@@ -80,33 +162,52 @@ function parse(raw: string | null): TripEntry[] {
     if (!Array.isArray(parsed)) return [];
     return parsed
       .filter(
-        (e): e is TripEntry =>
+        (e): e is TripEntry & OldShape =>
           !!e && typeof e === 'object' && typeof e.id === 'string' && typeof e.siteId === 'string',
       )
-      // Entries saved before ratings and stamps existed.
-      .map((e) => ({ ...e, rating: e.rating ?? null, stamp: e.stamp ?? null }));
+      .map(({ photos, stamp, ...e }) => ({
+        ...e,
+        // Saved before ratings existed.
+        rating: e.rating ?? null,
+        // Saved before captions and videos: photos, captions blank.
+        media: e.media ?? (photos ?? []).map(asPhoto),
+        // Saved with one trail, or none.
+        trails: e.trails ?? (stamp ? [stamp] : []),
+      }));
   } catch {
     return [];
   }
 }
 
-/** Copy picked photos into the app's documents folder; returns their new URIs. */
-function keepPhotos(uris: string[]): string[] {
-  if (uris.length === 0) return [];
-  const folder = new Directory(Paths.document, 'trip-photos');
-  folder.create({ idempotent: true, intermediates: true });
-  return uris.map((uri, i) => {
-    const extension = uri.split('?')[0].split('.').pop()?.toLowerCase() || 'jpg';
-    const target = new File(folder, `${Date.now()}-${i}.${extension}`);
-    new File(uri).copySync(target);
-    return target.uri;
-  });
+/** Web links (the samples' park photos) are used where they are. */
+function isWeb(uri: string): boolean {
+  return /^https?:/.test(uri);
 }
 
-function deletePhotos(uris: string[]) {
-  for (const uri of uris) {
+/** Copy a picked photo or video into the app's documents folder; returns its new URI. */
+function keepFile(uri: string, i: number): string {
+  const folder = new Directory(Paths.document, 'trip-photos');
+  folder.create({ idempotent: true, intermediates: true });
+  const extension = uri.split('?')[0].split('.').pop()?.toLowerCase() || 'jpg';
+  const target = new File(folder, `${Date.now()}-${i}.${extension}`);
+  new File(uri).copySync(target);
+  return target.uri;
+}
+
+/**
+ * The media to save: ones already the entry's (or on the web) stay where
+ * they are; newly picked ones are copied in.
+ */
+function keepMedia(media: TripMedia[], already: TripMedia[] = []): TripMedia[] {
+  const owned = new Set(already.map((m) => m.uri));
+  return media.map((m, i) => (owned.has(m.uri) || isWeb(m.uri) ? m : { ...m, uri: keepFile(m.uri, i) }));
+}
+
+function deleteMedia(media: TripMedia[]) {
+  for (const m of media) {
+    if (isWeb(m.uri)) continue;
     try {
-      new File(uri).delete();
+      new File(m.uri).delete();
     } catch {
       // Already gone; nothing to do.
     }
@@ -126,12 +227,19 @@ export function TripsProvider({ children }: { children: ReactNode }) {
     [loaded, userId],
   );
 
+  const draft = useRef<{ userId: string; value: EntryDraft | null } | null>(null);
+
   useEffect(() => {
     if (!userId) return;
     let cancelled = false;
     (async () => {
       const stored = parse(await getItem(storageKey(userId)));
       if (!cancelled) setLoaded({ userId, entries: stored.sort(byVisit) });
+      const storedDraft = parseDraft(await getItem(draftKey(userId)));
+      // Unless the sheet already wrote a newer one while this loaded.
+      if (!cancelled && draft.current?.userId !== userId) {
+        draft.current = { userId, value: storedDraft };
+      }
     })();
     return () => {
       cancelled = true;
@@ -152,7 +260,7 @@ export function TripsProvider({ children }: { children: ReactNode }) {
       const entry: TripEntry = {
         ...draft,
         id: `trip-${Date.now()}`,
-        photos: keepPhotos(draft.photos),
+        media: keepMedia(draft.media),
         createdAt: new Date().toISOString(),
       };
       await save([entry, ...entries].sort(byVisit));
@@ -164,8 +272,33 @@ export function TripsProvider({ children }: { children: ReactNode }) {
   const remove = useCallback(
     async (id: string) => {
       const entry = entries.find((e) => e.id === id);
-      if (entry) deletePhotos(entry.photos);
+      if (entry) deleteMedia(entry.media);
       await save(entries.filter((e) => e.id !== id));
+    },
+    [entries, save],
+  );
+
+  const update = useCallback(
+    async (id: string, draft: TripDraft) => {
+      const old = entries.find((e) => e.id === id);
+      if (!old) return undefined;
+      // Media already in the entry stay as they are (their captions may have
+      // changed); newly picked ones are copied in, and ones taken out of the
+      // entry are deleted.
+      const media = keepMedia(draft.media, old.media);
+      const stillThere = new Set(draft.media.map((m) => m.uri));
+      deleteMedia(old.media.filter((m) => !stillThere.has(m.uri)));
+      const entry: TripEntry = { ...old, ...draft, media };
+      await save(entries.map((e) => (e.id === id ? entry : e)).sort(byVisit));
+      return entry;
+    },
+    [entries, save],
+  );
+
+  const addEntries = useCallback(
+    async (more: TripEntry[]) => {
+      const ids = new Set(entries.map((e) => e.id));
+      await save([...entries, ...more.filter((e) => !ids.has(e.id))].sort(byVisit));
     },
     [entries, save],
   );
@@ -182,9 +315,24 @@ export function TripsProvider({ children }: { children: ReactNode }) {
     [entries],
   );
 
+  const getDraft = useCallback(
+    () => (draft.current && draft.current.userId === userId ? draft.current.value : null),
+    [userId],
+  );
+
+  const setDraft = useCallback(
+    (next: EntryDraft | null) => {
+      if (!userId) return;
+      draft.current = { userId, value: next };
+      if (next) void setItem(draftKey(userId), JSON.stringify(next));
+      else void removeItem(draftKey(userId));
+    },
+    [userId],
+  );
+
   const value = useMemo<TripsValue>(
-    () => ({ entries, visitedIds, visitSummary, add, remove }),
-    [entries, visitedIds, visitSummary, add, remove],
+    () => ({ entries, visitedIds, visitSummary, add, remove, update, addEntries, getDraft, setDraft }),
+    [entries, visitedIds, visitSummary, add, remove, update, addEntries, getDraft, setDraft],
   );
 
   return <TripsContext.Provider value={value}>{children}</TripsContext.Provider>;

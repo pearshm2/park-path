@@ -1,6 +1,6 @@
 export { Button } from './Button';
 export { ChoiceRow } from './ChoiceRow';
-export { ComingSoon } from './ComingSoon';
+export { Dialog, type DialogAction } from './Dialog';
 export { FilterButton } from './FilterButton';
 export {
   activeFilterCount,

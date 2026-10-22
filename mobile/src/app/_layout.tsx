@@ -106,11 +106,26 @@ function SessionGate() {
         // not the default white.
         animation: 'fade',
       }}
-    />
+    >
+      {/* Relive opens over the screen beneath with no transition of its own:
+          a dive into a memory has already covered the screen with Relive's
+          first frame, and otherwise Relive fades itself in. */}
+      <Stack.Screen
+        name="relive"
+        options={{
+          presentation: 'transparentModal',
+          animation: 'none',
+          contentStyle: styles.clear,
+        }}
+      />
+    </Stack>
   );
 }
 
 const styles = StyleSheet.create({
+  clear: {
+    backgroundColor: 'transparent',
+  },
   ground: {
     flex: 1,
     backgroundColor: colors.bg,
