@@ -9,6 +9,7 @@
  */
 
 import { API_BASE_URL, ApiError, request } from './client';
+import type { components } from './schema';
 
 /** Where a label is printed on a brochure map, in the image's pixels. */
 export type MapLabel = { name: string; x: number; y: number; width: number; height: number };
@@ -32,17 +33,8 @@ export type ParkMap = {
   trailNames: string[];
 };
 
-type ParkMapOut = {
-  brochures: {
-    title: string;
-    url: string;
-    width: number;
-    height: number;
-    visitor_centers: MapLabel[];
-  }[];
-  trails: { name: string | null }[];
-  official_map_url: string;
-};
+/** GET /sites/{code}/map. Generated from the API; see src/api/schema.ts. */
+type ParkMapOut = components['schemas']['ParkMapOut'];
 
 /** The park's maps, or null if there aren't any (not synced, or no NPS data). */
 export async function fetchParkMap(siteId: string): Promise<ParkMap | null> {
