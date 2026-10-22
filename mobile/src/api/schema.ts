@@ -365,10 +365,133 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/trips": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List My Trips */
+        get: operations["list_my_trips_trips_get"];
+        put?: never;
+        /** Create Trip */
+        post: operations["create_trip_trips_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/trips/feed": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Friends Feed
+         * @description Entries my friends shared with friends, newest first. Page with `before`.
+         */
+        get: operations["friends_feed_trips_feed_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/trips/photos/upload-url": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Photo Upload Url */
+        post: operations["photo_upload_url_trips_photos_upload_url_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/trips/{trip_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read Trip */
+        get: operations["read_trip_trips__trip_id__get"];
+        put?: never;
+        post?: never;
+        /** Delete Trip */
+        delete: operations["delete_trip_trips__trip_id__delete"];
+        options?: never;
+        head?: never;
+        /** Update Trip */
+        patch: operations["update_trip_trips__trip_id__patch"];
+        trace?: never;
+    };
+    "/passport": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** My Passport */
+        get: operations["my_passport_passport_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/passport/{user_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Friends Passport */
+        get: operations["friends_passport_passport__user_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** AchievementOut */
+        AchievementOut: {
+            /** Id */
+            id: string;
+            /** Title */
+            title: string;
+            /** Description */
+            description: string;
+            /** Earned */
+            earned: boolean;
+            /** Progress */
+            progress: number;
+            /** Goal */
+            goal: number;
+        };
         /**
          * BrochureMapOut
          * @description One of the park's official brochure maps, as a JPEG at `url`.
@@ -491,6 +614,78 @@ export interface components {
              */
             synced_at: string;
         };
+        /** PassportOut */
+        PassportOut: {
+            owner: components["schemas"]["UserOut"];
+            /** Parks Visited */
+            parks_visited: number;
+            /** Parks Total */
+            parks_total: number;
+            /** Stamps */
+            stamps: components["schemas"]["PassportStampOut"][];
+            /** Regions */
+            regions: components["schemas"]["RegionProgressOut"][];
+            /** Achievements */
+            achievements: components["schemas"]["AchievementOut"][];
+        };
+        /**
+         * PassportStampOut
+         * @description One national park's stamp: earned by logging a visit.
+         */
+        PassportStampOut: {
+            /** Park Code */
+            park_code: string;
+            /** Name */
+            name: string;
+            /** States */
+            states: string | null;
+            /** Region */
+            region: string | null;
+            /** Earned */
+            earned: boolean;
+            /** Visit Count */
+            visit_count: number;
+            /** First Visited On */
+            first_visited_on: string | null;
+            /** Last Visited On */
+            last_visited_on: string | null;
+            /** Latest Trip Id */
+            latest_trip_id: number | null;
+        };
+        /**
+         * PhotoUploadOut
+         * @description A signed form for one photo upload. The app sends a multipart POST to
+         *     `upload_url`: every entry of `fields` first, in order, then the file as
+         *     the last part named `file`. Then it passes `key` in `photo_keys` when it
+         *     saves the trip. The form stops working after `expires_in` seconds.
+         */
+        PhotoUploadOut: {
+            /** Key */
+            key: string;
+            /** Upload Url */
+            upload_url: string;
+            /** Fields */
+            fields: {
+                [key: string]: string;
+            };
+            /** Expires In */
+            expires_in: number;
+            /** Max Bytes */
+            max_bytes: number;
+        };
+        /**
+         * PhotoUploadRequest
+         * @description Ask for permission to upload one photo.
+         */
+        PhotoUploadRequest: {
+            /**
+             * Content Type
+             * @enum {string}
+             */
+            content_type: "image/jpeg" | "image/png" | "image/webp" | "image/heic";
+            /** Size Bytes */
+            size_bytes: number;
+        };
         /** PlaceOut */
         PlaceOut: {
             /** Name */
@@ -533,6 +728,19 @@ export interface components {
         RecommendationRequest: {
             answers: components["schemas"]["QuizAnswers"];
             location?: components["schemas"]["Location"] | null;
+        };
+        /** RegionProgressOut */
+        RegionProgressOut: {
+            /** Id */
+            id: string;
+            /** Label */
+            label: string;
+            /** Visited */
+            visited: number;
+            /** Total */
+            total: number;
+            /** Complete */
+            complete: boolean;
         };
         /** RoadOut */
         RoadOut: {
@@ -626,6 +834,102 @@ export interface components {
             /** Paths */
             paths: number[][][];
         };
+        /** TripCreate */
+        TripCreate: {
+            /** Park Code */
+            park_code: string;
+            /**
+             * Visited On
+             * Format: date
+             */
+            visited_on: string;
+            /**
+             * Title
+             * @default
+             */
+            title: string;
+            /**
+             * Notes
+             * @default
+             */
+            notes: string;
+            /** Rating */
+            rating?: number | null;
+            /** Stamp */
+            stamp?: string | null;
+            /** @default private */
+            visibility: components["schemas"]["Visibility"];
+            /** Photo Keys */
+            photo_keys?: string[];
+            /** Companion Ids */
+            companion_ids?: number[];
+        };
+        /** TripOut */
+        TripOut: {
+            /** Id */
+            id: number;
+            owner: components["schemas"]["UserOut"];
+            /** Park Code */
+            park_code: string;
+            /** Park Name */
+            park_name: string;
+            /**
+             * Visited On
+             * Format: date
+             */
+            visited_on: string;
+            /** Title */
+            title: string;
+            /** Notes */
+            notes: string;
+            /** Rating */
+            rating: number | null;
+            /** Stamp */
+            stamp: string | null;
+            visibility: components["schemas"]["Visibility"];
+            /** Photos */
+            photos: components["schemas"]["TripPhotoOut"][];
+            /** Companions */
+            companions: components["schemas"]["UserOut"][];
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /** TripPhotoOut */
+        TripPhotoOut: {
+            /** Key */
+            key: string;
+            /** Url */
+            url: string | null;
+        };
+        /**
+         * TripUpdate
+         * @description Only the fields sent change. `rating` and `stamp` can be set to null to clear them.
+         */
+        TripUpdate: {
+            /** Visited On */
+            visited_on?: string | null;
+            /** Title */
+            title?: string | null;
+            /** Notes */
+            notes?: string | null;
+            /** Rating */
+            rating?: number | null;
+            /** Stamp */
+            stamp?: string | null;
+            visibility?: components["schemas"]["Visibility"] | null;
+            /** Photo Keys */
+            photo_keys?: string[] | null;
+            /** Companion Ids */
+            companion_ids?: number[] | null;
+        };
         /** UserCreate */
         UserCreate: {
             /**
@@ -665,6 +969,11 @@ export interface components {
             /** Error Type */
             type: string;
         };
+        /**
+         * Visibility
+         * @enum {string}
+         */
+        Visibility: "private" | "friends";
         /**
          * WishlistItemOut
          * @description One saved site. The app already has the site details from GET /sites.
@@ -1285,6 +1594,283 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_my_trips_trips_get: {
+        parameters: {
+            query?: {
+                /** @description Only entries for this park */
+                park_code?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TripOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_trip_trips_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TripCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TripOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    friends_feed_trips_feed_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                /** @description Entry id: only entries posted before it */
+                before?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TripOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    photo_upload_url_trips_photos_upload_url_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PhotoUploadRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PhotoUploadOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_trip_trips__trip_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                trip_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TripOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_trip_trips__trip_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                trip_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_trip_trips__trip_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                trip_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TripUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TripOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    my_passport_passport_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PassportOut"];
+                };
+            };
+        };
+    };
+    friends_passport_passport__user_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PassportOut"];
+                };
             };
             /** @description Validation Error */
             422: {

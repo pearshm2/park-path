@@ -6,10 +6,13 @@ never include hashed_password) and conflating them is a common source
 of accidental data leaks.
 """
 
-from datetime import datetime
+from datetime import date, datetime, timedelta
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
+
+from app.storage import MAX_PHOTO_BYTES
+from app.visibility import Visibility
 
 
 class UserCreate(BaseModel):
@@ -213,3 +216,140 @@ class ParkMapOut(BaseModel):
     # The park's own maps page on nps.gov, with the official brochure map.
     official_map_url: str
     synced_at: datetime
+
+
+# --- Trips (/trips) ---------------------------------------------------------
+
+MAX_TRIP_PHOTOS = 8
+MAX_TRIP_COMPANIONS = 20
+
+
+class PhotoUploadRequest(BaseModel):
+    """Ask for permission to upload one photo."""
+
+    content_type: Literal["image/jpeg", "image/png", "image/webp", "image/heic"]
+    size_bytes: int = Field(gt=0, le=MAX_PHOTO_BYTES)
+
+
+class PhotoUploadOut(BaseModel):
+    """
+    A signed form for one photo upload. The app sends a multipart POST to
+    `upload_url`: every entry of `fields` first, in order, then the file as
+    the last part named `file`. Then it passes `key` in `photo_keys` when it
+    saves the trip. The form stops working after `expires_in` seconds.
+    """
+
+    key: str
+    upload_url: str
+    fields: dict[str, str]
+    expires_in: int
+    max_bytes: int
+
+
+class TripPhotoOut(BaseModel):
+    key: str
+    # Short-lived signed link; fetch the trip again for a fresh one.
+    url: str | None
+
+
+class TripCreate(BaseModel):
+    park_code: str
+    visited_on: date
+    title: str = Field("", max_length=200)
+    notes: str = Field("", max_length=10_000)
+    rating: int | None = Field(None, ge=1, le=5)
+    stamp: str | None = Field(None, max_length=200)
+    visibility: Visibility = Visibility.PRIVATE
+    # Keys from POST /trips/photos/upload-url, in the order to show them.
+    photo_keys: list[str] = Field(default_factory=list, max_length=MAX_TRIP_PHOTOS)
+    # User ids of friends who were there.
+    companion_ids: list[int] = Field(default_factory=list, max_length=MAX_TRIP_COMPANIONS)
+
+    @field_validator("visited_on")
+    @classmethod
+    def not_in_the_future(cls, value: date) -> date:
+        # A day of slack so a phone ahead of UTC can log "today".
+        if value > date.today() + timedelta(days=1):
+            raise ValueError("a visit can't be in the future")
+        return value
+
+
+class TripUpdate(BaseModel):
+    """Only the fields sent change. `rating` and `stamp` can be set to null to clear them."""
+
+    visited_on: date | None = None
+    title: str | None = Field(None, max_length=200)
+    notes: str | None = Field(None, max_length=10_000)
+    rating: int | None = Field(None, ge=1, le=5)
+    stamp: str | None = Field(None, max_length=200)
+    visibility: Visibility | None = None
+    photo_keys: list[str] | None = Field(None, max_length=MAX_TRIP_PHOTOS)
+    companion_ids: list[int] | None = Field(None, max_length=MAX_TRIP_COMPANIONS)
+
+    @field_validator("visited_on")
+    @classmethod
+    def not_in_the_future(cls, value: date | None) -> date | None:
+        if value is not None and value > date.today() + timedelta(days=1):
+            raise ValueError("a visit can't be in the future")
+        return value
+
+
+class TripOut(BaseModel):
+    id: int
+    owner: UserOut
+    park_code: str
+    park_name: str
+    visited_on: date
+    title: str
+    notes: str
+    rating: int | None
+    stamp: str | None
+    visibility: Visibility
+    photos: list[TripPhotoOut]
+    companions: list[UserOut]
+    created_at: datetime
+    updated_at: datetime
+
+
+# --- Passport (GET /passport) -----------------------------------------------
+
+
+class PassportStampOut(BaseModel):
+    """One national park's stamp: earned by logging a visit."""
+
+    park_code: str
+    name: str
+    states: str | None
+    region: str | None  # a RegionProgressOut id; null for territories
+    earned: bool
+    visit_count: int
+    first_visited_on: date | None
+    last_visited_on: date | None
+    # The trip to reopen when the stamp is tapped: the latest visit.
+    latest_trip_id: int | None
+
+
+class RegionProgressOut(BaseModel):
+    id: str
+    label: str
+    visited: int
+    total: int
+    complete: bool
+
+
+class AchievementOut(BaseModel):
+    id: str
+    title: str
+    description: str
+    earned: bool
+    progress: int  # capped at goal
+    goal: int
+
+
+class PassportOut(BaseModel):
+    owner: UserOut
+    parks_visited: int
+    parks_total: int
+    stamps: list[PassportStampOut]  # every national park, by name
+    regions: list[RegionProgressOut]
+    achievements: list[AchievementOut]

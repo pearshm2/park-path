@@ -19,3 +19,4 @@ ruff==0.6.9
 # park_map_sync: renders the brochure maps (PDF) and reads their labels
 pillow==10.4.0
 pypdfium2==5.14.0
+boto3==1.43.117  # trip photo uploads (app/storage.py)

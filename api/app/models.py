@@ -8,12 +8,13 @@ Alembic wiring works end to end. Week 2+ (auth, quiz, parks) adds real
 tables here.
 """
 
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 
 from sqlalchemy import (
     Boolean,
     CheckConstraint,
     Column,
+    Date,
     DateTime,
     Float,
     ForeignKey,
@@ -294,3 +295,98 @@ class BrochureMap(Base):
     synced_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(UTC), server_default=func.now()
     )
+
+
+class TripEntry(Base):
+    """
+    One journal entry: one visit to one site by one user. Logging an entry
+    is what marks a park visited, so the passport is computed from these.
+
+    `visibility` is "private" or "friends" (see app/visibility.py, which
+    decides who may read an entry; nothing else should compare it directly).
+    New entries are private until the owner shares them.
+    """
+
+    __tablename__ = "trip_entries"
+    __table_args__ = (
+        CheckConstraint("rating IS NULL OR rating BETWEEN 1 AND 5", name="ck_trip_entries_rating"),
+        CheckConstraint("visibility IN ('private', 'friends')", name="ck_trip_entries_visibility"),
+        # The passport and the friends feed both read "this user's entries, newest visit first".
+        Index("ix_trip_entries_user_visited", "user_id", "visited_on"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    site_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("sites.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    visited_on: Mapped[date] = mapped_column(Date, nullable=False)
+    title: Mapped[str] = mapped_column(String(200), nullable=False, default="", server_default="")
+    notes: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
+    rating: Mapped[int | None] = mapped_column(SmallInteger)  # 1 to 5 stars
+    # A trail or spot they loved, shown on the entry and in friends' feeds.
+    stamp: Mapped[str | None] = mapped_column(String(200))
+    visibility: Mapped[str] = mapped_column(
+        String(10), nullable=False, default="private", server_default="private"
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC), server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
+        server_default=func.now(),
+    )
+
+    user: Mapped["User"] = relationship(lazy="joined")
+    site: Mapped[Site] = relationship(lazy="joined")
+    photos: Mapped[list["TripPhoto"]] = relationship(
+        order_by="TripPhoto.position",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+    )
+    companions: Mapped[list["TripCompanion"]] = relationship(
+        order_by="TripCompanion.id", cascade="all, delete-orphan", lazy="selectin"
+    )
+
+
+class TripPhoto(Base):
+    """
+    A photo on an entry. The bytes live in object storage (S3), uploaded
+    straight from the phone with a signed URL (app/storage.py); this row
+    only remembers the storage key. `position` orders the entry's photos.
+    """
+
+    __tablename__ = "trip_photos"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    entry_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("trip_entries.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    storage_key: Mapped[str] = mapped_column(String(300), unique=True, nullable=False)
+    position: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC), server_default=func.now()
+    )
+
+
+class TripCompanion(Base):
+    """A friend tagged as having been on a trip. Only the entry's owner can tag people."""
+
+    __tablename__ = "trip_companions"
+    __table_args__ = (
+        UniqueConstraint("entry_id", "user_id", name="uq_trip_companions_entry_user"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    entry_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("trip_entries.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    user_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+
+    user: Mapped["User"] = relationship(lazy="joined")

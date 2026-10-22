@@ -38,6 +38,21 @@ class Settings(BaseSettings):
     # default so the API and tests run fine without one.
     nps_api_key: str = ""
 
+    # --- Trip photo storage (S3) ---
+    # Photos go from the phone straight to the bucket with a signed URL
+    # (app/storage.py). Leave S3_BUCKET empty and the photo endpoints answer
+    # 503 "not configured"; everything else in trips works without it.
+    # Credentials: set both keys below, or leave them empty to use whatever
+    # boto3 finds itself (an IAM role, AWS_PROFILE, ...).
+    s3_bucket: str = ""
+    s3_region: str = "us-east-1"
+    # Only for S3-compatible stores such as MinIO; empty means real AWS S3.
+    s3_endpoint_url: str = ""
+    aws_access_key_id: str = ""
+    aws_secret_access_key: str = ""
+    # Signed URLs stop working after this long.
+    s3_url_expire_seconds: int = 15 * 60
+
     @property
     def cors_origin_list(self) -> list[str]:
         if self.cors_origins == "*":
