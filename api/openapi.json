@@ -852,10 +852,484 @@
           }
         }
       }
+    },
+    "/trips": {
+      "post": {
+        "tags": [
+          "trips"
+        ],
+        "summary": "Create Trip",
+        "operationId": "create_trip_trips_post",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TripCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TripOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "trips"
+        ],
+        "summary": "List My Trips",
+        "operationId": "list_my_trips_trips_get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "park_code",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only entries for this park",
+              "title": "Park Code"
+            },
+            "description": "Only entries for this park"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TripOut"
+                  },
+                  "title": "Response List My Trips Trips Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/trips/feed": {
+      "get": {
+        "tags": [
+          "trips"
+        ],
+        "summary": "Friends Feed",
+        "description": "Entries my friends shared with friends, newest first. Page with `before`.",
+        "operationId": "friends_feed_trips_feed_get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 50,
+              "minimum": 1,
+              "default": 20,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "before",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Entry id: only entries posted before it",
+              "title": "Before"
+            },
+            "description": "Entry id: only entries posted before it"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TripOut"
+                  },
+                  "title": "Response Friends Feed Trips Feed Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/trips/photos/upload-url": {
+      "post": {
+        "tags": [
+          "trips"
+        ],
+        "summary": "Photo Upload Url",
+        "operationId": "photo_upload_url_trips_photos_upload_url_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PhotoUploadRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PhotoUploadOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      }
+    },
+    "/trips/{trip_id}": {
+      "get": {
+        "tags": [
+          "trips"
+        ],
+        "summary": "Read Trip",
+        "operationId": "read_trip_trips__trip_id__get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "trip_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Trip Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TripOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "trips"
+        ],
+        "summary": "Update Trip",
+        "operationId": "update_trip_trips__trip_id__patch",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "trip_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Trip Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TripUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TripOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "trips"
+        ],
+        "summary": "Delete Trip",
+        "operationId": "delete_trip_trips__trip_id__delete",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "trip_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Trip Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/passport": {
+      "get": {
+        "tags": [
+          "passport"
+        ],
+        "summary": "My Passport",
+        "operationId": "my_passport_passport_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PassportOut"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      }
+    },
+    "/passport/{user_id}": {
+      "get": {
+        "tags": [
+          "passport"
+        ],
+        "summary": "Friends Passport",
+        "operationId": "friends_passport_passport__user_id__get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "User Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PassportOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
     "schemas": {
+      "AchievementOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          },
+          "earned": {
+            "type": "boolean",
+            "title": "Earned"
+          },
+          "progress": {
+            "type": "integer",
+            "title": "Progress"
+          },
+          "goal": {
+            "type": "integer",
+            "title": "Goal"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "description",
+          "earned",
+          "progress",
+          "goal"
+        ],
+        "title": "AchievementOut"
+      },
       "BrochureMapOut": {
         "properties": {
           "title": {
@@ -1164,6 +1638,207 @@
         ],
         "title": "ParkMapOut"
       },
+      "PassportOut": {
+        "properties": {
+          "owner": {
+            "$ref": "#/components/schemas/UserOut"
+          },
+          "parks_visited": {
+            "type": "integer",
+            "title": "Parks Visited"
+          },
+          "parks_total": {
+            "type": "integer",
+            "title": "Parks Total"
+          },
+          "stamps": {
+            "items": {
+              "$ref": "#/components/schemas/PassportStampOut"
+            },
+            "type": "array",
+            "title": "Stamps"
+          },
+          "regions": {
+            "items": {
+              "$ref": "#/components/schemas/RegionProgressOut"
+            },
+            "type": "array",
+            "title": "Regions"
+          },
+          "achievements": {
+            "items": {
+              "$ref": "#/components/schemas/AchievementOut"
+            },
+            "type": "array",
+            "title": "Achievements"
+          }
+        },
+        "type": "object",
+        "required": [
+          "owner",
+          "parks_visited",
+          "parks_total",
+          "stamps",
+          "regions",
+          "achievements"
+        ],
+        "title": "PassportOut"
+      },
+      "PassportStampOut": {
+        "properties": {
+          "park_code": {
+            "type": "string",
+            "title": "Park Code"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "states": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "States"
+          },
+          "region": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region"
+          },
+          "earned": {
+            "type": "boolean",
+            "title": "Earned"
+          },
+          "visit_count": {
+            "type": "integer",
+            "title": "Visit Count"
+          },
+          "first_visited_on": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "First Visited On"
+          },
+          "last_visited_on": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Visited On"
+          },
+          "latest_trip_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latest Trip Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "park_code",
+          "name",
+          "states",
+          "region",
+          "earned",
+          "visit_count",
+          "first_visited_on",
+          "last_visited_on",
+          "latest_trip_id"
+        ],
+        "title": "PassportStampOut",
+        "description": "One national park's stamp: earned by logging a visit."
+      },
+      "PhotoUploadOut": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "upload_url": {
+            "type": "string",
+            "title": "Upload Url"
+          },
+          "fields": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Fields"
+          },
+          "expires_in": {
+            "type": "integer",
+            "title": "Expires In"
+          },
+          "max_bytes": {
+            "type": "integer",
+            "title": "Max Bytes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "upload_url",
+          "fields",
+          "expires_in",
+          "max_bytes"
+        ],
+        "title": "PhotoUploadOut",
+        "description": "A signed form for one photo upload. The app sends a multipart POST to\n`upload_url`: every entry of `fields` first, in order, then the file as\nthe last part named `file`. Then it passes `key` in `photo_keys` when it\nsaves the trip. The form stops working after `expires_in` seconds."
+      },
+      "PhotoUploadRequest": {
+        "properties": {
+          "content_type": {
+            "type": "string",
+            "enum": [
+              "image/jpeg",
+              "image/png",
+              "image/webp",
+              "image/heic"
+            ],
+            "title": "Content Type"
+          },
+          "size_bytes": {
+            "type": "integer",
+            "maximum": 10485760.0,
+            "exclusiveMinimum": 0.0,
+            "title": "Size Bytes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "content_type",
+          "size_bytes"
+        ],
+        "title": "PhotoUploadRequest",
+        "description": "Ask for permission to upload one photo."
+      },
       "PlaceOut": {
         "properties": {
           "name": {
@@ -1307,6 +1982,39 @@
           "answers"
         ],
         "title": "RecommendationRequest"
+      },
+      "RegionProgressOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "visited": {
+            "type": "integer",
+            "title": "Visited"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "complete": {
+            "type": "boolean",
+            "title": "Complete"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "label",
+          "visited",
+          "total",
+          "complete"
+        ],
+        "title": "RegionProgressOut"
       },
       "RoadOut": {
         "properties": {
@@ -1693,6 +2401,314 @@
         ],
         "title": "TrailOut"
       },
+      "TripCreate": {
+        "properties": {
+          "park_code": {
+            "type": "string",
+            "title": "Park Code"
+          },
+          "visited_on": {
+            "type": "string",
+            "format": "date",
+            "title": "Visited On"
+          },
+          "title": {
+            "type": "string",
+            "maxLength": 200,
+            "title": "Title",
+            "default": ""
+          },
+          "notes": {
+            "type": "string",
+            "maxLength": 10000,
+            "title": "Notes",
+            "default": ""
+          },
+          "rating": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 5.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rating"
+          },
+          "stamp": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stamp"
+          },
+          "visibility": {
+            "$ref": "#/components/schemas/Visibility",
+            "default": "private"
+          },
+          "photo_keys": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 8,
+            "title": "Photo Keys"
+          },
+          "companion_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "maxItems": 20,
+            "title": "Companion Ids"
+          }
+        },
+        "type": "object",
+        "required": [
+          "park_code",
+          "visited_on"
+        ],
+        "title": "TripCreate"
+      },
+      "TripOut": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "owner": {
+            "$ref": "#/components/schemas/UserOut"
+          },
+          "park_code": {
+            "type": "string",
+            "title": "Park Code"
+          },
+          "park_name": {
+            "type": "string",
+            "title": "Park Name"
+          },
+          "visited_on": {
+            "type": "string",
+            "format": "date",
+            "title": "Visited On"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "notes": {
+            "type": "string",
+            "title": "Notes"
+          },
+          "rating": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rating"
+          },
+          "stamp": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stamp"
+          },
+          "visibility": {
+            "$ref": "#/components/schemas/Visibility"
+          },
+          "photos": {
+            "items": {
+              "$ref": "#/components/schemas/TripPhotoOut"
+            },
+            "type": "array",
+            "title": "Photos"
+          },
+          "companions": {
+            "items": {
+              "$ref": "#/components/schemas/UserOut"
+            },
+            "type": "array",
+            "title": "Companions"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "owner",
+          "park_code",
+          "park_name",
+          "visited_on",
+          "title",
+          "notes",
+          "rating",
+          "stamp",
+          "visibility",
+          "photos",
+          "companions",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "TripOut"
+      },
+      "TripPhotoOut": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Url"
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "url"
+        ],
+        "title": "TripPhotoOut"
+      },
+      "TripUpdate": {
+        "properties": {
+          "visited_on": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Visited On"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 10000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          },
+          "rating": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 5.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rating"
+          },
+          "stamp": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stamp"
+          },
+          "visibility": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Visibility"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "photo_keys": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array",
+                "maxItems": 8
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Photo Keys"
+          },
+          "companion_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "integer"
+                },
+                "type": "array",
+                "maxItems": 20
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Companion Ids"
+          }
+        },
+        "type": "object",
+        "title": "TripUpdate",
+        "description": "Only the fields sent change. `rating` and `stamp` can be set to null to clear them."
+      },
       "UserCreate": {
         "properties": {
           "email": {
@@ -1782,6 +2798,14 @@
           "type"
         ],
         "title": "ValidationError"
+      },
+      "Visibility": {
+        "type": "string",
+        "enum": [
+          "private",
+          "friends"
+        ],
+        "title": "Visibility"
       },
       "WishlistItemOut": {
         "properties": {
