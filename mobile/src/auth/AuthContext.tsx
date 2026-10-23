@@ -23,6 +23,9 @@ import {
   login as loginRequest,
   signup as signupRequest,
   updateProfile as updateProfileRequest,
+  changePassword as changePasswordRequest,
+  removeAvatar,
+  setAvatar,
 } from '../api/auth';
 import { clearToken, loadToken, saveToken } from '../api/tokenStorage';
 import { readTokenSubject } from '../lib/jwt';
@@ -49,8 +52,11 @@ type AuthContextValue = {
   signIn: (credentials: Credentials) => Promise<void>;
   signUp: (details: SignUpDetails) => Promise<void>;
   signOut: () => Promise<void>;
-  /** Change your username or name (Settings); throws the API's message. */
+  /** Change your username, name or email (Settings); throws the API's message. */
   updateProfile: (changes: ProfileChanges) => Promise<void>;
+  /** Set your profile picture (a small JPEG, base64), or remove it with null. */
+  changeAvatar: (base64: string | null) => Promise<void>;
+  changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -145,6 +151,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [token],
   );
 
+  const changeAvatar = useCallback(
+    async (base64: string | null) => {
+      if (!token) return;
+      setUser(base64 ? await setAvatar(token, base64) : await removeAvatar(token));
+    },
+    [token],
+  );
+
+  const changePassword = useCallback(
+    async (currentPassword: string, newPassword: string) => {
+      if (!token) return;
+      await changePasswordRequest(token, currentPassword, newPassword);
+    },
+    [token],
+  );
+
   // Prefer the token's own claim; fall back to the profile if a future
   // token shape ever stops carrying one.
   const userId = useMemo(
@@ -153,8 +175,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   const value = useMemo<AuthContextValue>(
-    () => ({ status, user, token, userId, signIn, signUp, signOut, updateProfile }),
-    [status, user, token, userId, signIn, signUp, signOut, updateProfile],
+    () => ({ status, user, token, userId, signIn, signUp, signOut, updateProfile, changeAvatar, changePassword }),
+    [status, user, token, userId, signIn, signUp, signOut, updateProfile, changeAvatar, changePassword],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

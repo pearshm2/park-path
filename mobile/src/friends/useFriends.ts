@@ -36,10 +36,12 @@ export function useFriends() {
     enabled,
   });
 
+  // A new or removed friend changes the feed too.
   const refresh = () =>
     Promise.all([
       queryClient.invalidateQueries({ queryKey: ['friends', userId] }),
       queryClient.invalidateQueries({ queryKey: ['friendRequests'] }),
+      queryClient.invalidateQueries({ queryKey: ['feed'] }),
     ]);
 
   const send = useMutation({
@@ -66,6 +68,7 @@ export function useFriends() {
     loading: friends.isPending,
     error: friends.error ?? incoming.error ?? outgoing.error,
     send,
+    refresh,
     accept,
     dismiss,
     remove,

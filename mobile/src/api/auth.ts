@@ -69,3 +69,30 @@ export function requestPasswordReset(email: string): Promise<void> {
     body: { email },
   });
 }
+
+/** POST /auth/me/password — 204, or 400 if the current password is wrong. */
+export async function changePassword(
+  token: string,
+  currentPassword: string,
+  newPassword: string,
+): Promise<void> {
+  await request<null>('/auth/me/password', {
+    method: 'POST',
+    token,
+    body: { current_password: currentPassword, new_password: newPassword },
+  });
+}
+
+/** PUT /auth/me/avatar — a small JPEG, base64-encoded; the updated you. */
+export function setAvatar(token: string, base64: string): Promise<User> {
+  return request<User>('/auth/me/avatar', {
+    method: 'PUT',
+    token,
+    body: { content_type: 'image/jpeg', data: base64 },
+  });
+}
+
+/** DELETE /auth/me/avatar — the updated you, without a picture. */
+export function removeAvatar(token: string): Promise<User> {
+  return request<User>('/auth/me/avatar', { method: 'DELETE', token });
+}

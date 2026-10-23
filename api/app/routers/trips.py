@@ -8,6 +8,9 @@ Trip journal routes (all require a signed-in user):
   GET    /trips/{id}               one entry (mine, or a friend's if shared)
   PATCH  /trips/{id}               change my entry (only the fields sent)
   DELETE /trips/{id}               delete my entry and its photos
+  GET    /trips/{id}/comments      its comments, oldest first
+  POST   /trips/{id}/comments      comment on it (anyone who can see it)
+  DELETE /trips/{id}/comments/{c}  delete a comment (its author, or the trip's owner)
 
 Logging an entry is what marks a park visited (see app/passport.py).
 Who may read an entry is decided in app/visibility.py: entries start
@@ -35,10 +38,12 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.dependencies import get_current_user
-from app.models import Site, TripCompanion, TripEntry, TripPhoto, User
+from app.models import Site, TripComment, TripCompanion, TripEntry, TripPhoto, User
 from app.schemas import (
     PhotoUploadOut,
     PhotoUploadRequest,
+    TripCommentCreate,
+    TripCommentOut,
     TripCreate,
     TripOut,
     TripPhotoIn,
@@ -88,6 +93,7 @@ def _out(entry: TripEntry, storage: Storage | None) -> TripOut:
             for p in entry.photos
         ],
         companions=[UserOut.model_validate(c.user) for c in entry.companions],
+        comment_count=entry.comment_count or 0,
         created_at=entry.created_at,
         updated_at=entry.updated_at,
     )
@@ -376,4 +382,59 @@ def delete_trip(
     db.delete(entry)
     db.commit()
     _delete_objects(storage, keys)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+# --- comments ----------------------------------------------------------------
+
+
+@router.get("/{trip_id}/comments", response_model=list[TripCommentOut])
+def list_comments(
+    trip_id: int,
+    db: Session = Depends(get_db),
+    me: User = Depends(get_current_user),
+):
+    entry = _viewable(db, trip_id, me)
+    stmt = (
+        select(TripComment)
+        .where(TripComment.entry_id == entry.id)
+        .order_by(TripComment.created_at, TripComment.id)
+    )
+    return db.scalars(stmt).unique().all()
+
+
+@router.post(
+    "/{trip_id}/comments", response_model=TripCommentOut, status_code=status.HTTP_201_CREATED
+)
+def add_comment(
+    trip_id: int,
+    payload: TripCommentCreate,
+    db: Session = Depends(get_db),
+    me: User = Depends(get_current_user),
+):
+    entry = _viewable(db, trip_id, me)
+    comment = TripComment(entry_id=entry.id, user_id=me.id, body=payload.body)
+    db.add(comment)
+    db.commit()
+    db.refresh(comment)
+    return comment
+
+
+@router.delete("/{trip_id}/comments/{comment_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_comment(
+    trip_id: int,
+    comment_id: int,
+    db: Session = Depends(get_db),
+    me: User = Depends(get_current_user),
+):
+    entry = _viewable(db, trip_id, me)
+    comment = db.get(TripComment, comment_id)
+    if comment is None or comment.entry_id != entry.id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Comment not found")
+    if me.id not in (comment.user_id, entry.user_id):
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN, detail="Only its author or the trip's owner can delete it"
+        )
+    db.delete(comment)
+    db.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)

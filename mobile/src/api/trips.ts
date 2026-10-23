@@ -69,3 +69,11 @@ export function updateTrip(token: string, id: number, fields: TripFields): Promi
 export async function deleteTrip(token: string, id: number): Promise<void> {
   await request<null>(`/trips/${id}`, { method: 'DELETE', token });
 }
+
+/**
+ * GET /trips/feed — the trips your friends shared with friends, newest
+ * posted first. Page further back with `before` (an entry id).
+ */
+export function fetchFeed(token: string, before?: number): Promise<TripOut[]> {
+  return request<TripOut[]>(`/trips/feed?limit=30${before ? `&before=${before}` : ''}`, { token });
+}

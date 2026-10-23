@@ -4,7 +4,10 @@ Auth routes:
   POST  /auth/signup               new account: email, password, username, first and last name
   POST  /auth/login                email + password, for a token
   GET   /auth/me                   who's signed in
-  PATCH /auth/me                   change your name or username
+  PATCH /auth/me                   change your name, username, or email (email needs your password)
+  POST  /auth/me/password          change your password
+  PUT   /auth/me/avatar            set your profile picture
+  DELETE /auth/me/avatar           remove it
   GET   /auth/username-available   ?username=..., for the sign-up form to check as you type
 
 Scope note: this is access-token-only (no refresh tokens, no password
@@ -12,7 +15,11 @@ reset, no email verification) — matches this week's task ("JWT auth:
 sign up, log in, tokens"). Those are natural follow-ups, not regressions.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+import base64
+import binascii
+from datetime import UTC, datetime
+
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -20,7 +27,16 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.dependencies import get_current_user
 from app.models import User
-from app.schemas import Token, UserCreate, UserLogin, UsernameCheck, UserOut, UserUpdate
+from app.schemas import (
+    AvatarUpload,
+    PasswordChange,
+    Token,
+    UserCreate,
+    UserLogin,
+    UsernameCheck,
+    UserOut,
+    UserUpdate,
+)
 from app.security import create_access_token, hash_password, verify_password
 from app.usernames import normalize_username, username_problem
 
@@ -29,6 +45,7 @@ router = APIRouter()
 
 USERNAME_TAKEN = "That username is taken"
 EMAIL_TAKEN = "An account with that email already exists"
+WRONG_PASSWORD = "That password isn't right"
 
 
 def _username_taken(db: Session, username: str, except_id: int | None = None) -> bool:
@@ -111,6 +128,20 @@ def update_current_user(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    if payload.email is not None and payload.email.lower() != current_user.email.lower():
+        # Whoever holds the phone shouldn't be able to take the account.
+        if not payload.current_password or not verify_password(
+            payload.current_password, current_user.hashed_password
+        ):
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=WRONG_PASSWORD)
+        taken = db.scalars(
+            select(User.id).where(
+                func.lower(User.email) == payload.email.lower(), User.id != current_user.id
+            )
+        ).first()
+        if taken:
+            raise HTTPException(status.HTTP_409_CONFLICT, detail=EMAIL_TAKEN)
+        current_user.email = payload.email
     if payload.username is not None:
         current_user.username = _usable_username(db, payload.username, except_id=current_user.id)
     if payload.first_name is not None:
@@ -121,7 +152,62 @@ def update_current_user(
         db.commit()
     except IntegrityError:
         db.rollback()
-        raise HTTPException(status.HTTP_409_CONFLICT, detail=USERNAME_TAKEN)
+        raise HTTPException(status.HTTP_409_CONFLICT, detail="That username or email is taken")
+    db.refresh(current_user)
+    return current_user
+
+
+@router.post("/me/password", status_code=status.HTTP_204_NO_CONTENT)
+def change_password(
+    payload: PasswordChange,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    if not verify_password(payload.current_password, current_user.hashed_password):
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=WRONG_PASSWORD)
+    current_user.hashed_password = hash_password(payload.new_password)
+    db.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+# A picture's first bytes, by type: checked so only real images are stored.
+_MAGIC = {"image/jpeg": b"\xff\xd8\xff", "image/png": b"\x89PNG\r\n\x1a\n"}
+MAX_AVATAR_BYTES = 300_000
+
+
+@router.put("/me/avatar", response_model=UserOut)
+def set_avatar(
+    payload: AvatarUpload,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    try:
+        data = base64.b64decode(payload.data, validate=True)
+    except (binascii.Error, ValueError):
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, detail="That isn't a picture")
+    if len(data) > MAX_AVATAR_BYTES:
+        raise HTTPException(
+            status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="That picture is too big"
+        )
+    if not data.startswith(_MAGIC[payload.content_type]):
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, detail="That isn't a picture")
+    current_user.avatar = data
+    current_user.avatar_type = payload.content_type
+    current_user.avatar_updated_at = datetime.now(UTC)
+    db.commit()
+    db.refresh(current_user)
+    return current_user
+
+
+@router.delete("/me/avatar", response_model=UserOut)
+def remove_avatar(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    current_user.avatar = None
+    current_user.avatar_type = None
+    current_user.avatar_updated_at = None
+    db.commit()
     db.refresh(current_user)
     return current_user
 

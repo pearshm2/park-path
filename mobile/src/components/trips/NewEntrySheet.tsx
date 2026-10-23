@@ -50,6 +50,7 @@ import { scheduleOnRN } from 'react-native-worklets';
 import Svg, { Path } from 'react-native-svg';
 
 import { firstName } from '../../api/friends';
+import { defaultVisibility } from '../../lib/tripDefaults';
 import { fetchParkMap } from '../../api/parkMaps';
 import { listSites } from '../../api/parks';
 import { useFriends } from '../../friends/useFriends';
@@ -178,7 +179,7 @@ export function NewEntrySheet({
     setTrailText('');
     setWithIds([]);
     setMedia([]);
-    setVisibility('private');
+    setVisibility(defaultVisibility());
     setPassportStamp(null);
     setProblem(null);
   }
@@ -821,7 +822,8 @@ function blankDraft(initialSiteId: string | undefined): Omit<EntryDraft, 'savedA
     trails: [],
     withIds: [],
     media: [],
-    visibility: 'private',
+    // Settings → Privacy chooses who sees a new trip.
+    visibility: defaultVisibility(),
     passportStamp: null,
   };
 }

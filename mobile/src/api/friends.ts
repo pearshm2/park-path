@@ -20,6 +20,8 @@ export type Person = {
   username?: string;
   first_name?: string;
   last_name?: string;
+  /** Their profile picture's path on the API (fetch it with a token); null without one. */
+  avatar_url?: string | null;
 };
 
 export type Friend = { friendshipId: number; user: Person; since: string | null };

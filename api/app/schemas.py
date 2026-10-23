@@ -37,16 +37,33 @@ class UserCreate(BaseModel):
 
 
 class UserUpdate(BaseModel):
-    """PATCH /auth/me: any of these; the rest are left as they are."""
+    """
+    PATCH /auth/me: any of these; the rest are left as they are. Changing
+    the email also needs the current password.
+    """
 
     username: str | None = None
     first_name: Name | None = None
     last_name: Name | None = None
+    email: EmailStr | None = None
+    current_password: str | None = None
 
     @field_validator("first_name", "last_name")
     @classmethod
     def _names(cls, value: str | None) -> str | None:
         return None if value is None else _clean_name(value)
+
+
+class PasswordChange(BaseModel):
+    current_password: str
+    new_password: str = Field(min_length=8, max_length=200)
+
+
+class AvatarUpload(BaseModel):
+    """PUT /auth/me/avatar: the picture, base64-encoded (at most ~300 KB)."""
+
+    content_type: Literal["image/jpeg", "image/png"]
+    data: str = Field(max_length=420_000)
 
 
 class UsernameCheck(BaseModel):
@@ -70,6 +87,8 @@ class UserOut(BaseModel):
     username: str
     first_name: str
     last_name: str
+    # GET this (with your token) for their profile picture; null without one.
+    avatar_url: str | None = None
 
 
 class Token(BaseModel):
@@ -403,8 +422,30 @@ class TripOut(BaseModel):
     visibility: Visibility
     photos: list[TripPhotoOut]
     companions: list[UserOut]
+    comment_count: int = 0
     created_at: datetime
     updated_at: datetime
+
+
+class TripCommentCreate(BaseModel):
+    body: str = Field(min_length=1, max_length=1000)
+
+    @field_validator("body")
+    @classmethod
+    def _not_blank(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("Write something first")
+        return value
+
+
+class TripCommentOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    author: UserOut = Field(validation_alias="user")
+    body: str
+    created_at: datetime
 
 
 # --- Passport (GET /passport) -----------------------------------------------

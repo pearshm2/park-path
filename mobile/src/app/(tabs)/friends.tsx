@@ -9,17 +9,22 @@
  * cancelling your own, and removing a friend. People show as their name
  * and @username; emails stay private.
  *
- * The feed of friends' trips, with reactions and comments, needs the trips
- * backend; until then it says so rather than showing made-up posts.
+ * Below them, the feed: the trips your friends shared with friends,
+ * newest first (GET /trips/feed). Pull down to refresh. Tapping a friend,
+ * in the row or on a post, opens their passport: stamps, regions and
+ * achievements (components/friends/FriendProfile.tsx).
  */
 
-import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { useFocusEffect } from 'expo-router';
+import { useCallback, useMemo, useState } from 'react';
 import {
   Alert,
   KeyboardAvoidingView,
   Modal,
   Platform,
   Pressable,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   View,
@@ -27,11 +32,17 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
 
-import { displayName, handle, targetFrom, type Friend } from '../../api/friends';
+import { displayName, handle, targetFrom, type Friend, type Person } from '../../api/friends';
+import { listSites } from '../../api/parks';
+import { fetchFeed } from '../../api/trips';
 import { useAuth } from '../../auth/AuthContext';
 import { BodyText, Button, Heading, TextField, useTabBarSpace } from '../../components';
 import { Avatar } from '../../components/Avatar';
+import type { TripOut } from '../../api/trips';
+import { CommentsSheet } from '../../components/friends/CommentsSheet';
+import { FeedCard } from '../../components/friends/FeedCard';
 import { FriendCodeSheet } from '../../components/friends/FriendCode';
+import { FriendProfile } from '../../components/friends/FriendProfile';
 import { useFriends } from '../../friends/useFriends';
 import { colors, radius, shadow, space } from '../../theme';
 
@@ -44,23 +55,58 @@ function monthYear(iso: string | null): string | null {
 export default function FriendsScreen() {
   const insets = useSafeAreaInsets();
   const tabSpace = useTabBarSpace();
-  const { user } = useAuth();
-  const { friends, incoming, outgoing, loading, error, accept, dismiss, remove, send } = useFriends();
+  const { user, token, userId } = useAuth();
+  const { friends, incoming, outgoing, loading, error, accept, dismiss, remove, send, refresh } = useFriends();
   const [inviteOpen, setInviteOpen] = useState(false);
   const [codeOpen, setCodeOpen] = useState(false);
+  // Whose passport is open.
+  const [profile, setProfile] = useState<Person | null>(null);
+  // Whose trip's comments are open.
+  const [commentsOn, setCommentsOn] = useState<TripOut | null>(null);
 
-  function confirmRemove(friend: Friend) {
+  const feed = useQuery({
+    queryKey: ['feed', userId],
+    queryFn: () => fetchFeed(token!),
+    enabled: !!token,
+  });
+  const { data: sites = [] } = useQuery({
+    queryKey: ['sites', 'all'],
+    queryFn: () => listSites('all'),
+  });
+  const siteById = useMemo(() => new Map(sites.map((s) => [s.id, s])), [sites]);
+
+  // Fresh posts and requests each time the tab is opened.
+  const { refetch } = feed;
+  useFocusEffect(
+    useCallback(() => {
+      void refetch();
+      void refresh();
+      // Only on focus.
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [refetch]),
+  );
+  const [pulling, setPulling] = useState(false);
+  async function pullToRefresh() {
+    setPulling(true);
+    await Promise.all([refetch(), refresh()]);
+    setPulling(false);
+  }
+
+  function friendSince(person: Person): string | null {
+    return monthYear(friends.find((f) => f.user.id === person.id)?.since ?? null);
+  }
+
+  function confirmRemove(friend: Friend, removed: () => void) {
     const name = displayName(friend.user);
-    Alert.alert(name, handle(friend.user), [
-      { text: 'Cancel', style: 'cancel' },
+    Alert.alert(`Remove ${name}?`, "You'll stop seeing each other's trips.", [
+      { text: 'Keep', style: 'cancel' },
       {
-        text: 'Remove friend',
+        text: 'Remove',
         style: 'destructive',
-        onPress: () =>
-          Alert.alert(`Remove ${name}?`, "You'll stop seeing each other's trips.", [
-            { text: 'Keep', style: 'cancel' },
-            { text: 'Remove', style: 'destructive', onPress: () => remove.mutate(friend.user.id) },
-          ]),
+        onPress: () => {
+          remove.mutate(friend.user.id);
+          removed();
+        },
       },
     ]);
   }
@@ -70,6 +116,9 @@ export default function FriendsScreen() {
   return (
     <View style={styles.screen}>
       <ScrollView
+        refreshControl={
+          <RefreshControl refreshing={pulling} onRefresh={pullToRefresh} tintColor={colors.accent} colors={[colors.accent]} />
+        }
         contentContainerStyle={[
           styles.content,
           // Clear of the floating tab bar, which covers the bottom of the screen.
@@ -114,7 +163,7 @@ export default function FriendsScreen() {
             {friends.map((friend) => (
               <Pressable
                 key={friend.friendshipId}
-                onPress={() => confirmRemove(friend)}
+                onPress={() => setProfile(friend.user)}
                 accessibilityRole="button"
                 accessibilityLabel={`${displayName(friend.user)}, friends since ${monthYear(friend.since) ?? 'recently'}`}
                 style={({ pressed }) => [styles.friend, pressed && styles.pressed]}
@@ -157,10 +206,10 @@ export default function FriendsScreen() {
                 <Avatar person={req.requester} size={36} />
                 <View style={styles.requestText}>
                   <BodyText size={13.5} weight="semibold" numberOfLines={1}>
-                    {`${displayName(req.requester)} wants to be friends`}
+                    {displayName(req.requester)}
                   </BodyText>
                   <BodyText size={11.5} color={colors.neutral[600]} numberOfLines={1}>
-                    {handle(req.requester)}
+                    {`${handle(req.requester)} · wants to be friends`}
                   </BodyText>
                 </View>
                 <Button
@@ -199,22 +248,51 @@ export default function FriendsScreen() {
           </View>
         ) : null}
 
-        {/* The feed, in the prototype's card style, until there are trips to show. */}
+        {/* The feed: friends' shared trips, newest first. */}
         <View style={styles.section}>
           <BodyText size={10} weight="semibold" color={colors.neutral[600]} style={styles.label}>
             FRIENDS&apos; TRIPS
           </BodyText>
-          <View style={styles.card}>
-            <BodyText size={14} weight="semibold">
-              Your friends&apos; trips will show up here
-            </BodyText>
-            <BodyText size={13} lineHeightRatio={1.5} color={colors.neutral[700]}>
-              When friends log a trip, you&apos;ll see their photos, notes and location stamps
-              here, and can react and comment. This arrives with the trips backend.
-            </BodyText>
-          </View>
+          {feed.data && feed.data.length > 0 ? (
+            <View style={styles.feed}>
+              {feed.data.map((trip) => (
+                <FeedCard
+                  key={trip.id}
+                  trip={trip}
+                  site={siteById.get(trip.park_code)}
+                  onOwner={() => setProfile(trip.owner)}
+                  onComments={() => setCommentsOn(trip)}
+                />
+              ))}
+            </View>
+          ) : feed.isPending ? null : (
+            <View style={styles.card}>
+              <BodyText size={14} weight="semibold">
+                {feed.isError ? "Couldn't load your friends' trips" : 'No trips from friends yet'}
+              </BodyText>
+              <BodyText size={13} lineHeightRatio={1.5} color={colors.neutral[700]}>
+                {feed.isError
+                  ? 'Check your connection, then pull down to try again.'
+                  : 'When a friend logs a trip and shares it with friends, it shows up here.'}
+              </BodyText>
+            </View>
+          )}
         </View>
       </ScrollView>
+
+      {commentsOn ? <CommentsSheet trip={commentsOn} onClose={() => setCommentsOn(null)} /> : null}
+      {profile ? (
+        <FriendProfile
+          person={profile}
+          since={friendSince(profile)}
+          sites={siteById}
+          onRemove={() => {
+            const friend = friends.find((f) => f.user.id === profile.id);
+            if (friend) confirmRemove(friend, () => setProfile(null));
+          }}
+          onClose={() => setProfile(null)}
+        />
+      ) : null}
 
       <InviteSheet visible={inviteOpen} onClose={() => setInviteOpen(false)} send={send} />
       {user ? (
@@ -390,6 +468,10 @@ const styles = StyleSheet.create({
   },
   pressed: {
     opacity: 0.7,
+  },
+  feed: {
+    gap: space[4],
+    marginTop: space[1],
   },
   section: {
     marginTop: space[6],
