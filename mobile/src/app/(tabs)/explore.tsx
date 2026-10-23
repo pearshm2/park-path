@@ -61,6 +61,7 @@ import {
   FilterButton,
   FilterSheet,
   FullMapView,
+  turnSideways,
   Heading,
   Kicker,
   NO_FILTERS,
@@ -231,6 +232,11 @@ export default function ExploreScreen() {
   const [keyOpen, setKeyOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [fullMapOpen, setFullMapOpen] = useState(false);
+  // The screen starts turning on the press itself, before Explore re-renders.
+  function openFullMap() {
+    turnSideways();
+    setFullMapOpen(true);
+  }
   const [filters, setFilters] = useState<FeedFilters>(NO_FILTERS);
   const [filterOpen, setFilterOpen] = useState(false);
   const router = useRouter();
@@ -764,7 +770,7 @@ export default function ExploreScreen() {
             featureIcons={scope === 'parks'}
             // With the sheet open there's no room under the map, so the
             // button stays in the map's corner; closed, it sits below.
-            onExpand={sheetOpen ? () => setFullMapOpen(true) : undefined}
+            onExpand={sheetOpen ? openFullMap : undefined}
             onSelectSite={(site) => {
               if (anchor && site.id === highlightId) {
                 // Tapping the top card's pin again zooms back out.
@@ -789,7 +795,7 @@ export default function ExploreScreen() {
           {!sheetOpen ? (
             <>
               <Pressable
-                onPress={() => setFullMapOpen(true)}
+                onPress={openFullMap}
                 hitSlop={8}
                 accessibilityRole="button"
                 accessibilityLabel="Open the map full screen"

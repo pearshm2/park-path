@@ -92,9 +92,11 @@ const styles = StyleSheet.create({
     fontFamily: fonts.body,
     fontSize: 14,
     color: colors.text,
-    backgroundColor: colors.surface,
+    // Light cream with a clear edge: it reads as a place to type on the
+    // sand page and on cards alike.
+    backgroundColor: colors.neutral[100],
     borderWidth: 1,
-    borderColor: colors.divider,
+    borderColor: colors.neutral[300],
     borderRadius: radius.pill,
   },
   inputFocused: {

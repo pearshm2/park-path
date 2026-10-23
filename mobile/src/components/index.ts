@@ -11,7 +11,7 @@ export {
   type FeedFilters,
 } from './FilterSheet';
 export { ExpandIcon } from './ExpandIcon';
-export { FullMapView } from './FullMapView';
+export { FullMapView, turnSideways } from './FullMapView';
 export { GoogleButton, OrDivider } from './GoogleButton';
 export { ParkCard } from './ParkCard';
 export { MATCH_DOT, ParkMap, PICK_FILL, STATUS_DOT } from './ParkMap';

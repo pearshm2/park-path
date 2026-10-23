@@ -268,7 +268,9 @@ const styles = StyleSheet.create({
     height: BAR_HEIGHT,
     borderRadius: radius.lg,
     backgroundColor: colors.neutral[100],
-    ...shadow.md,
+    // A box shadow rather than Android's elevation, which drew a square
+    // shaded box behind the bar's rounded ends.
+    boxShadow: '0 3px 10px rgba(46, 43, 37, 0.16)',
   },
   tab: {
     flex: 1,
