@@ -87,7 +87,10 @@ export function sampleEntries(sites: Site[]): TripEntry[] {
       id: `sample-${sample.siteId}-${i}`,
       media: site.imageUrl ? [{ uri: site.imageUrl, kind: 'photo' as const, caption }] : [],
       with: [],
+      visibility: 'private' as const,
       createdAt: `${sample.date}T20:00:00.000Z`,
+      // Sent to the server like any new trip.
+      unsent: true,
     };
   });
 }

@@ -35,14 +35,14 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Defs, LinearGradient, Path, Rect, Stop } from 'react-native-svg';
 
 import { listSites } from '../../api/parks';
-import { useAuth } from '../../auth/AuthContext';
 import { BodyText, Button, Dialog, FilterButton, Heading, Toast, useTabBarSpace } from '../../components';
-import { Avatar } from '../../components/Avatar';
 import { diveParam } from '../../components/trips/DiveIn';
 import { MemoryBubble } from '../../components/trips/MemoryBubble';
 import { NewEntrySheet } from '../../components/trips/NewEntrySheet';
 import type { Site } from '../../data/parks';
 import { regionForState } from '../../data/regions';
+import { useCelebrations } from '../../celebrations/CelebrationsContext';
+import { playSound } from '../../lib/sounds';
 import { sampleEntries } from '../../trips/sampleTrips';
 import { colors, radius, shadow, space } from '../../theme';
 import { dateLabel, useTrips, type TripEntry } from '../../trips/TripsContext';
@@ -63,8 +63,8 @@ export default function TripsScreen() {
   const tabSpace = useTabBarSpace();
   const router = useRouter();
   const { width } = useWindowDimensions();
-  const { user } = useAuth();
   const { entries, visitedIds, remove, addEntries } = useTrips();
+  const { celebrate } = useCelebrations();
   const params = useLocalSearchParams<{ entry?: string; add?: string }>();
 
   const [sort, setSort] = useState<Sort>('new');
@@ -78,9 +78,14 @@ export default function TripsScreen() {
   const [sortBottom, setSortBottom] = useState(0);
   /** The bubble the list has settled on. */
   const [focus, setFocus] = useState(0);
-  /** The entry whose options are open, then the one being deleted. */
-  const [options, setOptions] = useState<TripEntry | null>(null);
-  const [deleting, setDeleting] = useState<TripEntry | null>(null);
+  /**
+   * A memory's options, then (asking to delete) the warning: one dialog
+   * whose contents change, so the warning shows at once rather than after
+   * one popup closes and another opens.
+   */
+  const [options, setOptions] = useState<{ entry: TripEntry; step: 'options' | 'delete' } | null>(
+    null,
+  );
   const [editing, setEditing] = useState<TripEntry | null>(null);
   /** The screen's and the floating header's heights, once laid out; the
    *  bubbles are sized and placed from them. */
@@ -162,6 +167,7 @@ export default function TripsScreen() {
   // out rather than measured, since Android's window measure leaves out
   // the status bar.
   function diveInto(entry: TripEntry) {
+    playSound('whoosh');
     const dive = diveParam({ x: (width - diameter) / 2, y: focusY - diameter / 2, size: diameter });
     router.push({ pathname: '/relive', params: { only: entry.id, dive } });
   }
@@ -209,7 +215,7 @@ export default function TripsScreen() {
                   scrollY={scrollY}
                   onFocus={() => goTo(i)}
                   onPlay={() => diveInto(item)}
-                  onOptions={() => setOptions(item)}
+                  onOptions={() => setOptions({ entry: item, step: 'options' })}
                 />
               )}
             />
@@ -273,7 +279,6 @@ export default function TripsScreen() {
               </BodyText>
             </View>
             <Button label="New entry" onPress={() => setSheet({ open: true })} style={styles.newEntry} />
-            {user ? <Avatar person={user} size={40} /> : null}
           </View>
           {sorted.length > 0 ? (
             <>
@@ -369,64 +374,59 @@ export default function TripsScreen() {
       {/* A memory's options, then a warning before it's deleted for good. */}
       <Dialog
         visible={!!options}
-        title={options?.title ?? ''}
-        message={options ? optionsLine(options, siteById.get(options.siteId)) : undefined}
-        actions={[
-          {
-            label: 'Relive this memory',
-            onPress: () => {
-              const entry = options;
-              setOptions(null);
-              if (entry) relive(entry);
-            },
-          },
-          {
-            label: 'Edit memory',
-            onPress: () => {
-              setEditing(options);
-              setOptions(null);
-            },
-          },
-          {
-            label: 'Delete memory',
-            tone: 'danger',
-            onPress: () => {
-              setDeleting(options);
-              setOptions(null);
-            },
-          },
-          { label: 'Cancel', tone: 'cancel', onPress: () => setOptions(null) },
-        ]}
-        onDismiss={() => setOptions(null)}
         // Low, so the memory it's about stays in view above it.
         placement="bottom"
-      />
-      <Dialog
-        visible={!!deleting}
-        icon={<WarningIcon />}
-        title="Delete this memory?"
-        message={
-          deleting
-            ? `“${deleting.title}” and its photos and notes will be gone for good. Once it's deleted, you can't get it back.`
-            : undefined
-        }
-        actions={[
-          {
-            label: 'Delete forever',
-            tone: 'danger',
-            onPress: () => {
-              const entry = deleting;
-              setDeleting(null);
-              if (entry) {
-                void remove(entry.id);
-                flash('Memory deleted.');
-              }
-            },
-          },
-          { label: 'Keep it', tone: 'cancel', onPress: () => setDeleting(null) },
-        ]}
-        onDismiss={() => setDeleting(null)}
-        placement="bottom"
+        onDismiss={() => setOptions(null)}
+        {...(options?.step === 'delete'
+          ? {
+              icon: <WarningIcon />,
+              title: 'Delete this memory?',
+              message: `“${options.entry.title}” and its photos and notes will be gone for good. Once it's deleted, you can't get it back.`,
+              actions: [
+                {
+                  label: 'Delete forever',
+                  tone: 'danger' as const,
+                  onPress: () => {
+                    const { entry } = options;
+                    setOptions(null);
+                    void remove(entry.id);
+                    flash('Memory deleted.');
+                  },
+                },
+                { label: 'Keep it', tone: 'cancel' as const, onPress: () => setOptions(null) },
+              ],
+            }
+          : {
+              title: options?.entry.title ?? '',
+              message: options ? optionsLine(options.entry, siteById.get(options.entry.siteId)) : undefined,
+              actions: [
+                {
+                  label: 'Relive this memory',
+                  onPress: () => {
+                    const entry = options?.entry;
+                    setOptions(null);
+                    if (!entry) return;
+                    // The same dive as the bubble's play button: options are
+                    // only on the bubble in the middle, which it dives from.
+                    if (sorted[focus]?.id === entry.id) diveInto(entry);
+                    else relive(entry);
+                  },
+                },
+                {
+                  label: 'Edit memory',
+                  onPress: () => {
+                    setEditing(options?.entry ?? null);
+                    setOptions(null);
+                  },
+                },
+                {
+                  label: 'Delete memory',
+                  tone: 'danger' as const,
+                  onPress: () => setOptions((o) => (o ? { ...o, step: 'delete' } : o)),
+                },
+                { label: 'Cancel', tone: 'cancel' as const, onPress: () => setOptions(null) },
+              ],
+            })}
       />
 
       {editing ? (
@@ -445,6 +445,18 @@ export default function TripsScreen() {
           onClose={closeSheet}
           onSaved={(entry) => {
             closeSheet();
+            // A national park stamped for the first time: go and see the
+            // stamp go down (and what else it earned) in Passport.
+            const stamp = celebrate({
+              siteId: entry.siteId,
+              visitedBefore: visitedIds,
+              parks: sites.filter((s) => s.isNamedPark),
+              allSites: sites,
+            });
+            if (stamp) {
+              router.navigate({ pathname: '/passport', params: { show: 'stamp', park: stamp } });
+              return;
+            }
             setSort('new');
             // The new entry is newest unless it's for an earlier date.
             const at = Math.max(
