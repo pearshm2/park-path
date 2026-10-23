@@ -88,6 +88,7 @@ export function sampleEntries(sites: Site[]): TripEntry[] {
       media: site.imageUrl ? [{ uri: site.imageUrl, kind: 'photo' as const, caption }] : [],
       with: [],
       visibility: 'private' as const,
+      passportStamp: null,
       createdAt: `${sample.date}T20:00:00.000Z`,
       // Sent to the server like any new trip.
       unsent: true,

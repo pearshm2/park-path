@@ -4,7 +4,9 @@
  *
  * Each trip opens on a title card over the park's own photo, blurred (the
  * park, the date, and its stamp pressing down; tapping the stamp opens
- * that park in Passport), then its photos and videos full screen, each
+ * that park in Passport), then the photo of its passport-book stamp if
+ * you added one, pasted onto a passport page, then its photos and videos
+ * full screen, each
  * with its own caption, and the trip's notes and trails over the first.
  * Photos slowly pan and zoom; videos play through once. Trips without any
  * use the park's photo. It ends on a summary of the journey so far.
@@ -52,6 +54,7 @@ import { playSound, tap } from '../lib/sounds';
 import { terrainTone } from '../components/TerrainIcon';
 import { bubbleWordCentres } from '../components/trips/MemoryBubble';
 import { DIVE_MS, DiveBackground, parseDive, type DiveRect } from '../components/trips/DiveIn';
+import { PassportPage } from '../components/trips/PassportPage';
 import { PinIcon, StarIcon } from '../components/trips/NewEntrySheet';
 import type { Site } from '../data/parks';
 import { regionForState } from '../data/regions';
@@ -83,6 +86,8 @@ type TripSlide = {
 
 type Slide =
   | (TripSlide & { kind: 'title' })
+  /** The trip's passport-book stamp photo; `image` is the photo. */
+  | (TripSlide & { kind: 'souvenir'; backdrop: string | null })
   | (TripSlide & {
       kind: 'media';
       /** The photo or video; null when the park's photo stands in. */
@@ -272,6 +277,8 @@ export default function ReliveScreen() {
             still={!!only}
             dive={index === 0 && diveRect ? { rect: diveRect, progress: diving } : undefined}
           />
+        ) : slide.kind === 'souvenir' ? (
+          <SouvenirSlide key={index} slide={slide} still={!!only} />
         ) : slide.kind === 'media' ? (
           <MediaSlide
             key={index}
@@ -347,6 +354,17 @@ function buildSlides(trips: TripEntry[], sites: Site[], summary: boolean): Slide
       site,
       image: site?.imageUrl ?? leadPhoto(entry),
     });
+    // The souvenir: the official stamp, collected in person.
+    if (entry.passportStamp) {
+      slides.push({
+        kind: 'souvenir',
+        trip,
+        entry,
+        site,
+        image: entry.passportStamp,
+        backdrop: site?.imageUrl ?? leadPhoto(entry),
+      });
+    }
     // No photos or videos of your own: the park's photo stands in, so
     // every trip has a photo slide with its details.
     const shots: (TripMedia | null)[] = entry.media.length > 0 ? entry.media : [null];
@@ -775,6 +793,56 @@ function MediaSlide({
   );
 }
 
+/**
+ * The trip's passport-book stamp: the photo pasted onto a passport page,
+ * settling down over the park's blurred photo like it's being laid on a
+ * table.
+ */
+function SouvenirSlide({ slide, still }: { slide: TripSlide & { backdrop: string | null }; still: boolean }) {
+  const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
+  const fallback = terrainTone(slide.site?.group ?? null).band;
+  const settle = useSharedValue(0);
+  useEffect(() => {
+    settle.value = withDelay(120, withTiming(1, { duration: 700, easing: Easing.out(Easing.cubic) }));
+  }, [settle]);
+  const pageStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(settle.value, [0, 0.4], [0, 1]),
+    transform: [
+      { translateY: interpolate(settle.value, [0, 1], [40, 0]) },
+      { rotate: `${interpolate(settle.value, [0, 1], [5, -1.5])}deg` },
+      { scale: interpolate(settle.value, [0, 1], [1.08, 1]) },
+    ],
+  }));
+
+  return (
+    <View style={[StyleSheet.absoluteFill, { backgroundColor: fallback }]}>
+      {slide.backdrop ? (
+        <Image source={{ uri: slide.backdrop }} style={StyleSheet.absoluteFill} contentFit="cover" blurRadius={24} />
+      ) : null}
+      <Shade strength={0.75} />
+      <View
+        style={[
+          styles.souvenir,
+          { paddingTop: insets.top + space[8], paddingBottom: insets.bottom + space[6] + (still ? HINT_ROOM : 0) },
+        ]}
+      >
+        <BodyText size={12} weight="bold" color={ON_INK_SOFT} style={styles.souvenirKicker}>
+          SOUVENIR · COLLECTED IN PERSON
+        </BodyText>
+        <Animated.View style={pageStyle}>
+          <PassportPage
+            uri={slide.image ?? ''}
+            park={slide.site?.name ?? slide.entry.siteId}
+            date={slide.entry.date}
+            width={Math.min(width - space[6] * 2, 400)}
+          />
+        </Animated.View>
+      </View>
+    </View>
+  );
+}
+
 /** A video filling the screen, played once through; holds while paused. */
 function VideoBackground({
   uri,
@@ -875,6 +943,15 @@ function EndSlide({
 }
 
 const styles = StyleSheet.create({
+  souvenir: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: space[4],
+  },
+  souvenirKicker: {
+    letterSpacing: 1.6,
+  },
   screen: {
     flex: 1,
     backgroundColor: INK,

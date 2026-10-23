@@ -3,7 +3,9 @@
  * from every site, national parks first), the exact date, a title, notes, a
  * star rating, who can see it (only you, or your friends too), trails and spots you loved (any number: the park's own
  * trails as chips to toggle, plus any typed in), who was with you (your
- * friends), and photos and videos, each with its own caption for Relive.
+ * friends), photos and videos, each with its own caption for Relive, and a
+ * photo of the park's official stamp in your passport book (a souvenir of
+ * being there in person).
  *
  * Saving logs the visit: the park becomes visited across the app.
  *
@@ -122,6 +124,8 @@ export function NewEntrySheet({
   const [withIds, setWithIds] = useState<number[]>(start.withIds);
   const [media, setMedia] = useState<TripMedia[]>(start.media);
   const [visibility, setVisibility] = useState<Visibility>(start.visibility);
+  const [passportStamp, setPassportStamp] = useState<string | null>(start.passportStamp);
+  const [stampNote, setStampNote] = useState<string | null>(null);
   /** Why a picked video was left out (too long), until the next pick. */
   const [mediaNote, setMediaNote] = useState<string | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
@@ -130,7 +134,7 @@ export function NewEntrySheet({
   // Keep the draft as it's typed: a moment after each change, and at once
   // if the sheet closes first. Nothing is written until something changes,
   // so opening and closing the sheet leaves an earlier draft alone.
-  const fields = { siteId, date: day, title, notes, rating, trails, withIds, media, visibility };
+  const fields = { siteId, date: day, title, notes, rating, trails, withIds, media, visibility, passportStamp };
   const fieldsJson = JSON.stringify(fields);
   const [openedWith] = useState(fieldsJson);
   const pending = useRef<EntryDraft | null | undefined>(undefined);
@@ -175,6 +179,7 @@ export function NewEntrySheet({
     setWithIds([]);
     setMedia([]);
     setVisibility('private');
+    setPassportStamp(null);
     setProblem(null);
   }
 
@@ -249,6 +254,24 @@ export function NewEntrySheet({
     setMedia((current) => [...current, ...picked].slice(0, MAX_MEDIA));
   }
 
+  /** A photo of the passport book's stamp, from the camera or the photos. */
+  async function pickPassportStamp(from: 'camera' | 'library') {
+    setStampNote(null);
+    if (from === 'camera') {
+      const permission = await ImagePicker.requestCameraPermissionsAsync();
+      if (!permission.granted) {
+        setStampNote('ParkPath needs the camera to photograph your stamp. You can allow it in Settings.');
+        return;
+      }
+    }
+    const options: ImagePicker.ImagePickerOptions = { mediaTypes: ['images'], quality: 0.9, allowsEditing: true };
+    const result =
+      from === 'camera'
+        ? await ImagePicker.launchCameraAsync(options)
+        : await ImagePicker.launchImageLibraryAsync(options);
+    if (!result.canceled && result.assets[0]) setPassportStamp(result.assets[0].uri);
+  }
+
   function setCaption(uri: string, caption: string) {
     setMedia((list) => list.map((m) => (m.uri === uri ? { ...m, caption } : m)));
   }
@@ -279,6 +302,7 @@ export function NewEntrySheet({
         ],
         rating,
         visibility,
+        passportStamp,
         // Something typed but not added yet still counts.
         trails: trailText.trim() && !trails.includes(trailText.trim()) ? [...trails, trailText.trim()] : trails,
       };
@@ -668,6 +692,72 @@ export function NewEntrySheet({
                 </View>
               ) : null}
 
+              <Label>Passport book stamp</Label>
+              <BodyText size={12} lineHeightRatio={1.45} color={colors.neutral[600]} style={styles.hint}>
+                Got the park&apos;s official stamp in your Passport To Your National Parks book?
+                Add a photo of it: a souvenir that you were there in person.
+              </BodyText>
+              {passportStamp ? (
+                <View style={styles.passportRow}>
+                  <View style={styles.passportThumb}>
+                    <Image source={{ uri: passportStamp }} style={StyleSheet.absoluteFill} contentFit="cover" />
+                  </View>
+                  <View style={styles.passportActions}>
+                    <BodyText size={13} weight="semibold" color={colors.accentRamp[800]}>
+                      Stamped in person
+                    </BodyText>
+                    <View style={styles.chips}>
+                      <Pressable
+                        onPress={() => pickPassportStamp('camera')}
+                        accessibilityRole="button"
+                        style={({ pressed }) => [styles.suggestion, pressed && styles.suggestionPressed]}
+                      >
+                        <BodyText size={12} weight="semibold" color={colors.neutral[800]}>
+                          Retake
+                        </BodyText>
+                      </Pressable>
+                      <Pressable
+                        onPress={() => setPassportStamp(null)}
+                        accessibilityRole="button"
+                        style={({ pressed }) => [styles.suggestion, pressed && styles.suggestionPressed]}
+                      >
+                        <BodyText size={12} weight="semibold" color={colors.neutral[800]}>
+                          Remove
+                        </BodyText>
+                      </Pressable>
+                    </View>
+                  </View>
+                </View>
+              ) : (
+                <View style={styles.passportButtons}>
+                  <Pressable
+                    onPress={() => pickPassportStamp('camera')}
+                    accessibilityRole="button"
+                    style={({ pressed }) => [styles.addPhotos, styles.passportButton, pressed && styles.addPhotosPressed]}
+                  >
+                    <CameraIcon />
+                    <BodyText size={13} weight="semibold" color={colors.accentRamp[800]}>
+                      Photograph it
+                    </BodyText>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => pickPassportStamp('library')}
+                    accessibilityRole="button"
+                    style={({ pressed }) => [styles.addPhotos, styles.passportButton, pressed && styles.addPhotosPressed]}
+                  >
+                    <PlusIcon />
+                    <BodyText size={13} weight="semibold" color={colors.accentRamp[800]}>
+                      From photos
+                    </BodyText>
+                  </Pressable>
+                </View>
+              )}
+              {stampNote ? (
+                <BodyText size={12.5} weight="medium" color={colors.accentRamp[800]} style={styles.mediaNote}>
+                  {stampNote}
+                </BodyText>
+              ) : null}
+
               {problem ? (
                 <BodyText size={12.5} weight="medium" color={colors.accentRamp[800]} style={styles.problem}>
                   {problem}
@@ -716,6 +806,7 @@ function fromEntry(entry: TripEntry): Omit<EntryDraft, 'savedAt'> {
     withIds: entry.with.map((p) => p.id),
     media: entry.media,
     visibility: entry.visibility,
+    passportStamp: entry.passportStamp,
   };
 }
 
@@ -731,6 +822,7 @@ function blankDraft(initialSiteId: string | undefined): Omit<EntryDraft, 'savedA
     withIds: [],
     media: [],
     visibility: 'private',
+    passportStamp: null,
   };
 }
 
@@ -744,6 +836,7 @@ function hasContent(draft: Omit<EntryDraft, 'savedAt'>, blank: Omit<EntryDraft, 
     draft.withIds.length > 0 ||
     draft.media.length > 0 ||
     draft.visibility !== blank.visibility ||
+    draft.passportStamp != null ||
     draft.siteId !== blank.siteId ||
     draft.date !== blank.date
   );
@@ -822,6 +915,21 @@ function CalendarIcon() {
         strokeLinecap="round"
         strokeLinejoin="round"
       />
+    </Svg>
+  );
+}
+
+function CameraIcon() {
+  return (
+    <Svg width={19} height={19} viewBox="0 0 24 24">
+      <Path
+        d="M4 8h3l2-2.5h6L17 8h3a1 1 0 011 1v9a1 1 0 01-1 1H4a1 1 0 01-1-1V9a1 1 0 011-1z"
+        fill="none"
+        stroke={colors.accentRamp[700]}
+        strokeWidth={2.2}
+        strokeLinejoin="round"
+      />
+      <Path d="M12 10a3.2 3.2 0 100 6.4 3.2 3.2 0 000-6.4z" fill="none" stroke={colors.accentRamp[700]} strokeWidth={2.2} />
     </Svg>
   );
 }
@@ -1005,6 +1113,33 @@ const styles = StyleSheet.create({
   visibilityOn: {
     borderColor: colors.accent,
     backgroundColor: colors.accent,
+  },
+  passportButtons: {
+    flexDirection: 'row',
+    gap: space[2],
+  },
+  passportButton: {
+    flex: 1,
+    gap: space[2],
+    paddingHorizontal: 12,
+  },
+  passportRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space[3],
+  },
+  passportThumb: {
+    width: 84,
+    height: 84,
+    borderRadius: radius.sm,
+    overflow: 'hidden',
+    backgroundColor: colors.neutral[200],
+    transform: [{ rotate: '-3deg' }],
+    ...shadow.sm,
+  },
+  passportActions: {
+    flex: 1,
+    gap: space[2],
   },
   mediaNote: {
     marginTop: space[2],

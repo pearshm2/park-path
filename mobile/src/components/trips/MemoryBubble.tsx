@@ -13,7 +13,9 @@
  *
  * Tapping a bubble brings it to the middle; tapping the one in the middle,
  * or its play button, dives into it (Trips grows it to fill the screen and
- * opens Relive for just that trip); the dots open its options.
+ * opens Relive for just that trip); the dots open its options. A trip with
+ * a passport-book stamp photo has a "Stamped in person" tag over its park
+ * name, which opens the photo.
  *
  * A bubble is taller than its row, spilling into its neighbours', and
  * Android only takes touches inside a view's own bounds. So the buttons
@@ -35,6 +37,7 @@ import type { Site } from '../../data/parks';
 import { colors, HEADING_LINE_HEIGHT_RATIO, radius, shadow, space } from '../../theme';
 import type { DiveRect } from './DiveIn';
 import { dateLabel, leadPhoto, type TripEntry } from '../../trips/TripsContext';
+import { PassportTag } from './PassportPage';
 import { TerrainIcon, terrainTone } from '../TerrainIcon';
 import { BodyText, Heading } from '../Typography';
 
@@ -91,6 +94,7 @@ export function MemoryBubble({
   onFocus,
   onPlay,
   onOptions,
+  onPassportStamp,
 }: {
   entry: TripEntry;
   /** The park, once the site list has loaded. */
@@ -109,6 +113,8 @@ export function MemoryBubble({
   /** Dive in (only the bubble in the middle offers it). */
   onPlay: () => void;
   onOptions: () => void;
+  /** Open the trip's passport-book stamp photo. */
+  onPassportStamp: () => void;
 }) {
   // How far this row is from the middle, in rows (0 = in focus).
   const away = (y: number) => {
@@ -188,6 +194,11 @@ export function MemoryBubble({
               wordsStyle,
             ]}
           >
+            {entry.passportStamp ? (
+              <Animated.View style={[styles.tagSlot, controlsStyle]} pointerEvents={focused ? 'auto' : 'none'}>
+                <PassportTag onPress={onPassportStamp} />
+              </Animated.View>
+            ) : null}
             <BodyText size={11} weight="bold" color={ON_PHOTO} style={styles.park} numberOfLines={1}>
               {(site?.name ?? entry.siteId).toUpperCase()}
             </BodyText>
@@ -322,6 +333,9 @@ const styles = StyleSheet.create({
   },
   optionsPressed: {
     backgroundColor: colors.neutral[300],
+  },
+  tagSlot: {
+    marginBottom: space[2],
   },
   reliveSlot: {
     marginTop: space[2],

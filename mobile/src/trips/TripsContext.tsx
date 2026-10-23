@@ -70,6 +70,12 @@ export type TripEntry = {
   trails: string[];
   /** Who can see it: only you, or your friends too. */
   visibility: Visibility;
+  /**
+   * A photo of the park's official stamp in a Passport To Your National
+   * Parks book: the souvenir of being there in person. Kept on the phone
+   * only, like photos for now. Null if none.
+   */
+  passportStamp: string | null;
   createdAt: string;
   /** Its id on the server, once it's been sent. */
   serverId?: number;
@@ -100,7 +106,16 @@ export function leadPhoto(entry: Pick<TripEntry, 'media'>): string | null {
 /** What the entry sheet fills in. */
 export type TripDraft = Pick<
   TripEntry,
-  'siteId' | 'date' | 'title' | 'notes' | 'media' | 'with' | 'rating' | 'trails' | 'visibility'
+  | 'siteId'
+  | 'date'
+  | 'title'
+  | 'notes'
+  | 'media'
+  | 'with'
+  | 'rating'
+  | 'trails'
+  | 'visibility'
+  | 'passportStamp'
 >;
 
 /**
@@ -118,6 +133,7 @@ export type EntryDraft = {
   withIds: number[];
   media: TripMedia[];
   visibility: Visibility;
+  passportStamp: string | null;
   /** When it was last changed, as an ISO timestamp. */
   savedAt: string;
 };
@@ -195,6 +211,7 @@ function parseDraft(raw: string | null): EntryDraft | null {
       media: draft.media ?? (photos ?? []).map(asPhoto),
       trails: draft.trails ?? (stamp?.trim() ? [stamp.trim()] : []),
       visibility: draft.visibility ?? 'private',
+      passportStamp: draft.passportStamp ?? null,
     };
   } catch {
     return null;
@@ -229,6 +246,8 @@ function parse(raw: string | null): TripEntry[] {
         trails: e.trails ?? (stamp ? [stamp] : []),
         // Saved before trips could be shared.
         visibility: e.visibility ?? 'private',
+        // Saved before passport stamps.
+        passportStamp: e.passportStamp ?? null,
         // Saved before the server: send it.
         unsent: e.unsent ?? e.serverId == null,
       }));
@@ -259,6 +278,15 @@ function keepFile(uri: string, i: number): string {
 function keepMedia(media: TripMedia[], already: TripMedia[] = []): TripMedia[] {
   const owned = new Set(already.map((m) => m.uri));
   return media.map((m, i) => (owned.has(m.uri) || isWeb(m.uri) ? m : { ...m, uri: keepFile(m.uri, i) }));
+}
+
+function deleteFile(uri: string) {
+  if (isWeb(uri)) return;
+  try {
+    new File(uri).delete();
+  } catch {
+    // Already gone; nothing to do.
+  }
 }
 
 function deleteMedia(media: TripMedia[]) {
@@ -300,6 +328,8 @@ function fromServer(trip: TripOut, local?: TripEntry): TripEntry {
     trails: trip.trails ?? (trip.stamp ? [trip.stamp] : []),
     visibility: trip.visibility,
     with: trip.companions,
+    // On the phone only, for now.
+    passportStamp: local?.passportStamp ?? null,
     // Photos stay as the phone has them; a trip new to this phone shows the
     // server's (links that expire; fetched fresh on each sync).
     media:
@@ -517,6 +547,7 @@ export function TripsProvider({ children }: { children: ReactNode }) {
           ...draft,
           id: `trip-${Date.now()}`,
           media: keepMedia(draft.media),
+          passportStamp: draft.passportStamp ? keepFile(draft.passportStamp, 99) : null,
           createdAt: new Date().toISOString(),
           unsent: true,
         };
@@ -533,6 +564,7 @@ export function TripsProvider({ children }: { children: ReactNode }) {
         const entry = latest.current?.entries.find((e) => e.id === id);
         if (!entry) return;
         deleteMedia(entry.media);
+        if (entry.passportStamp) deleteFile(entry.passportStamp);
         await commit((c) => ({
           entries: c.entries.filter((e) => e.id !== id),
           deletes: entry.serverId != null ? [...c.deletes, entry.serverId] : c.deletes,
@@ -553,8 +585,14 @@ export function TripsProvider({ children }: { children: ReactNode }) {
         const media = keepMedia(draft.media, old.media);
         const stillThere = new Set(draft.media.map((m) => m.uri));
         deleteMedia(old.media.filter((m) => !stillThere.has(m.uri)));
+        // The passport stamp: kept, replaced, or taken off.
+        let passportStamp = draft.passportStamp;
+        if (passportStamp !== old.passportStamp) {
+          if (old.passportStamp) deleteFile(old.passportStamp);
+          if (passportStamp) passportStamp = keepFile(passportStamp, 99);
+        }
         // Edited: send it again, even if it was refused before.
-        const entry: TripEntry = { ...old, ...draft, media, unsent: true, syncError: undefined };
+        const entry: TripEntry = { ...old, ...draft, media, passportStamp, unsent: true, syncError: undefined };
         await commit((c) => ({ ...c, entries: c.entries.map((e) => (e.id === id ? entry : e)) }));
         syncSoon();
         return entry;

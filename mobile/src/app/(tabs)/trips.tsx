@@ -38,6 +38,7 @@ import { listSites } from '../../api/parks';
 import { BodyText, Button, Dialog, FilterButton, Heading, Toast, useTabBarSpace } from '../../components';
 import { diveParam } from '../../components/trips/DiveIn';
 import { MemoryBubble } from '../../components/trips/MemoryBubble';
+import { PassportStampViewer } from '../../components/trips/PassportPage';
 import { NewEntrySheet } from '../../components/trips/NewEntrySheet';
 import type { Site } from '../../data/parks';
 import { regionForState } from '../../data/regions';
@@ -87,6 +88,8 @@ export default function TripsScreen() {
     null,
   );
   const [editing, setEditing] = useState<TripEntry | null>(null);
+  // The trip whose passport-book stamp photo is open.
+  const [stampOf, setStampOf] = useState<TripEntry | null>(null);
   /** The screen's and the floating header's heights, once laid out; the
    *  bubbles are sized and placed from them. */
   const [screenHeight, setScreenHeight] = useState(0);
@@ -216,6 +219,7 @@ export default function TripsScreen() {
                   onFocus={() => goTo(i)}
                   onPlay={() => diveInto(item)}
                   onOptions={() => setOptions({ entry: item, step: 'options' })}
+                  onPassportStamp={() => setStampOf(item)}
                 />
               )}
             />
@@ -370,6 +374,15 @@ export default function TripsScreen() {
       <View style={[styles.toastSlot, { top: insets.top + 64 }]} pointerEvents="none">
         <Toast message={toast} />
       </View>
+
+      {stampOf?.passportStamp ? (
+        <PassportStampViewer
+          uri={stampOf.passportStamp}
+          park={siteById.get(stampOf.siteId)?.name ?? stampOf.siteId}
+          date={stampOf.date}
+          onClose={() => setStampOf(null)}
+        />
+      ) : null}
 
       {/* A memory's options, then a warning before it's deleted for good. */}
       <Dialog
