@@ -87,6 +87,7 @@ import {
   type RegionId,
 } from '../../data/regions';
 import { useQuiz } from '../../quiz/QuizContext';
+import { useCelebrations } from '../../celebrations/CelebrationsContext';
 import { useSnoozed } from '../../wishlist/useSnoozed';
 import { useWishlist } from '../../wishlist/useWishlist';
 import { CapTextScale, colors, radius, shadow, space, useTextScale } from '../../theme';
@@ -293,10 +294,14 @@ export default function ExploreScreen() {
   const parkIds = useMemo(() => new Set(parks.map((site) => site.id)), [parks]);
   // Completed regions, marked on the map. The all-sites map counts every
   // site in a region; the others count its national parks.
-  const completed = useMemo(
-    () => completedRegions(scope === 'all' ? allSites : parks),
-    [scope, allSites, parks],
-  );
+  // A region just completed waits to be filled in on Passport's map first
+  // (celebrations/CelebrationsContext.tsx).
+  const { held } = useCelebrations();
+  const completed = useMemo(() => {
+    const done = completedRegions(scope === 'all' ? allSites : parks);
+    for (const r of held.regions) done.delete(r);
+    return done;
+  }, [scope, allSites, parks, held.regions]);
   const parkMatches = useMemo(
     () => matches.filter(({ site }) => parkIds.has(site.id)),
     [matches, parkIds],

@@ -47,7 +47,8 @@ import { scheduleOnRN } from 'react-native-worklets';
 
 import { listSites } from '../api/parks';
 import { BodyText, Button, Heading } from '../components';
-import { InkStamp } from '../components/passport/InkStamp';
+import { WaxSeal } from '../components/passport/WaxSeal';
+import { playSound, tap } from '../lib/sounds';
 import { terrainTone } from '../components/TerrainIcon';
 import { bubbleWordCentres } from '../components/trips/MemoryBubble';
 import { DIVE_MS, DiveBackground, parseDive, type DiveRect } from '../components/trips/DiveIn';
@@ -93,9 +94,11 @@ type Slide =
   | { kind: 'end' };
 
 const INK = '#14110f';
-/** The passport stamp's ink and size on the opening slide. */
-const STAMP_INK = colors.accentRamp[400];
+/** The park's wax seal on the opening slide. */
 const STAMP_SIZE = 124;
+/** How long the seal's press takes, and when in it the seal hits (0 to 1). */
+const PRESS_MS = 640;
+const HIT = 0.5;
 const MONTH_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const ON_INK = colors.neutral[100];
 const ON_INK_SOFT = 'rgba(249, 244, 237, 0.78)';
@@ -146,6 +149,14 @@ export default function ReliveScreen() {
     [entries, only],
   );
   const slides = useMemo(() => buildSlides(trips, sites, !only), [trips, sites, only]);
+  // Start every photo downloading now, so each is there when its slide
+  // opens (the parks' photos are large).
+  useEffect(() => {
+    const uris = slides.flatMap((s) =>
+      s.kind !== 'end' && s.image && !(s.kind === 'media' && s.media?.kind === 'video') ? [s.image] : [],
+    );
+    if (uris.length > 0) void Image.prefetch([...new Set(uris)]).catch(() => {});
+  }, [slides]);
 
   const [index, setIndex] = useState(0);
   const [paused, setPaused] = useState(false);
@@ -328,7 +339,6 @@ function buildSlides(trips: TripEntry[], sites: Site[], summary: boolean): Slide
   const slides: Slide[] = [];
   trips.forEach((entry, trip) => {
     const site = byId.get(entry.siteId);
-    const hasWords = !!entry.notes.trim() || entry.trails.length > 0;
     // The opening card is always the park's own photo, when there is one.
     slides.push({
       kind: 'title',
@@ -337,9 +347,9 @@ function buildSlides(trips: TripEntry[], sites: Site[], summary: boolean): Slide
       site,
       image: site?.imageUrl ?? leadPhoto(entry),
     });
-    // No photos or videos of your own: the park's photo stands in, if
-    // there's something to say over it.
-    const shots: (TripMedia | null)[] = entry.media.length > 0 ? entry.media : hasWords ? [null] : [];
+    // No photos or videos of your own: the park's photo stands in, so
+    // every trip has a photo slide with its details.
+    const shots: (TripMedia | null)[] = entry.media.length > 0 ? entry.media : [null];
     shots.forEach((media, i) => {
       slides.push({
         kind: 'media',
@@ -411,12 +421,24 @@ function SlowPan({
     <View style={[StyleSheet.absoluteFill, { backgroundColor: fallback }]}>
       {uri ? (
         <Animated.View style={[StyleSheet.absoluteFill, motion]}>
+          {/* A sharp photo can take a moment to load (the parks' are large),
+              so the blurred copy the opening slide already loaded shows
+              underneath until it does. */}
+          {blur === 0 ? (
+            <Image
+              source={{ uri }}
+              style={StyleSheet.absoluteFill}
+              contentFit="cover"
+              blurRadius={OPENING_BLUR}
+            />
+          ) : null}
           <Image
             source={{ uri }}
             style={StyleSheet.absoluteFill}
             contentFit="cover"
             blurRadius={blur}
             transition={400}
+            priority="high"
           />
         </Animated.View>
       ) : null}
@@ -443,6 +465,8 @@ function Shade({ strength = 0.8 }: { strength?: number }) {
 
 /** The opening slide's blur and dimming, which a dive grows into. */
 const TITLE_BLUR = 12;
+/** The same blur, for the photo shown while a sharp one loads. */
+const OPENING_BLUR = TITLE_BLUR;
 const TITLE_DIM = 0.45;
 
 function TitleSlide({
@@ -471,24 +495,56 @@ function TitleSlide({
   // Where the bubble's words were, for them to slide from.
   const from = dive ? bubbleWordCentres(dive.rect, entry.title, textScale) : null;
 
-  // The stamp lands like a rubber stamp: a quick press down, no bounce,
-  // and a ring of ink spreading out from it. After the dive, if there is one.
+  // The seal is pressed like a real one: it lifts into view above its
+  // spot, drops fast, hits (a squash, the thud, a haptic tap, and a ring of
+  // wax spreading out), rebounds a touch and settles. Its shadow on the
+  // page darkens and tightens as it comes down. After the dive, if there
+  // is one.
   const press = useSharedValue(0);
-  const splash = useSharedValue(0);
+  const spread = useSharedValue(0);
   useEffect(() => {
     const delay = dive ? DIVE_MS + 120 : 450;
-    press.value = withDelay(delay, withTiming(1, { duration: 160, easing: Easing.in(Easing.quad) }));
-    splash.value = withDelay(delay + 150, withTiming(1, { duration: 420, easing: Easing.out(Easing.quad) }));
+    press.value = withDelay(delay, withTiming(1, { duration: PRESS_MS, easing: Easing.linear }));
+    spread.value = withDelay(
+      delay + PRESS_MS * HIT,
+      withTiming(1, { duration: 520, easing: Easing.out(Easing.cubic) }),
+    );
+    const hit = setTimeout(() => {
+      playSound('stamp');
+      tap('medium');
+    }, delay + PRESS_MS * HIT);
+    return () => clearTimeout(hit);
     // Once, as the slide opens.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  const stampStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(press.value, [0, 0.35], [0, 1], 'clamp'),
-    transform: [{ scale: interpolate(press.value, [0, 1], [1.5, 1]) }, { rotate: '-8deg' }],
-  }));
-  const splashStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(splash.value, [0, 1], [0.5, 0]),
-    transform: [{ scale: interpolate(splash.value, [0, 1], [0.95, 1.4]) }],
+  const stampStyle = useAnimatedStyle(() => {
+    const p = press.value;
+    return {
+      opacity: interpolate(p, [0, 0.18], [0, 1], 'clamp'),
+      transform: [
+        // Hovering above, then down: slow to start, fast at the end.
+        { translateY: interpolate(p, [0, 0.3, HIT], [-30, -44, 0], 'clamp') },
+        { scale: interpolate(p, [0, 0.3, HIT], [1.18, 1.3, 1], 'clamp') },
+        // The squash on impact, the rebound, the settle.
+        { scaleX: interpolate(p, [HIT, HIT + 0.08, HIT + 0.22, 1], [1, 1.09, 0.98, 1], 'clamp') },
+        { scaleY: interpolate(p, [HIT, HIT + 0.08, HIT + 0.22, 1], [1, 0.88, 1.03, 1], 'clamp') },
+        { rotate: `${interpolate(p, [0, HIT], [-14, -8], 'clamp')}deg` },
+      ],
+    };
+  });
+  // Its shadow on the page: faint and wide while it's high, dark and tight
+  // as it lands, then gone (the seal draws its own resting shadow).
+  const landingShadowStyle = useAnimatedStyle(() => {
+    const p = press.value;
+    return {
+      opacity: interpolate(p, [0, 0.1, HIT, HIT + 0.15], [0, 0.15, 0.45, 0], 'clamp'),
+      transform: [{ scale: interpolate(p, [0, HIT], [1.25, 0.9], 'clamp') }],
+    };
+  });
+  // The wax spreading out from under the seal as it hits.
+  const spreadStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(spread.value, [0, 0.15, 1], [0, 0.55, 0]),
+    transform: [{ scale: interpolate(spread.value, [0, 1], [0.92, 1.35]) }],
   }));
   // The rest of the slide arrives as the dive finishes.
   const lateIn = useAnimatedStyle(() =>
@@ -537,15 +593,14 @@ function TitleSlide({
           style={styles.stampTap}
         >
           <View style={styles.stamp}>
-            <Animated.View style={[styles.splash, splashStyle]} />
+            <Animated.View style={[styles.landingShadow, landingShadowStyle]} />
+            <Animated.View style={[styles.spread, spreadStyle]} />
             <Animated.View style={stampStyle}>
-              <InkStamp
-                id={entry.siteId}
+              <WaxSeal
+                code={entry.siteId}
+                group={site?.group ?? null}
                 name={name}
-                day={`${MONTH_SHORT[Number(month) - 1]} ${Number(dayOfMonth)}`}
-                year={year}
-                footer={site?.state ?? ''}
-                color={STAMP_INK}
+                date={`${MONTH_SHORT[Number(month) - 1]} ${Number(dayOfMonth)}, ${year}`}
                 size={STAMP_SIZE}
               />
             </Animated.View>
@@ -898,14 +953,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  // The ring of ink spreading out as the stamp lands.
-  splash: {
+  landingShadow: {
     position: 'absolute',
-    width: STAMP_SIZE * 0.94,
-    height: STAMP_SIZE * 0.94,
+    width: STAMP_SIZE * 0.82,
+    height: STAMP_SIZE * 0.82,
     borderRadius: STAMP_SIZE,
-    borderWidth: 3,
-    borderColor: STAMP_INK,
+    backgroundColor: '#000',
+  },
+  spread: {
+    position: 'absolute',
+    width: STAMP_SIZE * 0.9,
+    height: STAMP_SIZE * 0.9,
+    borderRadius: STAMP_SIZE,
+    borderWidth: 2.5,
+    borderColor: '#9c2a2c',
   },
   mover: {
     alignSelf: 'flex-start',

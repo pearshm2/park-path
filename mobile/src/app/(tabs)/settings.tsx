@@ -16,6 +16,7 @@ import { useAuth } from '../../auth/AuthContext';
 import { BodyText, Button, Heading, useTabBarSpace } from '../../components';
 import { QUIZ_STEPS, type QuizAnswers } from '../../data/quizSpec';
 import { useQuiz } from '../../quiz/QuizContext';
+import { useSoundEffects } from '../../lib/sounds';
 import { colors, radius, shadow, space, TEXT_SIZES, useTextSize } from '../../theme';
 
 export default function SettingsScreen() {
@@ -24,6 +25,7 @@ export default function SettingsScreen() {
   const { user, signOut } = useAuth();
   const { answers } = useQuiz();
   const { size: textSize, setSize: setTextSize } = useTextSize();
+  const [soundsOn, setSoundsOn] = useSoundEffects();
   const arrivals = useArrivals();
   const tabSpace = useTabBarSpace();
 
@@ -81,6 +83,31 @@ export default function SettingsScreen() {
           </BodyText>
         </View>
       </View>
+
+      <View style={styles.group}>
+        <BodyText size={10} weight="semibold" color={colors.neutral[600]} style={styles.groupTitle}>
+          SOUND
+        </BodyText>
+        <View style={styles.card}>
+          <View style={styles.switchRow}>
+            <BodyText size={13.5} weight="semibold" style={styles.switchLabel}>
+              Sound effects
+            </BodyText>
+            <Switch
+              value={soundsOn}
+              onValueChange={setSoundsOn}
+              trackColor={{ true: colors.accent, false: colors.neutral[300] }}
+              thumbColor={colors.neutral[100]}
+              accessibilityLabel="Sound effects"
+            />
+          </View>
+          <BodyText size={11.5} lineHeightRatio={1.45} color={colors.textMuted}>
+            A chime when you earn an achievement or complete a region, and a light buzz when a
+            stamp goes down. Silent when your phone is.
+          </BodyText>
+        </View>
+      </View>
+
 
       <View style={styles.group}>
         <BodyText size={10} weight="semibold" color={colors.neutral[600]} style={styles.groupTitle}>
