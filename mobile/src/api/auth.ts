@@ -8,14 +8,34 @@
  */
 
 import { request } from './client';
-import type { Credentials, TokenResponse, User } from '../types/auth';
+import type {
+  Credentials,
+  ProfileChanges,
+  SignUpDetails,
+  TokenResponse,
+  User,
+  UsernameCheck,
+} from '../types/auth';
 
-/** POST /auth/signup — 201 with a token, or 409 if the email is taken. */
-export function signup(credentials: Credentials): Promise<TokenResponse> {
+/**
+ * POST /auth/signup — 201 with a token; 409 if the email or username is
+ * taken, 422 if the username breaks the rules (the message says which).
+ */
+export function signup(details: SignUpDetails): Promise<TokenResponse> {
   return request<TokenResponse>('/auth/signup', {
     method: 'POST',
-    body: credentials,
+    body: details,
   });
+}
+
+/** GET /auth/username-available — whether a username is free, and if not, why. */
+export function checkUsername(username: string): Promise<UsernameCheck> {
+  return request<UsernameCheck>(`/auth/username-available?username=${encodeURIComponent(username)}`);
+}
+
+/** PATCH /auth/me — change your username or name; the updated you. */
+export function updateProfile(token: string, changes: ProfileChanges): Promise<User> {
+  return request<User>('/auth/me', { method: 'PATCH', token, body: changes });
 }
 
 /** POST /auth/login — 200 with a token, or 401 on bad credentials. */

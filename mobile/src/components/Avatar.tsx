@@ -1,12 +1,12 @@
 /**
  * A person's initials in a coloured circle, picked by their id so each
  * person keeps the same colour everywhere (Friends, Trips, the header).
- * Profiles are only an email for now, so the initials come from it.
+ * The initials are from their first and last name.
  */
 
 import { StyleSheet, View } from 'react-native';
 
-import { initials } from '../api/friends';
+import { initials, type Person } from '../api/friends';
 import { colors, radius } from '../theme';
 import { BodyText } from './Typography';
 
@@ -27,7 +27,7 @@ export function Avatar({
   size,
   ring = false,
 }: {
-  person: { id: number; email: string };
+  person: Person;
   size: number;
   /** A coloured ring round it, as in the Friends row. */
   ring?: boolean;
@@ -47,7 +47,7 @@ export function Avatar({
       ]}
     >
       <BodyText size={Math.round(size * 0.32)} weight="bold" color={tone.fg}>
-        {initials(person.email)}
+        {initials(person)}
       </BodyText>
     </View>
   );

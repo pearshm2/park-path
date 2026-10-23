@@ -12,8 +12,7 @@ import {
   fetchFriends,
   fetchRequests,
   removeFriend,
-  sendRequest,
-} from '../api/friends';
+  sendRequest, type FriendTarget } from '../api/friends';
 import { useAuth } from '../auth/AuthContext';
 
 export function useFriends() {
@@ -44,7 +43,7 @@ export function useFriends() {
     ]);
 
   const send = useMutation({
-    mutationFn: (email: string) => sendRequest(token!, email.trim()),
+    mutationFn: (target: FriendTarget) => sendRequest(token!, target),
     onSuccess: refresh,
   });
   const accept = useMutation({

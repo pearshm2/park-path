@@ -18,10 +18,15 @@ import {
   type ReactNode,
 } from 'react';
 
-import { fetchCurrentUser, login as loginRequest, signup as signupRequest } from '../api/auth';
+import {
+  fetchCurrentUser,
+  login as loginRequest,
+  signup as signupRequest,
+  updateProfile as updateProfileRequest,
+} from '../api/auth';
 import { clearToken, loadToken, saveToken } from '../api/tokenStorage';
 import { readTokenSubject } from '../lib/jwt';
-import type { Credentials, User } from '../types/auth';
+import type { Credentials, ProfileChanges, SignUpDetails, User } from '../types/auth';
 
 /**
  * `restoring` is the launch state, before we know whether the stored
@@ -42,8 +47,10 @@ type AuthContextValue = {
    */
   userId: string | null;
   signIn: (credentials: Credentials) => Promise<void>;
-  signUp: (credentials: Credentials) => Promise<void>;
+  signUp: (details: SignUpDetails) => Promise<void>;
   signOut: () => Promise<void>;
+  /** Change your username or name (Settings); throws the API's message. */
+  updateProfile: (changes: ProfileChanges) => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -116,8 +123,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   const signUp = useCallback(
-    async (credentials: Credentials) => {
-      const { access_token } = await signupRequest(credentials);
+    async (details: SignUpDetails) => {
+      const { access_token } = await signupRequest(details);
       await establishSession(access_token);
     },
     [establishSession],
@@ -130,6 +137,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setStatus('signedOut');
   }, []);
 
+  const updateProfile = useCallback(
+    async (changes: ProfileChanges) => {
+      if (!token) return;
+      setUser(await updateProfileRequest(token, changes));
+    },
+    [token],
+  );
+
   // Prefer the token's own claim; fall back to the profile if a future
   // token shape ever stops carrying one.
   const userId = useMemo(
@@ -138,8 +153,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   const value = useMemo<AuthContextValue>(
-    () => ({ status, user, token, userId, signIn, signUp, signOut }),
-    [status, user, token, userId, signIn, signUp, signOut],
+    () => ({ status, user, token, userId, signIn, signUp, signOut, updateProfile }),
+    [status, user, token, userId, signIn, signUp, signOut, updateProfile],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

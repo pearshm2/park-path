@@ -53,6 +53,7 @@ import { WaxSeal } from '../components/passport/WaxSeal';
 import { playSound, tap } from '../lib/sounds';
 import { terrainTone } from '../components/TerrainIcon';
 import { bubbleWordCentres } from '../components/trips/MemoryBubble';
+import { firstName } from '../api/friends';
 import { DIVE_MS, DiveBackground, parseDive, type DiveRect } from '../components/trips/DiveIn';
 import { PassportPage } from '../components/trips/PassportPage';
 import { PinIcon, StarIcon } from '../components/trips/NewEntrySheet';
@@ -733,7 +734,7 @@ function MediaSlide({
 }) {
   const insets = useSafeAreaInsets();
   const { entry, site, media, first } = slide;
-  const company = entry.with.map((p) => p.email.split('@')[0]);
+  const company = entry.with.map((p) => firstName(p));
   const notes = first ? entry.notes.trim() : '';
   const caption = media?.caption.trim() ?? '';
   const fallback = terrainTone(site?.group ?? null).band;

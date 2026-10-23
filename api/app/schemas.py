@@ -14,10 +14,47 @@ from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, mo
 from app.storage import MAX_VIDEO_BYTES, max_bytes_for
 from app.visibility import Visibility
 
+Name = Annotated[str, Field(min_length=1, max_length=50)]
+
+
+def _clean_name(value: str) -> str:
+    value = " ".join(value.split())
+    if not value:
+        raise ValueError("Enter a name")
+    return value
+
 
 class UserCreate(BaseModel):
     email: EmailStr
     password: str
+    # Checked against app/usernames.py's rules in the route, so the error
+    # can say what's wrong.
+    username: str
+    first_name: Name
+    last_name: Name
+
+    _names = field_validator("first_name", "last_name")(_clean_name)
+
+
+class UserUpdate(BaseModel):
+    """PATCH /auth/me: any of these; the rest are left as they are."""
+
+    username: str | None = None
+    first_name: Name | None = None
+    last_name: Name | None = None
+
+    @field_validator("first_name", "last_name")
+    @classmethod
+    def _names(cls, value: str | None) -> str | None:
+        return None if value is None else _clean_name(value)
+
+
+class UsernameCheck(BaseModel):
+    """GET /auth/username-available: whether it's free, and if not, why."""
+
+    username: str
+    available: bool
+    reason: str | None = None
 
 
 class UserLogin(BaseModel):
@@ -30,6 +67,9 @@ class UserOut(BaseModel):
 
     id: int
     email: EmailStr
+    username: str
+    first_name: str
+    last_name: str
 
 
 class Token(BaseModel):
@@ -66,7 +106,16 @@ class SiteOut(BaseModel):
 
 
 class FriendRequestCreate(BaseModel):
-    email: EmailStr
+    """Who to ask: by email, or by username (typed, or from their QR code)."""
+
+    email: EmailStr | None = None
+    username: str | None = None
+
+    @model_validator(mode="after")
+    def _one_of(self):
+        if (self.email is None) == (self.username is None):
+            raise ValueError("Give an email or a username")
+        return self
 
 
 class FriendshipOut(BaseModel):

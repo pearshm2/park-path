@@ -1,36 +1,74 @@
 """
-Auth routes: POST /auth/signup, POST /auth/login, GET /auth/me.
+Auth routes:
+
+  POST  /auth/signup               new account: email, password, username, first and last name
+  POST  /auth/login                email + password, for a token
+  GET   /auth/me                   who's signed in
+  PATCH /auth/me                   change your name or username
+  GET   /auth/username-available   ?username=..., for the sign-up form to check as you type
 
 Scope note: this is access-token-only (no refresh tokens, no password
 reset, no email verification) — matches this week's task ("JWT auth:
 sign up, log in, tokens"). Those are natural follow-ups, not regressions.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.dependencies import get_current_user
 from app.models import User
-from app.schemas import Token, UserCreate, UserLogin, UserOut
+from app.schemas import Token, UserCreate, UserLogin, UsernameCheck, UserOut, UserUpdate
 from app.security import create_access_token, hash_password, verify_password
+from app.usernames import normalize_username, username_problem
 
 router = APIRouter()
 
 
+USERNAME_TAKEN = "That username is taken"
+EMAIL_TAKEN = "An account with that email already exists"
+
+
+def _username_taken(db: Session, username: str, except_id: int | None = None) -> bool:
+    stmt = select(User.id).where(User.username == username)
+    if except_id is not None:
+        stmt = stmt.where(User.id != except_id)
+    return db.scalars(stmt).first() is not None
+
+
+def _usable_username(db: Session, raw: str, except_id: int | None = None) -> str:
+    """The normalized username, or a 422/409 saying why it can't be used."""
+    username = normalize_username(raw)
+    problem = username_problem(username)
+    if problem:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, detail=problem)
+    if _username_taken(db, username, except_id):
+        raise HTTPException(status.HTTP_409_CONFLICT, detail=USERNAME_TAKEN)
+    return username
+
+
 @router.post("/signup", response_model=Token, status_code=status.HTTP_201_CREATED)
 def signup(payload: UserCreate, db: Session = Depends(get_db)):
-    user = User(email=payload.email, hashed_password=hash_password(payload.password))
+    username = _usable_username(db, payload.username)
+    if db.scalars(select(User.id).where(func.lower(User.email) == payload.email.lower())).first():
+        raise HTTPException(status.HTTP_409_CONFLICT, detail=EMAIL_TAKEN)
+    user = User(
+        email=payload.email,
+        username=username,
+        first_name=payload.first_name,
+        last_name=payload.last_name,
+        hashed_password=hash_password(payload.password),
+    )
     db.add(user)
     try:
         db.commit()
     except IntegrityError:
+        # Someone took the email or username in the same instant.
         db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="An account with that email already exists",
-        )
+        detail = USERNAME_TAKEN if _username_taken(db, username) else EMAIL_TAKEN
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=detail)
     db.refresh(user)
 
     token = create_access_token(subject=str(user.id))
@@ -65,3 +103,39 @@ def read_current_user(current_user: User = Depends(get_current_user)):
     `current_user: User = Depends(get_current_user)` as a parameter.
     """
     return current_user
+
+
+@router.patch("/me", response_model=UserOut)
+def update_current_user(
+    payload: UserUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    if payload.username is not None:
+        current_user.username = _usable_username(db, payload.username, except_id=current_user.id)
+    if payload.first_name is not None:
+        current_user.first_name = payload.first_name
+    if payload.last_name is not None:
+        current_user.last_name = payload.last_name
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status.HTTP_409_CONFLICT, detail=USERNAME_TAKEN)
+    db.refresh(current_user)
+    return current_user
+
+
+@router.get("/username-available", response_model=UsernameCheck)
+def username_available(username: str = Query(..., max_length=40), db: Session = Depends(get_db)):
+    """
+    Public, so the sign-up form can check as you type. Says only whether a
+    name is free, never whose it is.
+    """
+    name = normalize_username(username)
+    problem = username_problem(name)
+    if problem:
+        return UsernameCheck(username=name, available=False, reason=problem)
+    if _username_taken(db, name):
+        return UsernameCheck(username=name, available=False, reason=USERNAME_TAKEN)
+    return UsernameCheck(username=name, available=True)

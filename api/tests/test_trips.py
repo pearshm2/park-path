@@ -21,6 +21,7 @@ from app.database import SessionLocal
 from app.main import app
 from app.models import Site, User
 from app.storage import MAX_PHOTO_BYTES, MAX_VIDEO_BYTES, SignedUpload, get_storage, user_prefix
+from tests.helpers import new_names
 
 client = TestClient(app)
 
@@ -68,7 +69,10 @@ def no_storage():
 class Person:
     def __init__(self):
         self.email = f"trip-{uuid.uuid4().hex[:10]}@example.com"
-        resp = client.post("/auth/signup", json={"email": self.email, "password": "correct-horse"})
+        resp = client.post(
+            "/auth/signup",
+            json={"email": self.email, "password": "correct-horse", **new_names()},
+        )
         self.headers = {"Authorization": f"Bearer {resp.json()['access_token']}"}
         self.id = client.get("/auth/me", headers=self.headers).json()["id"]
 

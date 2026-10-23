@@ -1,19 +1,24 @@
 /**
  * Settings. Deliberately functional rather than a mockup translation:
- * it is where the demo proves the session is real (the email comes from
- * GET /auth/me), lets you retake the quiz, and shows which API the app
+ * it is where the demo proves the session is real (your name, @username
+ * and email come from GET /auth/me, and Edit profile changes the first
+ * two), lets you retake the quiz, and shows which API the app
  * is talking to — which is the first thing to check when a device cannot
  * reach the backend.
  */
 
 import { useRouter } from 'expo-router';
+import { useState } from 'react';
 import { Linking, Pressable, ScrollView, StyleSheet, Switch, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { API_BASE_URL } from '../../api/client';
 import { useArrivals } from '../../arrivals/ArrivalsContext';
 import { useAuth } from '../../auth/AuthContext';
+import { displayName, handle } from '../../api/friends';
 import { BodyText, Button, Heading, useTabBarSpace } from '../../components';
+import { Avatar } from '../../components/Avatar';
+import { ProfileSheet } from '../../components/ProfileSheet';
 import { QUIZ_STEPS, type QuizAnswers } from '../../data/quizSpec';
 import { useQuiz } from '../../quiz/QuizContext';
 import { useSoundEffects } from '../../lib/sounds';
@@ -27,6 +32,7 @@ export default function SettingsScreen() {
   const { size: textSize, setSize: setTextSize } = useTextSize();
   const [soundsOn, setSoundsOn] = useSoundEffects();
   const arrivals = useArrivals();
+  const [editingProfile, setEditingProfile] = useState(false);
   const tabSpace = useTabBarSpace();
 
   const terrainSummary = answers.terrains.length
@@ -43,9 +49,28 @@ export default function SettingsScreen() {
       ]}
     >
       <Heading size={26}>Settings</Heading>
-      <BodyText size={12} color={colors.neutral[600]}>
-        {user ? user.email : 'Signed in'}
-      </BodyText>
+      {user ? (
+        <View style={[styles.card, styles.profile]}>
+          <Avatar person={user} size={48} />
+          <View style={styles.profileText}>
+            <BodyText size={16} weight="bold" numberOfLines={1}>
+              {displayName(user)}
+            </BodyText>
+            <BodyText size={13} weight="semibold" color={colors.accentRamp[700]} numberOfLines={1}>
+              {handle(user)}
+            </BodyText>
+            <BodyText size={12} color={colors.neutral[600]} numberOfLines={1}>
+              {user.email}
+            </BodyText>
+          </View>
+          <Button label="Edit" variant="secondary" onPress={() => setEditingProfile(true)} style={styles.edit} />
+        </View>
+      ) : (
+        <BodyText size={12} color={colors.neutral[600]}>
+          Signed in
+        </BodyText>
+      )}
+      {editingProfile && user ? <ProfileSheet user={user} onClose={() => setEditingProfile(false)} /> : null}
 
       <View style={styles.group}>
         <BodyText size={10} weight="semibold" color={colors.neutral[600]} style={styles.groupTitle}>
@@ -218,6 +243,19 @@ const styles = StyleSheet.create({
   content: {
     paddingHorizontal: space[4],
     gap: space[2],
+  },
+  profile: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space[3],
+    marginTop: space[3],
+  },
+  profileText: {
+    flex: 1,
+  },
+  edit: {
+    paddingVertical: 8,
+    paddingHorizontal: 14,
   },
   group: {
     marginTop: space[6],

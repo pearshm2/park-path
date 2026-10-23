@@ -49,7 +49,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { scheduleOnRN } from 'react-native-worklets';
 import Svg, { Path } from 'react-native-svg';
 
-import { displayName } from '../../api/friends';
+import { firstName } from '../../api/friends';
 import { fetchParkMap } from '../../api/parkMaps';
 import { listSites } from '../../api/parks';
 import { useFriends } from '../../friends/useFriends';
@@ -593,7 +593,7 @@ export function NewEntrySheet({
                           weight="semibold"
                           color={on ? colors.accentRamp[800] : colors.neutral[800]}
                         >
-                          {displayName(friend.user.email).split(' ')[0]}
+                          {firstName(friend.user)}
                         </BodyText>
                       </Pressable>
                     );

@@ -115,6 +115,28 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
+        /** Update Current User */
+        patch: operations["update_current_user_auth_me_patch"];
+        trace?: never;
+    };
+    "/auth/username-available": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Username Available
+         * @description Public, so the sign-up form can check as you type. Says only whether a
+         *     name is free, never whose it is.
+         */
+        get: operations["username_available_auth_username_available_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
         patch?: never;
         trace?: never;
     };
@@ -519,13 +541,15 @@ export interface components {
             /** Since */
             since: string | null;
         };
-        /** FriendRequestCreate */
+        /**
+         * FriendRequestCreate
+         * @description Who to ask: by email, or by username (typed, or from their QR code).
+         */
         FriendRequestCreate: {
-            /**
-             * Email
-             * Format: email
-             */
-            email: string;
+            /** Email */
+            email?: string | null;
+            /** Username */
+            username?: string | null;
         };
         /**
          * FriendshipOut
@@ -979,6 +1003,12 @@ export interface components {
             email: string;
             /** Password */
             password: string;
+            /** Username */
+            username: string;
+            /** First Name */
+            first_name: string;
+            /** Last Name */
+            last_name: string;
         };
         /** UserLogin */
         UserLogin: {
@@ -999,6 +1029,36 @@ export interface components {
              * Format: email
              */
             email: string;
+            /** Username */
+            username: string;
+            /** First Name */
+            first_name: string;
+            /** Last Name */
+            last_name: string;
+        };
+        /**
+         * UserUpdate
+         * @description PATCH /auth/me: any of these; the rest are left as they are.
+         */
+        UserUpdate: {
+            /** Username */
+            username?: string | null;
+            /** First Name */
+            first_name?: string | null;
+            /** Last Name */
+            last_name?: string | null;
+        };
+        /**
+         * UsernameCheck
+         * @description GET /auth/username-available: whether it's free, and if not, why.
+         */
+        UsernameCheck: {
+            /** Username */
+            username: string;
+            /** Available */
+            available: boolean;
+            /** Reason */
+            reason?: string | null;
         };
         /** ValidationError */
         ValidationError: {
@@ -1178,6 +1238,70 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["UserOut"];
+                };
+            };
+        };
+    };
+    update_current_user_auth_me_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UserUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    username_available_auth_username_available_get: {
+        parameters: {
+            query: {
+                username: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UsernameCheck"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

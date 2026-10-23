@@ -39,6 +39,7 @@ import {
 import { AppState } from 'react-native';
 
 import { ApiError } from '../api/client';
+import type { Person } from '../api/friends';
 import {
   createTrip,
   deleteTrip,
@@ -63,7 +64,7 @@ export type TripEntry = {
   media: TripMedia[];
   /** Friends who were there: their ids and, so the entry reads the same
    *  if they're later removed, their emails as they were. */
-  with: { id: number; email: string }[];
+  with: Person[];
   /** How it was, 1 to 5 stars; null if not rated. */
   rating: number | null;
   /** Trails or spots they loved, shown on the entry and in friends' feeds. */
