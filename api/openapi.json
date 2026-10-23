@@ -1810,7 +1810,7 @@
           "max_bytes"
         ],
         "title": "PhotoUploadOut",
-        "description": "A signed form for one photo upload. The app sends a multipart POST to\n`upload_url`: every entry of `fields` first, in order, then the file as\nthe last part named `file`. Then it passes `key` in `photo_keys` when it\nsaves the trip. The form stops working after `expires_in` seconds."
+        "description": "A signed form for one photo or video upload. The app sends a multipart\nPOST to `upload_url`: every entry of `fields` first, in order, then the\nfile as the last part named `file`. Then it passes `key` in `photos`\nwhen it saves the trip. The form stops working after `expires_in`\nseconds."
       },
       "PhotoUploadRequest": {
         "properties": {
@@ -1820,13 +1820,15 @@
               "image/jpeg",
               "image/png",
               "image/webp",
-              "image/heic"
+              "image/heic",
+              "video/mp4",
+              "video/quicktime"
             ],
             "title": "Content Type"
           },
           "size_bytes": {
             "type": "integer",
-            "maximum": 10485760.0,
+            "maximum": 157286400.0,
             "exclusiveMinimum": 0.0,
             "title": "Size Bytes"
           }
@@ -1837,7 +1839,7 @@
           "size_bytes"
         ],
         "title": "PhotoUploadRequest",
-        "description": "Ask for permission to upload one photo."
+        "description": "Ask for permission to upload one photo or video."
       },
       "PlaceOut": {
         "properties": {
@@ -2437,6 +2439,22 @@
             ],
             "title": "Rating"
           },
+          "trails": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string",
+                  "maxLength": 200
+                },
+                "type": "array",
+                "maxItems": 20
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trails"
+          },
           "stamp": {
             "anyOf": [
               {
@@ -2452,6 +2470,21 @@
           "visibility": {
             "$ref": "#/components/schemas/Visibility",
             "default": "private"
+          },
+          "photos": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/TripPhotoIn"
+                },
+                "type": "array",
+                "maxItems": 8
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Photos"
           },
           "photo_keys": {
             "items": {
@@ -2518,6 +2551,13 @@
             ],
             "title": "Rating"
           },
+          "trails": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Trails"
+          },
           "stamp": {
             "anyOf": [
               {
@@ -2567,6 +2607,7 @@
           "title",
           "notes",
           "rating",
+          "trails",
           "stamp",
           "visibility",
           "photos",
@@ -2575,6 +2616,39 @@
           "updated_at"
         ],
         "title": "TripOut"
+      },
+      "TripPhotoIn": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "caption": {
+            "type": "string",
+            "maxLength": 500,
+            "title": "Caption",
+            "default": ""
+          },
+          "duration_ms": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 300000.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration Ms"
+          }
+        },
+        "type": "object",
+        "required": [
+          "key"
+        ],
+        "title": "TripPhotoIn",
+        "description": "A photo or video on a trip: its key from the upload, and its caption."
       },
       "TripPhotoOut": {
         "properties": {
@@ -2592,12 +2666,38 @@
               }
             ],
             "title": "Url"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "photo",
+              "video"
+            ],
+            "title": "Kind"
+          },
+          "caption": {
+            "type": "string",
+            "title": "Caption"
+          },
+          "duration_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration Ms"
           }
         },
         "type": "object",
         "required": [
           "key",
-          "url"
+          "url",
+          "kind",
+          "caption",
+          "duration_ms"
         ],
         "title": "TripPhotoOut"
       },
@@ -2652,6 +2752,22 @@
             ],
             "title": "Rating"
           },
+          "trails": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string",
+                  "maxLength": 200
+                },
+                "type": "array",
+                "maxItems": 20
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trails"
+          },
           "stamp": {
             "anyOf": [
               {
@@ -2673,6 +2789,21 @@
                 "type": "null"
               }
             ]
+          },
+          "photos": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/TripPhotoIn"
+                },
+                "type": "array",
+                "maxItems": 8
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Photos"
           },
           "photo_keys": {
             "anyOf": [
@@ -2707,7 +2838,7 @@
         },
         "type": "object",
         "title": "TripUpdate",
-        "description": "Only the fields sent change. `rating` and `stamp` can be set to null to clear them."
+        "description": "Only the fields sent change. `rating` can be set to null to clear it.\n\n`trails` replaces the list. `stamp`, the older one-trail form, sets the\nfirst trail (keeping the rest), or removes it when null; it's ignored\nwhen `trails` is sent. Likewise `photos` replaces the photos and their\ncaptions, and `photo_keys` (keys only) is ignored when it's sent."
       },
       "UserCreate": {
         "properties": {

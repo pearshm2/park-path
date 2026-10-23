@@ -654,10 +654,11 @@ export interface components {
         };
         /**
          * PhotoUploadOut
-         * @description A signed form for one photo upload. The app sends a multipart POST to
-         *     `upload_url`: every entry of `fields` first, in order, then the file as
-         *     the last part named `file`. Then it passes `key` in `photo_keys` when it
-         *     saves the trip. The form stops working after `expires_in` seconds.
+         * @description A signed form for one photo or video upload. The app sends a multipart
+         *     POST to `upload_url`: every entry of `fields` first, in order, then the
+         *     file as the last part named `file`. Then it passes `key` in `photos`
+         *     when it saves the trip. The form stops working after `expires_in`
+         *     seconds.
          */
         PhotoUploadOut: {
             /** Key */
@@ -675,14 +676,14 @@ export interface components {
         };
         /**
          * PhotoUploadRequest
-         * @description Ask for permission to upload one photo.
+         * @description Ask for permission to upload one photo or video.
          */
         PhotoUploadRequest: {
             /**
              * Content Type
              * @enum {string}
              */
-            content_type: "image/jpeg" | "image/png" | "image/webp" | "image/heic";
+            content_type: "image/jpeg" | "image/png" | "image/webp" | "image/heic" | "video/mp4" | "video/quicktime";
             /** Size Bytes */
             size_bytes: number;
         };
@@ -855,10 +856,14 @@ export interface components {
             notes: string;
             /** Rating */
             rating?: number | null;
+            /** Trails */
+            trails?: string[] | null;
             /** Stamp */
             stamp?: string | null;
             /** @default private */
             visibility: components["schemas"]["Visibility"];
+            /** Photos */
+            photos?: components["schemas"]["TripPhotoIn"][] | null;
             /** Photo Keys */
             photo_keys?: string[];
             /** Companion Ids */
@@ -884,6 +889,8 @@ export interface components {
             notes: string;
             /** Rating */
             rating: number | null;
+            /** Trails */
+            trails: string[];
             /** Stamp */
             stamp: string | null;
             visibility: components["schemas"]["Visibility"];
@@ -902,16 +909,45 @@ export interface components {
              */
             updated_at: string;
         };
+        /**
+         * TripPhotoIn
+         * @description A photo or video on a trip: its key from the upload, and its caption.
+         */
+        TripPhotoIn: {
+            /** Key */
+            key: string;
+            /**
+             * Caption
+             * @default
+             */
+            caption: string;
+            /** Duration Ms */
+            duration_ms?: number | null;
+        };
         /** TripPhotoOut */
         TripPhotoOut: {
             /** Key */
             key: string;
             /** Url */
             url: string | null;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "photo" | "video";
+            /** Caption */
+            caption: string;
+            /** Duration Ms */
+            duration_ms: number | null;
         };
         /**
          * TripUpdate
-         * @description Only the fields sent change. `rating` and `stamp` can be set to null to clear them.
+         * @description Only the fields sent change. `rating` can be set to null to clear it.
+         *
+         *     `trails` replaces the list. `stamp`, the older one-trail form, sets the
+         *     first trail (keeping the rest), or removes it when null; it's ignored
+         *     when `trails` is sent. Likewise `photos` replaces the photos and their
+         *     captions, and `photo_keys` (keys only) is ignored when it's sent.
          */
         TripUpdate: {
             /** Visited On */
@@ -922,9 +958,13 @@ export interface components {
             notes?: string | null;
             /** Rating */
             rating?: number | null;
+            /** Trails */
+            trails?: string[] | null;
             /** Stamp */
             stamp?: string | null;
             visibility?: components["schemas"]["Visibility"] | null;
+            /** Photos */
+            photos?: components["schemas"]["TripPhotoIn"][] | null;
             /** Photo Keys */
             photo_keys?: string[] | null;
             /** Companion Ids */

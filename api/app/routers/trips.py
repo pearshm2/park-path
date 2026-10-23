@@ -4,7 +4,7 @@ Trip journal routes (all require a signed-in user):
   POST   /trips                    log a visit
   GET    /trips                    my entries, newest visit first (?park_code=)
   GET    /trips/feed               friends' shared entries, newest posted first
-  POST   /trips/photos/upload-url  signed form to upload one photo to S3
+  POST   /trips/photos/upload-url  signed form to upload one photo or video to S3
   GET    /trips/{id}               one entry (mine, or a friend's if shared)
   PATCH  /trips/{id}               change my entry (only the fields sent)
   DELETE /trips/{id}               delete my entry and its photos
@@ -17,9 +17,14 @@ Not-found vs forbidden: an entry you may not see is 404, never 403, so ids
 don't reveal what exists. A friend who can read an entry but isn't its owner
 gets 403 if they try to change it.
 
-Photos are uploaded straight to S3 with a signed form (app/storage.py);
-entries only hold the storage keys, and come back with short-lived signed
-URLs. The photo endpoints answer 503 until S3 is configured.
+Photos and videos are uploaded straight to S3 with a signed form
+(app/storage.py); entries hold their storage keys and captions, and come
+back with short-lived signed URLs. The photo endpoints answer 503 until S3
+is configured.
+
+Trails and photos each have an older form kept for older clients: `stamp`
+(one trail) and `photo_keys` (keys, no captions). The newer `trails` and
+`photos` win when both are sent.
 """
 
 import logging
@@ -36,11 +41,19 @@ from app.schemas import (
     PhotoUploadRequest,
     TripCreate,
     TripOut,
+    TripPhotoIn,
     TripPhotoOut,
     TripUpdate,
     UserOut,
 )
-from app.storage import MAX_PHOTO_BYTES, Storage, get_storage, new_photo_key, user_prefix
+from app.storage import (
+    Storage,
+    get_storage,
+    max_bytes_for,
+    media_kind,
+    new_photo_key,
+    user_prefix,
+)
 from app.visibility import Visibility, can_view, friend_ids
 
 logger = logging.getLogger(__name__)
@@ -61,11 +74,16 @@ def _out(entry: TripEntry, storage: Storage | None) -> TripOut:
         title=entry.title,
         notes=entry.notes,
         rating=entry.rating,
-        stamp=entry.stamp,
+        trails=list(entry.trails),
+        stamp=entry.trails[0] if entry.trails else None,
         visibility=Visibility(entry.visibility),
         photos=[
             TripPhotoOut(
-                key=p.storage_key, url=storage.signed_url(p.storage_key) if storage else None
+                key=p.storage_key,
+                url=storage.signed_url(p.storage_key) if storage else None,
+                kind=media_kind(p.storage_key),
+                caption=p.caption,
+                duration_ms=p.duration_ms,
             )
             for p in entry.photos
         ],
@@ -135,6 +153,36 @@ def _check_photo_keys(
         raise _bad_request("A photo is already on another trip")
 
 
+def _clean_trails(trails: list[str]) -> list[str]:
+    """Trimmed, blanks dropped, each once (first spelling kept)."""
+    seen: set[str] = set()
+    out: list[str] = []
+    for trail in trails:
+        name = trail.strip()
+        if name and name.lower() not in seen:
+            seen.add(name.lower())
+            out.append(name)
+    return out
+
+
+def _with_stamp(trails: list[str], stamp: str | None) -> list[str]:
+    """The older one-trail form: `stamp` becomes the first trail, or None removes it."""
+    rest = trails[1:]
+    name = (stamp or "").strip()
+    return _clean_trails([name, *rest]) if name else rest
+
+
+def _photos_in(
+    photos: list[TripPhotoIn] | None, keys: list[str] | None
+) -> list[TripPhotoIn] | None:
+    """The photos sent, in either form; None when neither was."""
+    if photos is not None:
+        return photos
+    if keys is not None:
+        return [TripPhotoIn(key=k) for k in keys]
+    return None
+
+
 def _delete_objects(storage: Storage | None, keys: list[str]) -> None:
     """Best effort: a failure leaves an orphan object, not a broken request."""
     if storage is None:
@@ -158,7 +206,13 @@ def create_trip(
 ):
     site = _site(db, payload.park_code)
     companions = _check_companions(db, me, payload.companion_ids)
-    _check_photo_keys(db, me, storage, payload.photo_keys, keep=set())
+    photos = _photos_in(payload.photos, payload.photo_keys) or []
+    _check_photo_keys(db, me, storage, [p.key for p in photos], keep=set())
+    trails = (
+        _clean_trails(payload.trails)
+        if payload.trails is not None
+        else _with_stamp([], payload.stamp)
+    )
     entry = TripEntry(
         user_id=me.id,
         site_id=site.id,
@@ -166,9 +220,12 @@ def create_trip(
         title=payload.title.strip(),
         notes=payload.notes,
         rating=payload.rating,
-        stamp=(payload.stamp or "").strip() or None,
+        trails=trails,
         visibility=payload.visibility.value,
-        photos=[TripPhoto(storage_key=k, position=i) for i, k in enumerate(payload.photo_keys)],
+        photos=[
+            TripPhoto(storage_key=p.key, position=i, caption=p.caption, duration_ms=p.duration_ms)
+            for i, p in enumerate(photos)
+        ],
         companions=[TripCompanion(user_id=uid) for uid in companions],
     )
     db.add(entry)
@@ -227,7 +284,7 @@ def photo_upload_url(
         upload_url=signed.url,
         fields=signed.fields,
         expires_in=signed.expires_in,
-        max_bytes=MAX_PHOTO_BYTES,
+        max_bytes=max_bytes_for(payload.content_type),
     )
 
 
@@ -265,8 +322,12 @@ def update_trip(
         entry.notes = payload.notes
     if "rating" in sent:
         entry.rating = payload.rating
-    if "stamp" in sent:
-        entry.stamp = (payload.stamp or "").strip() or None
+    if "trails" in sent:
+        if payload.trails is None:
+            raise _bad_request("trails can't be null")
+        entry.trails = _clean_trails(payload.trails)
+    elif "stamp" in sent:
+        entry.trails = _with_stamp(list(entry.trails), payload.stamp)
     if "visibility" in sent:
         entry.visibility = payload.visibility.value
 
@@ -276,19 +337,27 @@ def update_trip(
             raise _bad_request("companion_ids can't be null")
         ids = _check_companions(db, me, payload.companion_ids)
         entry.companions = [TripCompanion(user_id=uid) for uid in ids]
-    if "photo_keys" in sent:
-        if payload.photo_keys is None:
-            raise _bad_request("photo_keys can't be null")
+    if "photos" in sent or "photo_keys" in sent:
+        if ("photos" in sent and payload.photos is None) or (
+            "photos" not in sent and payload.photo_keys is None
+        ):
+            raise _bad_request("photos can't be null")
         current = {p.storage_key: p for p in entry.photos}
-        _check_photo_keys(db, me, storage, payload.photo_keys, keep=set(current))
-        removed = [k for k in current if k not in payload.photo_keys]
+        # Keys only (the older form) keep the captions the photos have.
+        wanted = _photos_in(payload.photos, payload.photo_keys) or []
+        keys = [p.key for p in wanted]
+        _check_photo_keys(db, me, storage, keys, keep=set(current))
+        removed = [k for k in current if k not in keys]
         # Re-use rows for kept photos so they aren't deleted and re-inserted.
-        entry.photos = [
-            current.get(k) or TripPhoto(storage_key=k, position=i)
-            for i, k in enumerate(payload.photo_keys)
-        ]
-        for i, photo in enumerate(entry.photos):
-            photo.position = i
+        rows = []
+        for i, p in enumerate(wanted):
+            row = current.get(p.key) or TripPhoto(storage_key=p.key)
+            row.position = i
+            if "photos" in sent:
+                row.caption = p.caption
+                row.duration_ms = p.duration_ms
+            rows.append(row)
+        entry.photos = rows
     db.commit()
     db.refresh(entry)
     _delete_objects(storage, removed)

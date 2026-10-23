@@ -326,8 +326,10 @@ class TripEntry(Base):
     title: Mapped[str] = mapped_column(String(200), nullable=False, default="", server_default="")
     notes: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
     rating: Mapped[int | None] = mapped_column(SmallInteger)  # 1 to 5 stars
-    # A trail or spot they loved, shown on the entry and in friends' feeds.
-    stamp: Mapped[str | None] = mapped_column(String(200))
+    # Trails or spots they loved, shown on the entry and in friends' feeds.
+    trails: Mapped[list[str]] = mapped_column(
+        ARRAY(String(200)), nullable=False, default=list, server_default="{}"
+    )
     visibility: Mapped[str] = mapped_column(
         String(10), nullable=False, default="private", server_default="private"
     )
@@ -355,9 +357,10 @@ class TripEntry(Base):
 
 class TripPhoto(Base):
     """
-    A photo on an entry. The bytes live in object storage (S3), uploaded
-    straight from the phone with a signed URL (app/storage.py); this row
-    only remembers the storage key. `position` orders the entry's photos.
+    A photo or video on an entry. The bytes live in object storage (S3),
+    uploaded straight from the phone with a signed URL (app/storage.py);
+    this row remembers the storage key (whose extension says which it is),
+    its caption, and a video's length. `position` orders the entry's photos.
     """
 
     __tablename__ = "trip_photos"
@@ -368,6 +371,10 @@ class TripPhoto(Base):
     )
     storage_key: Mapped[str] = mapped_column(String(300), unique=True, nullable=False)
     position: Mapped[int] = mapped_column(Integer, nullable=False)
+    # Words shown over it when the trip is relived; may be empty.
+    caption: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
+    # A video's length, as the phone measured it; None for photos.
+    duration_ms: Mapped[int | None] = mapped_column(Integer)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(UTC), server_default=func.now()
     )
