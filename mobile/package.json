@@ -63,7 +63,8 @@
     "web": "expo start --web",
     "lint": "expo lint",
     "typecheck": "tsc --noEmit",
-    "api:types": "npx --yes openapi-typescript@7.13.0 ../api/openapi.json -o src/api/schema.ts"
+    "api:types": "npx --yes openapi-typescript@7.13.0 ../api/openapi.json -o src/api/schema.ts",
+    "eas-build-pre-install": "npm install --package-lock-only --no-audit --no-fund"
   },
   "private": true
 }
