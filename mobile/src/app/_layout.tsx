@@ -24,9 +24,13 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { AuthProvider, useAuth } from '../auth/AuthContext';
+import { UsernamePrompt } from '../auth/UsernamePrompt';
 import { QuizProvider, useQuiz } from '../quiz/QuizContext';
 import { ArrivalBanner } from '../arrivals/ArrivalBanner';
 import { ArrivalsProvider } from '../arrivals/ArrivalsContext';
+import { CelebrationBanner } from '../celebrations/CelebrationBanner';
+import { preloadSounds } from '../lib/sounds';
+import { CelebrationsProvider } from '../celebrations/CelebrationsContext';
 import { TripsProvider } from '../trips/TripsContext';
 import { colors, TextSizeProvider, useAppFonts } from '../theme';
 
@@ -49,6 +53,9 @@ const queryClient = new QueryClient({
 export default function RootLayout() {
   const fontsReady = useAppFonts();
 
+  // Load the sound effects now, so none is late the first time it plays.
+  useEffect(() => preloadSounds(), []);
+
   // Every screen is laid out for a tall phone, so the app stays portrait.
   // The full-screen map unlocks rotation while it is open (FullMapView).
   useEffect(() => {
@@ -64,14 +71,20 @@ export default function RootLayout() {
           <AuthProvider>
             <QuizProvider>
               <TripsProvider>
-                <ArrivalsProvider>
-                  <TextSizeProvider>
-                    <StatusBar style="dark" />
-                    <SessionGate />
-                    {/* Over every screen: the nudge when you arrive at a park. */}
-                    <ArrivalBanner />
-                  </TextSizeProvider>
-                </ArrivalsProvider>
+                <CelebrationsProvider>
+                  <ArrivalsProvider>
+                    <TextSizeProvider>
+                      <StatusBar style="dark" />
+                      <SessionGate />
+                      {/* Over every screen: the nudge when you arrive at a park,
+                          and notifications of what a trip earned. */}
+                      <ArrivalBanner />
+                      <CelebrationBanner />
+                      {/* Once, after Google sign-in makes a new account. */}
+                      <UsernamePrompt />
+                    </TextSizeProvider>
+                  </ArrivalsProvider>
+                </CelebrationsProvider>
               </TripsProvider>
             </QuizProvider>
           </AuthProvider>

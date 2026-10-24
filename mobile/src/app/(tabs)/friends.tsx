@@ -4,31 +4,45 @@
  * friends' feed.
  *
  * Real data from the friendships backend (api/app/routers/friends.py):
- * adding a friend by the email they signed up with, accepting or declining
- * requests, cancelling your own, and removing a friend. Profiles are only
- * an email for now, so names and initials are made from it.
+ * adding a friend by their username or email, or by scanning their QR
+ * code (the QR button by Invite), accepting or declining requests,
+ * cancelling your own, and removing a friend. People show as their name
+ * and @username; emails stay private.
  *
- * The feed of friends' trips, with reactions and comments, needs the trips
- * backend; until then it says so rather than showing made-up posts.
+ * Below them, the feed: the trips your friends shared with friends,
+ * newest first (GET /trips/feed). Pull down to refresh. Tapping a friend,
+ * in the row or on a post, opens their passport: stamps, regions and
+ * achievements (components/friends/FriendProfile.tsx).
  */
 
-import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { useFocusEffect } from 'expo-router';
+import { useCallback, useMemo, useState } from 'react';
 import {
   Alert,
   KeyboardAvoidingView,
   Modal,
   Platform,
   Pressable,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Svg, { Path } from 'react-native-svg';
 
-import { displayName, type Friend } from '../../api/friends';
+import { displayName, handle, targetFrom, type Friend, type Person } from '../../api/friends';
+import { listSites } from '../../api/parks';
+import { fetchFeed } from '../../api/trips';
 import { useAuth } from '../../auth/AuthContext';
 import { BodyText, Button, Heading, TextField, useTabBarSpace } from '../../components';
 import { Avatar } from '../../components/Avatar';
+import type { TripOut } from '../../api/trips';
+import { CommentsSheet } from '../../components/friends/CommentsSheet';
+import { FeedCard } from '../../components/friends/FeedCard';
+import { FriendCodeSheet } from '../../components/friends/FriendCode';
+import { FriendProfile } from '../../components/friends/FriendProfile';
 import { useFriends } from '../../friends/useFriends';
 import { colors, radius, shadow, space } from '../../theme';
 
@@ -41,22 +55,58 @@ function monthYear(iso: string | null): string | null {
 export default function FriendsScreen() {
   const insets = useSafeAreaInsets();
   const tabSpace = useTabBarSpace();
-  const { user } = useAuth();
-  const { friends, incoming, outgoing, loading, error, accept, dismiss, remove, send } = useFriends();
+  const { user, token, userId } = useAuth();
+  const { friends, incoming, outgoing, loading, error, accept, dismiss, remove, send, refresh } = useFriends();
   const [inviteOpen, setInviteOpen] = useState(false);
+  const [codeOpen, setCodeOpen] = useState(false);
+  // Whose passport is open.
+  const [profile, setProfile] = useState<Person | null>(null);
+  // Whose trip's comments are open.
+  const [commentsOn, setCommentsOn] = useState<TripOut | null>(null);
 
-  function confirmRemove(friend: Friend) {
-    const name = displayName(friend.user.email);
-    Alert.alert(name, friend.user.email, [
-      { text: 'Cancel', style: 'cancel' },
+  const feed = useQuery({
+    queryKey: ['feed', userId],
+    queryFn: () => fetchFeed(token!),
+    enabled: !!token,
+  });
+  const { data: sites = [] } = useQuery({
+    queryKey: ['sites', 'all'],
+    queryFn: () => listSites('all'),
+  });
+  const siteById = useMemo(() => new Map(sites.map((s) => [s.id, s])), [sites]);
+
+  // Fresh posts and requests each time the tab is opened.
+  const { refetch } = feed;
+  useFocusEffect(
+    useCallback(() => {
+      void refetch();
+      void refresh();
+      // Only on focus.
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [refetch]),
+  );
+  const [pulling, setPulling] = useState(false);
+  async function pullToRefresh() {
+    setPulling(true);
+    await Promise.all([refetch(), refresh()]);
+    setPulling(false);
+  }
+
+  function friendSince(person: Person): string | null {
+    return monthYear(friends.find((f) => f.user.id === person.id)?.since ?? null);
+  }
+
+  function confirmRemove(friend: Friend, removed: () => void) {
+    const name = displayName(friend.user);
+    Alert.alert(`Remove ${name}?`, "You'll stop seeing each other's trips.", [
+      { text: 'Keep', style: 'cancel' },
       {
-        text: 'Remove friend',
+        text: 'Remove',
         style: 'destructive',
-        onPress: () =>
-          Alert.alert(`Remove ${name}?`, "You'll stop seeing each other's trips.", [
-            { text: 'Keep', style: 'cancel' },
-            { text: 'Remove', style: 'destructive', onPress: () => remove.mutate(friend.user.id) },
-          ]),
+        onPress: () => {
+          remove.mutate(friend.user.id);
+          removed();
+        },
       },
     ]);
   }
@@ -66,6 +116,9 @@ export default function FriendsScreen() {
   return (
     <View style={styles.screen}>
       <ScrollView
+        refreshControl={
+          <RefreshControl refreshing={pulling} onRefresh={pullToRefresh} tintColor={colors.accent} colors={[colors.accent]} />
+        }
         contentContainerStyle={[
           styles.content,
           // Clear of the floating tab bar, which covers the bottom of the screen.
@@ -85,6 +138,17 @@ export default function FriendsScreen() {
             onPress={() => setInviteOpen(true)}
             style={styles.invite}
           />
+          {user?.username ? (
+            <Pressable
+              onPress={() => setCodeOpen(true)}
+              hitSlop={6}
+              accessibilityRole="button"
+              accessibilityLabel="Friend code: show yours or scan a friend's"
+              style={({ pressed }) => [styles.qrButton, pressed && styles.pressed]}
+            >
+              <QrIcon />
+            </Pressable>
+          ) : null}
           {user ? <Avatar person={user} size={40} /> : null}
         </View>
 
@@ -99,14 +163,14 @@ export default function FriendsScreen() {
             {friends.map((friend) => (
               <Pressable
                 key={friend.friendshipId}
-                onPress={() => confirmRemove(friend)}
+                onPress={() => setProfile(friend.user)}
                 accessibilityRole="button"
-                accessibilityLabel={`${displayName(friend.user.email)}, friends since ${monthYear(friend.since) ?? 'recently'}`}
+                accessibilityLabel={`${displayName(friend.user)}, friends since ${monthYear(friend.since) ?? 'recently'}`}
                 style={({ pressed }) => [styles.friend, pressed && styles.pressed]}
               >
                 <Avatar person={friend.user} size={54} ring />
                 <BodyText size={11.5} weight="semibold" numberOfLines={1} style={styles.friendName}>
-                  {displayName(friend.user.email)}
+                  {displayName(friend.user)}
                 </BodyText>
                 <BodyText size={10} weight="medium" color={colors.neutral[600]} numberOfLines={1}>
                   {monthYear(friend.since) ? `since ${monthYear(friend.since)}` : 'friend'}
@@ -120,8 +184,8 @@ export default function FriendsScreen() {
               No friends yet
             </BodyText>
             <BodyText size={13} lineHeightRatio={1.5} color={colors.neutral[700]}>
-              Tap Invite and add someone by the email they signed up to ParkPath with. Once they
-              accept, you can see each other&apos;s trips.
+              Tap Invite to add someone by their username, or the QR button to scan their friend
+              code. Once they accept, you can see each other&apos;s trips.
             </BodyText>
           </View>
         ) : null}
@@ -142,10 +206,10 @@ export default function FriendsScreen() {
                 <Avatar person={req.requester} size={36} />
                 <View style={styles.requestText}>
                   <BodyText size={13.5} weight="semibold" numberOfLines={1}>
-                    {`${displayName(req.requester.email)} wants to be friends`}
+                    {displayName(req.requester)}
                   </BodyText>
                   <BodyText size={11.5} color={colors.neutral[600]} numberOfLines={1}>
-                    {req.requester.email}
+                    {`${handle(req.requester)} · wants to be friends`}
                   </BodyText>
                 </View>
                 <Button
@@ -167,10 +231,10 @@ export default function FriendsScreen() {
                 <Avatar person={req.addressee} size={36} />
                 <View style={styles.requestText}>
                   <BodyText size={13.5} weight="semibold" numberOfLines={1}>
-                    {`Waiting for ${displayName(req.addressee.email)}`}
+                    {`Waiting for ${displayName(req.addressee)}`}
                   </BodyText>
                   <BodyText size={11.5} color={colors.neutral[600]} numberOfLines={1}>
-                    {`Sent ${monthYear(req.createdAt) ?? ''} · ${req.addressee.email}`}
+                    {`Sent ${monthYear(req.createdAt) ?? ''} · ${handle(req.addressee)}`}
                   </BodyText>
                 </View>
                 <Button
@@ -184,29 +248,72 @@ export default function FriendsScreen() {
           </View>
         ) : null}
 
-        {/* The feed, in the prototype's card style, until there are trips to show. */}
+        {/* The feed: friends' shared trips, newest first. */}
         <View style={styles.section}>
           <BodyText size={10} weight="semibold" color={colors.neutral[600]} style={styles.label}>
             FRIENDS&apos; TRIPS
           </BodyText>
-          <View style={styles.card}>
-            <BodyText size={14} weight="semibold">
-              Your friends&apos; trips will show up here
-            </BodyText>
-            <BodyText size={13} lineHeightRatio={1.5} color={colors.neutral[700]}>
-              When friends log a trip, you&apos;ll see their photos, notes and location stamps
-              here, and can react and comment. This arrives with the trips backend.
-            </BodyText>
-          </View>
+          {feed.data && feed.data.length > 0 ? (
+            <View style={styles.feed}>
+              {feed.data.map((trip) => (
+                <FeedCard
+                  key={trip.id}
+                  trip={trip}
+                  site={siteById.get(trip.park_code)}
+                  onOwner={() => setProfile(trip.owner)}
+                  onComments={() => setCommentsOn(trip)}
+                />
+              ))}
+            </View>
+          ) : feed.isPending ? null : (
+            <View style={styles.card}>
+              <BodyText size={14} weight="semibold">
+                {feed.isError ? "Couldn't load your friends' trips" : 'No trips from friends yet'}
+              </BodyText>
+              <BodyText size={13} lineHeightRatio={1.5} color={colors.neutral[700]}>
+                {feed.isError
+                  ? 'Check your connection, then pull down to try again.'
+                  : 'When a friend logs a trip and shares it with friends, it shows up here.'}
+              </BodyText>
+            </View>
+          )}
         </View>
       </ScrollView>
 
+      {commentsOn ? <CommentsSheet trip={commentsOn} onClose={() => setCommentsOn(null)} /> : null}
+      {profile ? (
+        <FriendProfile
+          person={profile}
+          since={friendSince(profile)}
+          sites={siteById}
+          onRemove={() => {
+            const friend = friends.find((f) => f.user.id === profile.id);
+            if (friend) confirmRemove(friend, () => setProfile(null));
+          }}
+          onClose={() => setProfile(null)}
+        />
+      ) : null}
+
       <InviteSheet visible={inviteOpen} onClose={() => setInviteOpen(false)} send={send} />
+      {user ? (
+        <FriendCodeSheet visible={codeOpen} me={user} send={send} onClose={() => setCodeOpen(false)} />
+      ) : null}
     </View>
   );
 }
 
-/** Add a friend by email: a sheet from the bottom with one field. */
+/** A QR code, for the friend-code button. */
+function QrIcon() {
+  const stroke = colors.accentRamp[700];
+  return (
+    <Svg width={20} height={20} viewBox="0 0 24 24">
+      <Path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4z" fill="none" stroke={stroke} strokeWidth={2} strokeLinejoin="round" />
+      <Path d="M14 14h2.5v2.5H14zM17.5 17.5H20V20h-2.5zM14 18.5h1.5M18.5 14H20" fill="none" stroke={stroke} strokeWidth={2} />
+    </Svg>
+  );
+}
+
+/** Add a friend by username or email: a sheet from the bottom with one field. */
 function InviteSheet({
   visible,
   onClose,
@@ -217,29 +324,29 @@ function InviteSheet({
   send: ReturnType<typeof useFriends>['send'];
 }) {
   const insets = useSafeAreaInsets();
-  const [email, setEmail] = useState('');
+  const [who, setWho] = useState('');
   const [result, setResult] = useState<{ ok: boolean; text: string } | null>(null);
 
   function close() {
-    setEmail('');
+    setWho('');
     setResult(null);
     send.reset();
     onClose();
   }
 
   function submit() {
-    if (!email.trim()) return;
+    if (!who.trim()) return;
     setResult(null);
-    send.mutate(email, {
+    send.mutate(targetFrom(who), {
       onSuccess: (req) => {
-        const name = displayName(req.addressee.email);
+        const name = displayName(req.addressee);
         setResult(
           req.status === 'accepted'
             ? // They had already asked you, so that made you friends.
               { ok: true, text: `You and ${name} are now friends.` }
             : { ok: true, text: `Request sent. ${name} will see it in their Friends.` },
         );
-        setEmail('');
+        setWho('');
       },
       onError: (err) =>
         setResult({
@@ -247,7 +354,9 @@ function InviteSheet({
           text:
             err.message === 'No user with that email'
               ? "There's no ParkPath account with that email yet."
-              : err.message,
+              : err.message === 'No user with that username'
+                ? "There's no ParkPath account with that username."
+                : err.message,
         }),
     });
   }
@@ -262,22 +371,22 @@ function InviteSheet({
         <View style={[styles.sheet, { marginBottom: insets.bottom + 14 }]}>
           <Heading size={19}>Invite a friend</Heading>
           <BodyText size={12.5} lineHeightRatio={1.45} color={colors.neutral[700]}>
-            Add someone by the email they use for ParkPath. They&apos;ll see your request in their
-            Friends.
+            Add someone by their ParkPath username (or the email they signed up with). They&apos;ll
+            see your request in their Friends.
           </BodyText>
           <TextField
-            label="Their email"
-            value={email}
+            label="Their username or email"
+            value={who}
             onChangeText={(text) => {
-              setEmail(text);
+              setWho(text);
               setResult(null);
             }}
             onSubmitEditing={submit}
-            placeholder="name@example.com"
+            placeholder="@jane.doe"
             keyboardType="email-address"
             autoCapitalize="none"
             autoCorrect={false}
-            autoComplete="email"
+            autoComplete="off"
             returnKeyType="send"
           />
           {result ? (
@@ -296,7 +405,7 @@ function InviteSheet({
               block
               onPress={submit}
               loading={send.isPending}
-              disabled={!email.trim()}
+              disabled={!who.trim()}
               style={styles.sheetSend}
             />
           </View>
@@ -325,6 +434,16 @@ const styles = StyleSheet.create({
   subtitle: {
     marginTop: 2,
   },
+  qrButton: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: radius.pill,
+    borderWidth: 1.5,
+    borderColor: colors.accentRamp[400],
+    backgroundColor: colors.neutral[100],
+  },
   invite: {
     paddingVertical: 10,
     paddingHorizontal: 14,
@@ -349,6 +468,10 @@ const styles = StyleSheet.create({
   },
   pressed: {
     opacity: 0.7,
+  },
+  feed: {
+    gap: space[4],
+    marginTop: space[1],
   },
   section: {
     marginTop: space[6],

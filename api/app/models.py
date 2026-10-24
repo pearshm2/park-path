@@ -27,9 +27,10 @@ from sqlalchemy import (
     UniqueConstraint,
     false,
     func,
+    select,
 )
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, column_property, mapped_column, relationship
 
 from app.database import Base
 
@@ -51,10 +52,31 @@ class User(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     email: Mapped[str] = mapped_column(String(255), unique=True, index=True, nullable=False)
+    # The @handle friends see instead of the email; always lowercase (app/usernames.py).
+    username: Mapped[str] = mapped_column(String(20), unique=True, index=True, nullable=False)
+    first_name: Mapped[str] = mapped_column(String(50), nullable=False)
+    last_name: Mapped[str] = mapped_column(String(50), nullable=False, server_default="")
+    # A profile picture, small enough to keep in the database (the phone
+    # shrinks it first). Deferred, so it's only loaded when it's served.
+    avatar: Mapped[bytes | None] = mapped_column(LargeBinary, deferred=True)
+    avatar_type: Mapped[str | None] = mapped_column(String(30))
+    avatar_updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Google's id for their account, once they've signed in with Google.
+    google_sub: Mapped[str | None] = mapped_column(String(255), unique=True, index=True)
     hashed_password: Mapped[str] = mapped_column(String(255), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(UTC)
     )
+
+    @property
+    def avatar_url(self) -> str | None:
+        """
+        Where to fetch the profile picture (GET /users/{id}/avatar), with
+        its version on the end so a new picture isn't served from a cache.
+        """
+        if self.avatar_updated_at is None:
+            return None
+        return f"/users/{self.id}/avatar?v={int(self.avatar_updated_at.timestamp())}"
 
 
 class Site(Base):
@@ -326,8 +348,10 @@ class TripEntry(Base):
     title: Mapped[str] = mapped_column(String(200), nullable=False, default="", server_default="")
     notes: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
     rating: Mapped[int | None] = mapped_column(SmallInteger)  # 1 to 5 stars
-    # A trail or spot they loved, shown on the entry and in friends' feeds.
-    stamp: Mapped[str | None] = mapped_column(String(200))
+    # Trails or spots they loved, shown on the entry and in friends' feeds.
+    trails: Mapped[list[str]] = mapped_column(
+        ARRAY(String(200)), nullable=False, default=list, server_default="{}"
+    )
     visibility: Mapped[str] = mapped_column(
         String(10), nullable=False, default="private", server_default="private"
     )
@@ -355,9 +379,10 @@ class TripEntry(Base):
 
 class TripPhoto(Base):
     """
-    A photo on an entry. The bytes live in object storage (S3), uploaded
-    straight from the phone with a signed URL (app/storage.py); this row
-    only remembers the storage key. `position` orders the entry's photos.
+    A photo or video on an entry. The bytes live in object storage (S3),
+    uploaded straight from the phone with a signed URL (app/storage.py);
+    this row remembers the storage key (whose extension says which it is),
+    its caption, and a video's length. `position` orders the entry's photos.
     """
 
     __tablename__ = "trip_photos"
@@ -368,6 +393,10 @@ class TripPhoto(Base):
     )
     storage_key: Mapped[str] = mapped_column(String(300), unique=True, nullable=False)
     position: Mapped[int] = mapped_column(Integer, nullable=False)
+    # Words shown over it when the trip is relived; may be empty.
+    caption: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
+    # A video's length, as the phone measured it; None for photos.
+    duration_ms: Mapped[int | None] = mapped_column(Integer)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(UTC), server_default=func.now()
     )
@@ -390,3 +419,35 @@ class TripCompanion(Base):
     )
 
     user: Mapped["User"] = relationship(lazy="joined")
+
+
+class TripComment(Base):
+    """
+    A comment on a trip, by its owner or anyone who can see it (their
+    friends, for a trip shared with friends).
+    """
+
+    __tablename__ = "trip_comments"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    entry_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("trip_entries.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    user_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    body: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC), server_default=func.now()
+    )
+
+    user: Mapped["User"] = relationship(lazy="joined")
+
+
+# How many comments a trip has, counted in the same query that loads it.
+TripEntry.comment_count = column_property(
+    select(func.count(TripComment.id))
+    .where(TripComment.entry_id == TripEntry.id)
+    .correlate_except(TripComment)
+    .scalar_subquery()
+)

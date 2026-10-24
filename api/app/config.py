@@ -53,6 +53,16 @@ class Settings(BaseSettings):
     # Signed URLs stop working after this long.
     s3_url_expire_seconds: int = 15 * 60
 
+    # --- Google sign-in ---
+    # OAuth client ids from Google Cloud, comma-separated: the web client
+    # id (Android sign-in tokens are issued for it) and the iOS one. Empty
+    # turns Google sign-in off (POST /auth/google answers 503).
+    google_client_ids: str = ""
+
+    @property
+    def google_client_id_list(self) -> list[str]:
+        return [cid.strip() for cid in self.google_client_ids.split(",") if cid.strip()]
+
     @property
     def cors_origin_list(self) -> list[str]:
         if self.cors_origins == "*":

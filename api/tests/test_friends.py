@@ -17,6 +17,7 @@ from app.database import SessionLocal
 from app.main import app
 from app.models import Friendship, User
 from app.visibility import Visibility, are_friends, can_view, friend_ids
+from tests.helpers import new_names
 
 client = TestClient(app)
 
@@ -24,7 +25,12 @@ client = TestClient(app)
 class Person:
     def __init__(self):
         self.email = f"friend-{uuid.uuid4().hex[:10]}@example.com"
-        resp = client.post("/auth/signup", json={"email": self.email, "password": "correct-horse"})
+        names = new_names()
+        self.username = names["username"]
+        resp = client.post(
+            "/auth/signup",
+            json={"email": self.email, "password": "correct-horse", **names},
+        )
         self.headers = {"Authorization": f"Bearer {resp.json()['access_token']}"}
         self.id = client.get("/auth/me", headers=self.headers).json()["id"]
 
@@ -83,6 +89,32 @@ def test_request_email_lookup_ignores_case(people):
         "/friends/requests", json={"email": bob.email.upper()}, headers=ann.headers
     )
     assert response.status_code == 201
+
+
+def test_request_by_username(people):
+    ann, bob = people(), people()
+    response = client.post(
+        "/friends/requests", json={"username": f"@{bob.username.upper()}"}, headers=ann.headers
+    )
+    assert response.status_code == 201
+    assert response.json()["addressee"]["username"] == bob.username
+    assert response.json()["addressee"]["first_name"] == "Test"
+
+
+def test_request_needs_email_or_username_not_both(people):
+    ann, bob = people(), people()
+    assert client.post("/friends/requests", json={}, headers=ann.headers).status_code == 422
+    both = {"email": bob.email, "username": bob.username}
+    assert client.post("/friends/requests", json=both, headers=ann.headers).status_code == 422
+
+
+def test_unknown_username_is_404(people):
+    ann = people()
+    response = client.post(
+        "/friends/requests", json={"username": "nobody_here_xyz"}, headers=ann.headers
+    )
+    assert response.status_code == 404
+    assert response.json()["detail"] == "No user with that username"
 
 
 def test_cannot_friend_yourself(people):

@@ -14,7 +14,16 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.database import get_db
-from app.routers import auth, friends, passport, recommendations, sites, trips, wishlist
+from app.routers import (
+    auth,
+    friends,
+    passport,
+    recommendations,
+    sites,
+    trips,
+    users,
+    wishlist,
+)
 
 app = FastAPI(
     title="ParkPath API",
@@ -63,5 +72,6 @@ app.include_router(recommendations.router, prefix="/recommendations", tags=["rec
 app.include_router(wishlist.router, prefix="/wishlist", tags=["wishlist"])
 app.include_router(trips.router, prefix="/trips", tags=["trips"])
 app.include_router(passport.router, prefix="/passport", tags=["passport"])
+app.include_router(users.router, prefix="/users", tags=["users"])
 
 # Future routers (quiz, etc.) follow the same pattern.

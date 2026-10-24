@@ -8,7 +8,8 @@
     "scheme": "parkpath",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "icon": "./assets/expo.icon"
+      "icon": "./assets/expo.icon",
+      "bundleIdentifier": "com.parkpath.app"
     },
     "android": {
       "adaptiveIcon": {
@@ -17,7 +18,8 @@
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "package": "com.parkpath.app"
     },
     "web": {
       "output": "static",
@@ -40,7 +42,15 @@
           "locationWhenInUsePermission": "ParkPath uses your location while it's open to let you know when you've arrived at a park, so you can log the visit while it's fresh. It never leaves your phone."
         }
       ],
-      "expo-video"
+      "expo-video",
+      "expo-audio",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "ParkPath uses the camera to scan a friend's QR code and to photograph your passport book stamps.",
+          "recordAudioAndroid": false
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

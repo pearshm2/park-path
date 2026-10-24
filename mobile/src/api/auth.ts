@@ -8,14 +8,35 @@
  */
 
 import { request } from './client';
-import type { Credentials, TokenResponse, User } from '../types/auth';
+import type {
+  Credentials,
+  GoogleTokenResponse,
+  ProfileChanges,
+  SignUpDetails,
+  TokenResponse,
+  User,
+  UsernameCheck,
+} from '../types/auth';
 
-/** POST /auth/signup — 201 with a token, or 409 if the email is taken. */
-export function signup(credentials: Credentials): Promise<TokenResponse> {
+/**
+ * POST /auth/signup — 201 with a token; 409 if the email or username is
+ * taken, 422 if the username breaks the rules (the message says which).
+ */
+export function signup(details: SignUpDetails): Promise<TokenResponse> {
   return request<TokenResponse>('/auth/signup', {
     method: 'POST',
-    body: credentials,
+    body: details,
   });
+}
+
+/** GET /auth/username-available — whether a username is free, and if not, why. */
+export function checkUsername(username: string): Promise<UsernameCheck> {
+  return request<UsernameCheck>(`/auth/username-available?username=${encodeURIComponent(username)}`);
+}
+
+/** PATCH /auth/me — change your username or name; the updated you. */
+export function updateProfile(token: string, changes: ProfileChanges): Promise<User> {
+  return request<User>('/auth/me', { method: 'PATCH', token, body: changes });
 }
 
 /** POST /auth/login — 200 with a token, or 401 on bad credentials. */
@@ -48,4 +69,39 @@ export function requestPasswordReset(email: string): Promise<void> {
     method: 'POST',
     body: { email },
   });
+}
+
+/** POST /auth/me/password — 204, or 400 if the current password is wrong. */
+export async function changePassword(
+  token: string,
+  currentPassword: string,
+  newPassword: string,
+): Promise<void> {
+  await request<null>('/auth/me/password', {
+    method: 'POST',
+    token,
+    body: { current_password: currentPassword, new_password: newPassword },
+  });
+}
+
+/** PUT /auth/me/avatar — a small JPEG, base64-encoded; the updated you. */
+export function setAvatar(token: string, base64: string): Promise<User> {
+  return request<User>('/auth/me/avatar', {
+    method: 'PUT',
+    token,
+    body: { content_type: 'image/jpeg', data: base64 },
+  });
+}
+
+/** DELETE /auth/me/avatar — the updated you, without a picture. */
+export function removeAvatar(token: string): Promise<User> {
+  return request<User>('/auth/me/avatar', { method: 'DELETE', token });
+}
+
+/**
+ * POST /auth/google — a Google ID token for a ParkPath token. Signs in,
+ * links an account with the same email, or makes a new one (`created`).
+ */
+export function googleSignIn(idToken: string): Promise<GoogleTokenResponse> {
+  return request<GoogleTokenResponse>('/auth/google', { method: 'POST', body: { id_token: idToken } });
 }

@@ -4,11 +4,20 @@
  * visited, so the map's visited pins and region stamps, the cards' Visited
  * stamp and the Visits view all come from here.
  *
- * Kept on the device for now, per account (like the quiz answers), until
- * the trips backend exists (Sebastian, week 5): then `add` and `remove`
- * call the API and photos upload, and nothing above this file changes.
- * Photos and videos are copied into the app's own documents folder, since
- * the picker's copies can be cleared by the phone.
+ * Saved on the server (api/trips.ts), with a copy on the phone so Trips
+ * opens at once and works without a signal. Every change is made on the
+ * phone at once (never waiting on the network), then sent; one request at
+ * a time, in order. Anything that
+ * couldn't be sent (no signal, or the API asleep) is marked and sent on the
+ * next sync: when the app opens, comes back to the front, or changes a trip.
+ * A sync then fetches the server's trips, so ones logged or deleted on
+ * another phone show up here too. Trips saved before the server existed
+ * are sent up the first time.
+ *
+ * Photos and videos stay on the phone only until the S3 bucket exists and
+ * uploads are wired up; the server already takes them with their
+ * captions. They're copied into the app's own documents folder, since the
+ * picker's copies can be cleared by the phone.
  *
  * Entries saved before captions, videos and several trails existed are
  * read in the current shape: their photos with blank captions, their one
@@ -27,8 +36,21 @@ import {
   type ReactNode,
 } from 'react';
 
+import { AppState } from 'react-native';
+
+import { ApiError } from '../api/client';
+import type { Person } from '../api/friends';
+import {
+  createTrip,
+  deleteTrip,
+  fetchTrips,
+  updateTrip,
+  type TripFields,
+  type TripOut,
+  type Visibility,
+} from '../api/trips';
 import { useAuth } from '../auth/AuthContext';
-import { getItem, removeItem, setItem } from '../lib/storage';
+import { readText, removeText, writeText } from '../lib/fileStore';
 
 export type TripEntry = {
   id: string;
@@ -42,12 +64,28 @@ export type TripEntry = {
   media: TripMedia[];
   /** Friends who were there: their ids and, so the entry reads the same
    *  if they're later removed, their emails as they were. */
-  with: { id: number; email: string }[];
+  with: Person[];
   /** How it was, 1 to 5 stars; null if not rated. */
   rating: number | null;
   /** Trails or spots they loved, shown on the entry and in friends' feeds. */
   trails: string[];
+  /** Who can see it: only you, or your friends too. */
+  visibility: Visibility;
+  /**
+   * A photo of the park's official stamp in a Passport To Your National
+   * Parks book: the souvenir of being there in person. Kept on the phone
+   * only, like photos for now. Null if none.
+   */
+  passportStamp: string | null;
   createdAt: string;
+  /** Its id on the server, once it's been sent. */
+  serverId?: number;
+  /** The park the server has it under, to notice a change of park. */
+  serverPark?: string;
+  /** Changed on the phone and not yet sent. */
+  unsent?: boolean;
+  /** Why the server turned it down; not retried until it's edited. */
+  syncError?: string;
 };
 
 /** A photo or video in an entry. */
@@ -66,7 +104,20 @@ export function leadPhoto(entry: Pick<TripEntry, 'media'>): string | null {
   return entry.media.find((m) => m.kind === 'photo')?.uri ?? null;
 }
 
-export type TripDraft = Omit<TripEntry, 'id' | 'createdAt'>;
+/** What the entry sheet fills in. */
+export type TripDraft = Pick<
+  TripEntry,
+  | 'siteId'
+  | 'date'
+  | 'title'
+  | 'notes'
+  | 'media'
+  | 'with'
+  | 'rating'
+  | 'trails'
+  | 'visibility'
+  | 'passportStamp'
+>;
 
 /**
  * A new entry that was started but not saved, kept so closing the sheet
@@ -82,6 +133,8 @@ export type EntryDraft = {
   trails: string[];
   withIds: number[];
   media: TripMedia[];
+  visibility: Visibility;
+  passportStamp: string | null;
   /** When it was last changed, as an ISO timestamp. */
   savedAt: string;
 };
@@ -103,6 +156,8 @@ type TripsValue = {
   /** Parks with at least one entry. */
   visitedIds: Set<string>;
   visitSummary: (siteId: string) => VisitSummary | undefined;
+  /** Trips changed on the phone and not yet on the server. */
+  unsentCount: number;
   add: (draft: TripDraft) => Promise<TripEntry>;
   remove: (id: string) => Promise<void>;
   /** Replace an entry's details, keeping its id and when it was made. */
@@ -123,8 +178,23 @@ function storageKey(userId: string): string {
   return `parkpath.trips.${userId}`;
 }
 
+/** Server ids of trips deleted on the phone, not yet deleted on the server. */
+function deletesKey(userId: string): string {
+  return `parkpath.tripDeletes.${userId}`;
+}
+
 function draftKey(userId: string): string {
   return `parkpath.tripDraft.${userId}`;
+}
+
+/** Stored server ids awaiting deletion; anything else is dropped. */
+function parseDeletes(raw: string | null): number[] {
+  try {
+    const parsed = raw ? (JSON.parse(raw) as unknown) : [];
+    return Array.isArray(parsed) ? parsed.filter((id): id is number => typeof id === 'number') : [];
+  } catch {
+    return [];
+  }
 }
 
 /** A stored draft, if it's still recent enough to keep. */
@@ -141,6 +211,8 @@ function parseDraft(raw: string | null): EntryDraft | null {
       ...rest,
       media: draft.media ?? (photos ?? []).map(asPhoto),
       trails: draft.trails ?? (stamp?.trim() ? [stamp.trim()] : []),
+      visibility: draft.visibility ?? 'private',
+      passportStamp: draft.passportStamp ?? null,
     };
   } catch {
     return null;
@@ -173,6 +245,12 @@ function parse(raw: string | null): TripEntry[] {
         media: e.media ?? (photos ?? []).map(asPhoto),
         // Saved with one trail, or none.
         trails: e.trails ?? (stamp ? [stamp] : []),
+        // Saved before trips could be shared.
+        visibility: e.visibility ?? 'private',
+        // Saved before passport stamps.
+        passportStamp: e.passportStamp ?? null,
+        // Saved before the server: send it.
+        unsent: e.unsent ?? e.serverId == null,
       }));
   } catch {
     return [];
@@ -203,6 +281,15 @@ function keepMedia(media: TripMedia[], already: TripMedia[] = []): TripMedia[] {
   return media.map((m, i) => (owned.has(m.uri) || isWeb(m.uri) ? m : { ...m, uri: keepFile(m.uri, i) }));
 }
 
+function deleteFile(uri: string) {
+  if (isWeb(uri)) return;
+  try {
+    new File(uri).delete();
+  } catch {
+    // Already gone; nothing to do.
+  }
+}
+
 function deleteMedia(media: TripMedia[]) {
   for (const m of media) {
     if (isWeb(m.uri)) continue;
@@ -214,13 +301,70 @@ function deleteMedia(media: TripMedia[]) {
   }
 }
 
+/** A trip as the server takes it. */
+function toFields(entry: TripEntry): TripFields {
+  return {
+    park_code: entry.siteId,
+    visited_on: entry.date,
+    title: entry.title.slice(0, 200),
+    notes: entry.notes,
+    rating: entry.rating,
+    trails: entry.trails.map((t) => t.slice(0, 200)).slice(0, 20),
+    stamp: entry.trails[0]?.slice(0, 200) ?? null,
+    visibility: entry.visibility,
+    companion_ids: entry.with.map((p) => p.id),
+  };
+}
+
+/** The server's copy of a trip, over the phone's (whose extras it keeps). */
+function fromServer(trip: TripOut, local?: TripEntry): TripEntry {
+  return {
+    id: local?.id ?? `trip-server-${trip.id}`,
+    siteId: trip.park_code,
+    date: trip.visited_on,
+    title: trip.title,
+    notes: trip.notes,
+    rating: trip.rating,
+    // An older server has only `stamp`.
+    trails: trip.trails ?? (trip.stamp ? [trip.stamp] : []),
+    visibility: trip.visibility,
+    with: trip.companions,
+    // On the phone only, for now.
+    passportStamp: local?.passportStamp ?? null,
+    // Photos stay as the phone has them; a trip new to this phone shows the
+    // server's (links that expire; fetched fresh on each sync).
+    media:
+      local?.media ??
+      trip.photos.flatMap((p) =>
+        p.url
+          ? [
+              {
+                uri: p.url,
+                kind: p.kind,
+                caption: p.caption,
+                ...(p.duration_ms != null ? { duration: p.duration_ms } : {}),
+              },
+            ]
+          : [],
+      ),
+    createdAt: local?.createdAt ?? trip.created_at,
+    serverId: trip.id,
+    serverPark: trip.park_code,
+  };
+}
+
+/** A request that failed for want of a connection, not because it was refused. */
+function offline(error: unknown): boolean {
+  return !(error instanceof ApiError) || error.status === 401 || error.status >= 500;
+}
+
 /** Newest visit first, then newest entry. */
 function byVisit(a: TripEntry, b: TripEntry): number {
   return b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt);
 }
 
 export function TripsProvider({ children }: { children: ReactNode }) {
-  const { userId } = useAuth();
+  const { userId, token } = useAuth();
   const [loaded, setLoaded] = useState<{ userId: string; entries: TripEntry[] } | null>(null);
   const entries = useMemo(
     () => (loaded && loaded.userId === userId ? loaded.entries : []),
@@ -229,79 +373,247 @@ export function TripsProvider({ children }: { children: ReactNode }) {
 
   const draft = useRef<{ userId: string; value: EntryDraft | null } | null>(null);
 
-  useEffect(() => {
-    if (!userId) return;
-    let cancelled = false;
-    (async () => {
-      const stored = parse(await getItem(storageKey(userId)));
-      if (!cancelled) setLoaded({ userId, entries: stored.sort(byVisit) });
-      const storedDraft = parseDraft(await getItem(draftKey(userId)));
-      // Unless the sheet already wrote a newer one while this loaded.
-      if (!cancelled && draft.current?.userId !== userId) {
-        draft.current = { userId, value: storedDraft };
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [userId]);
+  // The latest entries and pending deletes, for the sync, which runs after
+  // the render that started it.
+  const latest = useRef<{ userId: string; entries: TripEntry[]; deletes: number[] } | null>(null);
+  // Changes and syncs run one after another, never side by side.
+  const queue = useRef<Promise<unknown>>(Promise.resolve());
+  function enqueue<T>(job: () => Promise<T>): Promise<T> {
+    const run = queue.current.then(job, job);
+    queue.current = run.catch(() => undefined);
+    return run;
+  }
 
-  const save = useCallback(
-    async (next: TripEntry[]) => {
-      if (!userId) return;
-      setLoaded({ userId, entries: next });
-      await setItem(storageKey(userId), JSON.stringify(next));
+  /** Change the entries (and pending deletes) for this account, and keep them. */
+  const commit = useCallback(
+    async (change: (current: { entries: TripEntry[]; deletes: number[] }) => {
+      entries: TripEntry[];
+      deletes: number[];
+    }) => {
+      const current = latest.current;
+      if (!userId || !current || current.userId !== userId) return;
+      const next = change(current);
+      const sorted = next.entries.slice().sort(byVisit);
+      latest.current = { userId, entries: sorted, deletes: next.deletes };
+      setLoaded({ userId, entries: sorted });
+      // Kept on the phone, in files (lib/fileStore.ts).
+      writeText(storageKey(userId), JSON.stringify(sorted));
+      writeText(deletesKey(userId), JSON.stringify(next.deletes));
     },
     [userId],
   );
 
+  /**
+   * Send what's waiting, then take the server's trips. Stops quietly when
+   * offline; whatever's left goes next time.
+   */
+  const sync = useCallback(async () => {
+    if (!userId || !token) return;
+    const mine = () => latest.current && latest.current.userId === userId;
+    if (!mine()) return;
+    try {
+      // Deletes.
+      for (const serverId of latest.current!.deletes) {
+        try {
+          await deleteTrip(token, serverId);
+        } catch (error) {
+          // Already gone is as good as deleted.
+          if (!(error instanceof ApiError && error.status === 404)) throw error;
+        }
+        await commit((c) => ({ ...c, deletes: c.deletes.filter((id) => id !== serverId) }));
+      }
+
+      // Trips changed on the phone.
+      const waiting = latest.current!.entries.filter((e) => e.unsent && !e.syncError);
+      for (const entry of waiting) {
+        let saved: TripOut;
+        try {
+          if (entry.serverId != null && entry.serverPark === entry.siteId) {
+            try {
+              saved = await updateTrip(token, entry.serverId, toFields(entry));
+            } catch (error) {
+              // Deleted on another phone meanwhile: log it again.
+              if (!(error instanceof ApiError && error.status === 404)) throw error;
+              saved = await createTrip(token, toFields(entry));
+            }
+          } else {
+            // New, or moved to another park (which the server can't do in place).
+            if (entry.serverId != null) {
+              await deleteTrip(token, entry.serverId).catch((error) => {
+                if (!(error instanceof ApiError && error.status === 404)) throw error;
+              });
+            }
+            saved = await createTrip(token, toFields(entry));
+          }
+        } catch (error) {
+          if (offline(error)) throw error;
+          // Refused (a friend removed since, say): keep it on the phone with
+          // the reason, and don't retry until it's edited.
+          const reason = error instanceof Error ? error.message : 'Not saved';
+          await commit((c) => ({
+            ...c,
+            entries: c.entries.map((e) => (e.id === entry.id ? { ...e, syncError: reason } : e)),
+          }));
+          continue;
+        }
+        // Deleted on the phone while this was sending: delete it there too.
+        if (!latest.current?.entries.some((e) => e.id === entry.id)) {
+          await commit((c) => ({ ...c, deletes: [...c.deletes, saved.id] }));
+          continue;
+        }
+        await commit((c) => ({
+          ...c,
+          entries: c.entries.map((e) =>
+            e.id === entry.id
+              ? {
+                  ...e,
+                  serverId: saved.id,
+                  serverPark: saved.park_code,
+                  // Edited again while this was sending: still waiting.
+                  unsent: e !== entry && e.unsent ? true : undefined,
+                  syncError: undefined,
+                }
+              : e,
+          ),
+        }));
+      }
+
+      // The server's trips: new ones from other phones in, deleted ones out.
+      const server = await fetchTrips(token);
+      if (!mine()) return;
+      await commit((c) => {
+        const byServerId = new Map(server.map((t) => [t.id, t]));
+        const known = new Set<number>();
+        const next: TripEntry[] = [];
+        for (const e of c.entries) {
+          if (e.serverId == null) {
+            next.push(e);
+            continue;
+          }
+          known.add(e.serverId);
+          const remote = byServerId.get(e.serverId);
+          if (e.unsent || e.syncError) next.push(e);
+          else if (remote) next.push(fromServer(remote, e));
+          // Gone from the server and not changed here: deleted on another phone.
+          else deleteMedia(e.media);
+        }
+        for (const t of server) {
+          if (!known.has(t.id) && !c.deletes.includes(t.id)) next.push(fromServer(t));
+        }
+        return { ...c, entries: next };
+      });
+    } catch {
+      // Offline, or the API asleep: try again next time.
+    }
+  }, [userId, token, commit]);
+
+  const syncSoon = useCallback(() => {
+    void enqueue(sync);
+  }, [sync]);
+
+  useEffect(() => {
+    if (!userId) return;
+    let cancelled = false;
+    (async () => {
+      const stored = parse(await readText(storageKey(userId)));
+      const deletes = parseDeletes(await readText(deletesKey(userId)));
+      if (cancelled) return;
+      const sorted = stored.sort(byVisit);
+      latest.current = { userId, entries: sorted, deletes };
+      setLoaded({ userId, entries: sorted });
+      const storedDraft = parseDraft(await readText(draftKey(userId)));
+      // Unless the sheet already wrote a newer one while this loaded.
+      if (!cancelled && draft.current?.userId !== userId) {
+        draft.current = { userId, value: storedDraft };
+      }
+      if (!cancelled) syncSoon();
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [userId, syncSoon]);
+
+  // Back in the app: catch up.
+  useEffect(() => {
+    const listener = AppState.addEventListener('change', (state) => {
+      if (state === 'active') syncSoon();
+    });
+    return () => listener.remove();
+  }, [syncSoon]);
+
   const add = useCallback(
-    async (draft: TripDraft) => {
-      const entry: TripEntry = {
-        ...draft,
-        id: `trip-${Date.now()}`,
-        media: keepMedia(draft.media),
-        createdAt: new Date().toISOString(),
-      };
-      await save([entry, ...entries].sort(byVisit));
-      return entry;
-    },
-    [entries, save],
+    (draft: TripDraft) =>
+      (async () => {
+        const entry: TripEntry = {
+          ...draft,
+          id: `trip-${Date.now()}`,
+          media: keepMedia(draft.media),
+          passportStamp: draft.passportStamp ? keepFile(draft.passportStamp, 99) : null,
+          createdAt: new Date().toISOString(),
+          unsent: true,
+        };
+        await commit((c) => ({ ...c, entries: [entry, ...c.entries] }));
+        syncSoon();
+        return entry;
+      })(),
+    [commit, syncSoon],
   );
 
   const remove = useCallback(
-    async (id: string) => {
-      const entry = entries.find((e) => e.id === id);
-      if (entry) deleteMedia(entry.media);
-      await save(entries.filter((e) => e.id !== id));
-    },
-    [entries, save],
+    (id: string) =>
+      (async () => {
+        const entry = latest.current?.entries.find((e) => e.id === id);
+        if (!entry) return;
+        deleteMedia(entry.media);
+        if (entry.passportStamp) deleteFile(entry.passportStamp);
+        await commit((c) => ({
+          entries: c.entries.filter((e) => e.id !== id),
+          deletes: entry.serverId != null ? [...c.deletes, entry.serverId] : c.deletes,
+        }));
+        syncSoon();
+      })(),
+    [commit, syncSoon],
   );
 
   const update = useCallback(
-    async (id: string, draft: TripDraft) => {
-      const old = entries.find((e) => e.id === id);
-      if (!old) return undefined;
-      // Media already in the entry stay as they are (their captions may have
-      // changed); newly picked ones are copied in, and ones taken out of the
-      // entry are deleted.
-      const media = keepMedia(draft.media, old.media);
-      const stillThere = new Set(draft.media.map((m) => m.uri));
-      deleteMedia(old.media.filter((m) => !stillThere.has(m.uri)));
-      const entry: TripEntry = { ...old, ...draft, media };
-      await save(entries.map((e) => (e.id === id ? entry : e)).sort(byVisit));
-      return entry;
-    },
-    [entries, save],
+    (id: string, draft: TripDraft) =>
+      (async () => {
+        const old = latest.current?.entries.find((e) => e.id === id);
+        if (!old) return undefined;
+        // Media already in the entry stay as they are (their captions may have
+        // changed); newly picked ones are copied in, and ones taken out of the
+        // entry are deleted.
+        const media = keepMedia(draft.media, old.media);
+        const stillThere = new Set(draft.media.map((m) => m.uri));
+        deleteMedia(old.media.filter((m) => !stillThere.has(m.uri)));
+        // The passport stamp: kept, replaced, or taken off.
+        let passportStamp = draft.passportStamp;
+        if (passportStamp !== old.passportStamp) {
+          if (old.passportStamp) deleteFile(old.passportStamp);
+          if (passportStamp) passportStamp = keepFile(passportStamp, 99);
+        }
+        // Edited: send it again, even if it was refused before.
+        const entry: TripEntry = { ...old, ...draft, media, passportStamp, unsent: true, syncError: undefined };
+        await commit((c) => ({ ...c, entries: c.entries.map((e) => (e.id === id ? entry : e)) }));
+        syncSoon();
+        return entry;
+      })(),
+    [commit, syncSoon],
   );
 
   const addEntries = useCallback(
-    async (more: TripEntry[]) => {
-      const ids = new Set(entries.map((e) => e.id));
-      await save([...entries, ...more.filter((e) => !ids.has(e.id))].sort(byVisit));
-    },
-    [entries, save],
+    (more: TripEntry[]) =>
+      (async () => {
+        await commit((c) => {
+          const ids = new Set(c.entries.map((e) => e.id));
+          return { ...c, entries: [...c.entries, ...more.filter((e) => !ids.has(e.id))] };
+        });
+        syncSoon();
+      })(),
+    [commit, syncSoon],
   );
+
+  const unsentCount = useMemo(() => entries.filter((e) => e.unsent).length, [entries]);
 
   const visitedIds = useMemo(() => new Set(entries.map((e) => e.siteId)), [entries]);
 
@@ -324,15 +636,26 @@ export function TripsProvider({ children }: { children: ReactNode }) {
     (next: EntryDraft | null) => {
       if (!userId) return;
       draft.current = { userId, value: next };
-      if (next) void setItem(draftKey(userId), JSON.stringify(next));
-      else void removeItem(draftKey(userId));
+      if (next) writeText(draftKey(userId), JSON.stringify(next));
+      else removeText(draftKey(userId));
     },
     [userId],
   );
 
   const value = useMemo<TripsValue>(
-    () => ({ entries, visitedIds, visitSummary, add, remove, update, addEntries, getDraft, setDraft }),
-    [entries, visitedIds, visitSummary, add, remove, update, addEntries, getDraft, setDraft],
+    () => ({
+      entries,
+      visitedIds,
+      visitSummary,
+      unsentCount,
+      add,
+      remove,
+      update,
+      addEntries,
+      getDraft,
+      setDraft,
+    }),
+    [entries, visitedIds, visitSummary, unsentCount, add, remove, update, addEntries, getDraft, setDraft],
   );
 
   return <TripsContext.Provider value={value}>{children}</TripsContext.Provider>;

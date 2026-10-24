@@ -61,6 +61,7 @@ import {
   FilterButton,
   FilterSheet,
   FullMapView,
+  turnSideways,
   Heading,
   Kicker,
   NO_FILTERS,
@@ -87,6 +88,7 @@ import {
   type RegionId,
 } from '../../data/regions';
 import { useQuiz } from '../../quiz/QuizContext';
+import { useCelebrations } from '../../celebrations/CelebrationsContext';
 import { useSnoozed } from '../../wishlist/useSnoozed';
 import { useWishlist } from '../../wishlist/useWishlist';
 import { CapTextScale, colors, radius, shadow, space, useTextScale } from '../../theme';
@@ -230,6 +232,11 @@ export default function ExploreScreen() {
   const [keyOpen, setKeyOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [fullMapOpen, setFullMapOpen] = useState(false);
+  // The screen starts turning on the press itself, before Explore re-renders.
+  function openFullMap() {
+    turnSideways();
+    setFullMapOpen(true);
+  }
   const [filters, setFilters] = useState<FeedFilters>(NO_FILTERS);
   const [filterOpen, setFilterOpen] = useState(false);
   const router = useRouter();
@@ -293,10 +300,14 @@ export default function ExploreScreen() {
   const parkIds = useMemo(() => new Set(parks.map((site) => site.id)), [parks]);
   // Completed regions, marked on the map. The all-sites map counts every
   // site in a region; the others count its national parks.
-  const completed = useMemo(
-    () => completedRegions(scope === 'all' ? allSites : parks),
-    [scope, allSites, parks],
-  );
+  // A region just completed waits to be filled in on Passport's map first
+  // (celebrations/CelebrationsContext.tsx).
+  const { held } = useCelebrations();
+  const completed = useMemo(() => {
+    const done = completedRegions(scope === 'all' ? allSites : parks);
+    for (const r of held.regions) done.delete(r);
+    return done;
+  }, [scope, allSites, parks, held.regions]);
   const parkMatches = useMemo(
     () => matches.filter(({ site }) => parkIds.has(site.id)),
     [matches, parkIds],
@@ -759,7 +770,7 @@ export default function ExploreScreen() {
             featureIcons={scope === 'parks'}
             // With the sheet open there's no room under the map, so the
             // button stays in the map's corner; closed, it sits below.
-            onExpand={sheetOpen ? () => setFullMapOpen(true) : undefined}
+            onExpand={sheetOpen ? openFullMap : undefined}
             onSelectSite={(site) => {
               if (anchor && site.id === highlightId) {
                 // Tapping the top card's pin again zooms back out.
@@ -784,7 +795,7 @@ export default function ExploreScreen() {
           {!sheetOpen ? (
             <>
               <Pressable
-                onPress={() => setFullMapOpen(true)}
+                onPress={openFullMap}
                 hitSlop={8}
                 accessibilityRole="button"
                 accessibilityLabel="Open the map full screen"

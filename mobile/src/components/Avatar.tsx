@@ -1,12 +1,16 @@
 /**
  * A person's initials in a coloured circle, picked by their id so each
  * person keeps the same colour everywhere (Friends, Trips, the header).
- * Profiles are only an email for now, so the initials come from it.
+ * The initials are from their first and last name; a profile picture,
+ * when they have one, covers them.
  */
 
+import { Image } from 'expo-image';
 import { StyleSheet, View } from 'react-native';
 
-import { initials } from '../api/friends';
+import { API_BASE_URL } from '../api/client';
+import { initials, type Person } from '../api/friends';
+import { useAuth } from '../auth/AuthContext';
 import { colors, radius } from '../theme';
 import { BodyText } from './Typography';
 
@@ -27,12 +31,13 @@ export function Avatar({
   size,
   ring = false,
 }: {
-  person: { id: number; email: string };
+  person: Person;
   size: number;
   /** A coloured ring round it, as in the Friends row. */
   ring?: boolean;
 }) {
   const tone = avatarTone(person.id);
+  const { token } = useAuth();
   return (
     <View
       style={[
@@ -47,14 +52,25 @@ export function Avatar({
       ]}
     >
       <BodyText size={Math.round(size * 0.32)} weight="bold" color={tone.fg}>
-        {initials(person.email)}
+        {initials(person)}
       </BodyText>
+      {person.avatar_url && token ? (
+        <Image
+          source={{ uri: `${API_BASE_URL}${person.avatar_url}`, headers: { Authorization: `Bearer ${token}` } }}
+          style={[StyleSheet.absoluteFill, { borderRadius: size / 2 }]}
+          contentFit="cover"
+          transition={150}
+          cachePolicy="memory-disk"
+          accessibilityIgnoresInvertColors
+        />
+      ) : null}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   avatar: {
+    overflow: 'hidden',
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: radius.pill,

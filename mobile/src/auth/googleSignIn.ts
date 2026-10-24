@@ -1,31 +1,33 @@
 /**
  * Google sign-in — the single integration point.
  *
- * NOT CONNECTED YET. The button exists and is styled, but two pieces have
- * to be built before it can actually sign anyone in:
+ * Signs in with Google on the phone (Google's own account picker, from
+ * @react-native-google-signin/google-signin), then trades the ID token
+ * Google gives us for a ParkPath token at POST /auth/google, which signs
+ * in, links an account with the same email, or makes a new one.
  *
- *   1. A Google Cloud OAuth client. Create one at
- *      console.cloud.google.com -> APIs & Services -> Credentials, then
- *      put its id in mobile/.env as EXPO_PUBLIC_GOOGLE_CLIENT_ID.
- *      Android and web need separate client ids and a redirect URI
- *      matching the app's scheme ("parkpath", set in app.json).
+ * What it needs before it works:
  *
- *   2. An API route that trades a Google credential for a ParkPath token.
- *      api/app/routers/auth.py has no OAuth route today — it only issues
- *      tokens for email + password. It would need something like
- *      POST /auth/google that verifies the Google ID token against
- *      Google's public keys, finds or creates the matching user row, and
- *      returns the same {access_token, token_type} shape as /auth/login,
- *      so nothing above this file has to change.
+ *   1. OAuth client ids from Google Cloud (APIs & Services -> Credentials):
+ *        - a Web client, whose id goes in EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID
+ *          (Android signs in for it, and it's what the token is issued for)
+ *        - an Android client, made with the app's package name and its
+ *          signing key's SHA-1 (EAS shows it); nothing to copy back
+ *        - for iPhones, an iOS client, whose id goes in
+ *          EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID (app.config.js turns it into
+ *          the URL scheme the plugin needs)
+ *      The server needs the web and iOS ids too, in GOOGLE_CLIENT_IDS.
  *
- * Once both exist, install expo-auth-session, run the flow here, POST the
- * resulting id_token to that route, and return its TokenResponse. The
- * auth screens already handle everything downstream.
+ *   2. A development build: Google sign-in is native code, which Expo Go
+ *      doesn't include. In Expo Go the button says so instead.
  */
 
-import type { TokenResponse } from '../types/auth';
+import Constants, { ExecutionEnvironment } from 'expo-constants';
 
-/** Thrown when the button is pressed before the pieces above are in place. */
+import { googleSignIn as googleSignInRequest } from '../api/auth';
+import type { GoogleTokenResponse } from '../types/auth';
+
+/** Thrown when Google sign-in can't run here; the message says why. */
 export class GoogleSignInUnavailableError extends Error {
   constructor(message: string) {
     super(message);
@@ -34,22 +36,68 @@ export class GoogleSignInUnavailableError extends Error {
 }
 
 /** Set in mobile/.env. Empty until a Google Cloud client exists. */
-export const GOOGLE_CLIENT_ID = (process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID ?? '').trim();
+export const GOOGLE_WEB_CLIENT_ID = (process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID ?? '').trim();
+const GOOGLE_IOS_CLIENT_ID = (process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID ?? '').trim();
 
-export const isGoogleSignInConfigured = GOOGLE_CLIENT_ID.length > 0;
+export const isGoogleSignInConfigured = GOOGLE_WEB_CLIENT_ID.length > 0;
+
+/** Expo Go has no Google sign-in in it; a development build does. */
+const inExpoGo = Constants.executionEnvironment === ExecutionEnvironment.StoreClient;
+
+/** Thrown when the person backs out of Google's account picker. */
+export class GoogleSignInCancelled extends Error {
+  constructor() {
+    super('Google sign-in was cancelled.');
+    this.name = 'GoogleSignInCancelled';
+  }
+}
+
+let configured = false;
 
 /**
- * Will perform the Google flow and return a ParkPath token.
- *
- * Throws {@link GoogleSignInUnavailableError} until the two steps in the
- * file header are done. It fails loudly and specifically on purpose — a
- * button that silently does nothing is harder to diagnose than one that
- * says what is missing.
+ * Signs in with Google and returns a ParkPath token, and whether this
+ * made a new account.
  */
-export async function signInWithGoogle(): Promise<TokenResponse> {
-  throw new GoogleSignInUnavailableError(
-    isGoogleSignInConfigured
-      ? 'Google sign-in is not finished yet — the API has no route to accept a Google account. Use your email and password for now.'
-      : 'Google sign-in is not set up yet. Use your email and password for now.',
+export async function signInWithGoogle(): Promise<GoogleTokenResponse> {
+  if (inExpoGo) {
+    throw new GoogleSignInUnavailableError(
+      "Google sign-in works in the installed ParkPath app, not in Expo Go. Use your email and password here.",
+    );
+  }
+  if (!isGoogleSignInConfigured) {
+    throw new GoogleSignInUnavailableError('Google sign-in is not set up yet. Use your email and password for now.');
+  }
+
+  // Loaded only here: the native module doesn't exist in Expo Go.
+  const { GoogleSignin, isErrorWithCode, isSuccessResponse, statusCodes } = await import(
+    '@react-native-google-signin/google-signin'
   );
+  if (!configured) {
+    GoogleSignin.configure({
+      webClientId: GOOGLE_WEB_CLIENT_ID,
+      ...(GOOGLE_IOS_CLIENT_ID ? { iosClientId: GOOGLE_IOS_CLIENT_ID } : {}),
+    });
+    configured = true;
+  }
+
+  try {
+    await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
+    const response = await GoogleSignin.signIn();
+    if (!isSuccessResponse(response)) throw new GoogleSignInCancelled();
+    const idToken = response.data.idToken;
+    if (!idToken) throw new Error('Google sent no ID token.');
+    return await googleSignInRequest(idToken);
+  } catch (error) {
+    if (isErrorWithCode(error)) {
+      if (error.code === statusCodes.SIGN_IN_CANCELLED) throw new GoogleSignInCancelled();
+      if (error.code === statusCodes.PLAY_SERVICES_NOT_AVAILABLE) {
+        throw new GoogleSignInUnavailableError('Google Play services are needed to sign in with Google on this phone.');
+      }
+    }
+    throw error;
+  } finally {
+    // Signs out of Google in the app (not ParkPath), so the account
+    // picker shows again next time instead of reusing the last choice.
+    GoogleSignin.signOut().catch(() => {});
+  }
 }

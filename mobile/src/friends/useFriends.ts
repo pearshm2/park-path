@@ -12,8 +12,7 @@ import {
   fetchFriends,
   fetchRequests,
   removeFriend,
-  sendRequest,
-} from '../api/friends';
+  sendRequest, type FriendTarget } from '../api/friends';
 import { useAuth } from '../auth/AuthContext';
 
 export function useFriends() {
@@ -37,14 +36,16 @@ export function useFriends() {
     enabled,
   });
 
+  // A new or removed friend changes the feed too.
   const refresh = () =>
     Promise.all([
       queryClient.invalidateQueries({ queryKey: ['friends', userId] }),
       queryClient.invalidateQueries({ queryKey: ['friendRequests'] }),
+      queryClient.invalidateQueries({ queryKey: ['feed'] }),
     ]);
 
   const send = useMutation({
-    mutationFn: (email: string) => sendRequest(token!, email.trim()),
+    mutationFn: (target: FriendTarget) => sendRequest(token!, target),
     onSuccess: refresh,
   });
   const accept = useMutation({
@@ -67,6 +68,7 @@ export function useFriends() {
     loading: friends.isPending,
     error: friends.error ?? incoming.error ?? outgoing.error,
     send,
+    refresh,
     accept,
     dismiss,
     remove,

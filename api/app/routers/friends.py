@@ -1,7 +1,7 @@
 """
 Friend routes (all require a signed-in user):
 
-  POST   /friends/requests                 send a request, by the other person's email
+  POST   /friends/requests                 send a request, by the other person's email or username
   GET    /friends/requests                 pending requests (?direction=incoming|outgoing)
   POST   /friends/requests/{id}/accept     accept an incoming request
   DELETE /friends/requests/{id}            decline (recipient) or cancel (sender)
@@ -29,6 +29,7 @@ from app.database import get_db
 from app.dependencies import get_current_user
 from app.models import Friendship, User
 from app.schemas import FriendOut, FriendRequestCreate, FriendshipOut, UserOut
+from app.usernames import normalize_username
 from app.visibility import Visibility, can_view
 
 router = APIRouter()
@@ -64,11 +65,18 @@ def send_request(
     db: Session = Depends(get_db),
     me: User = Depends(get_current_user),
 ):
-    target = db.scalars(
-        select(User).where(func.lower(User.email) == payload.email.lower())
-    ).first()
-    if target is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="No user with that email")
+    if payload.email is not None:
+        target = db.scalars(
+            select(User).where(func.lower(User.email) == payload.email.lower())
+        ).first()
+        if target is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, detail="No user with that email")
+    else:
+        target = db.scalars(
+            select(User).where(User.username == normalize_username(payload.username))
+        ).first()
+        if target is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, detail="No user with that username")
     if target.id == me.id:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="You can't friend yourself")
 

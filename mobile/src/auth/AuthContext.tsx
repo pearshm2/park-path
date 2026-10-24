@@ -18,10 +18,19 @@ import {
   type ReactNode,
 } from 'react';
 
-import { fetchCurrentUser, login as loginRequest, signup as signupRequest } from '../api/auth';
+import {
+  fetchCurrentUser,
+  login as loginRequest,
+  signup as signupRequest,
+  updateProfile as updateProfileRequest,
+  changePassword as changePasswordRequest,
+  removeAvatar,
+  setAvatar,
+} from '../api/auth';
 import { clearToken, loadToken, saveToken } from '../api/tokenStorage';
+import { signInWithGoogle } from './googleSignIn';
 import { readTokenSubject } from '../lib/jwt';
-import type { Credentials, User } from '../types/auth';
+import type { Credentials, ProfileChanges, SignUpDetails, User } from '../types/auth';
 
 /**
  * `restoring` is the launch state, before we know whether the stored
@@ -42,8 +51,21 @@ type AuthContextValue = {
    */
   userId: string | null;
   signIn: (credentials: Credentials) => Promise<void>;
-  signUp: (credentials: Credentials) => Promise<void>;
+  signUp: (details: SignUpDetails) => Promise<void>;
   signOut: () => Promise<void>;
+  /** Sign in (or up) with Google; throws if it can't (see googleSignIn.ts). */
+  signInWithGoogle: () => Promise<void>;
+  /**
+   * True right after Google made a new account, until they've looked at the
+   * name and username it was given (see UsernamePrompt).
+   */
+  welcomeGoogleAccount: boolean;
+  dismissGoogleWelcome: () => void;
+  /** Change your username, name or email (Settings); throws the API's message. */
+  updateProfile: (changes: ProfileChanges) => Promise<void>;
+  /** Set your profile picture (a small JPEG, base64), or remove it with null. */
+  changeAvatar: (base64: string | null) => Promise<void>;
+  changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -52,6 +74,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<AuthStatus>('restoring');
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
+  const [welcomeGoogleAccount, setWelcomeGoogleAccount] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -116,19 +139,52 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   const signUp = useCallback(
-    async (credentials: Credentials) => {
-      const { access_token } = await signupRequest(credentials);
+    async (details: SignUpDetails) => {
+      const { access_token } = await signupRequest(details);
       await establishSession(access_token);
     },
     [establishSession],
   );
 
+  const googleSignIn = useCallback(async () => {
+    const { access_token, created } = await signInWithGoogle();
+    await establishSession(access_token);
+    setWelcomeGoogleAccount(created);
+  }, [establishSession]);
+
+  const dismissGoogleWelcome = useCallback(() => setWelcomeGoogleAccount(false), []);
+
   const signOut = useCallback(async () => {
     await clearToken();
     setToken(null);
     setUser(null);
+    setWelcomeGoogleAccount(false);
     setStatus('signedOut');
   }, []);
+
+  const updateProfile = useCallback(
+    async (changes: ProfileChanges) => {
+      if (!token) return;
+      setUser(await updateProfileRequest(token, changes));
+    },
+    [token],
+  );
+
+  const changeAvatar = useCallback(
+    async (base64: string | null) => {
+      if (!token) return;
+      setUser(base64 ? await setAvatar(token, base64) : await removeAvatar(token));
+    },
+    [token],
+  );
+
+  const changePassword = useCallback(
+    async (currentPassword: string, newPassword: string) => {
+      if (!token) return;
+      await changePasswordRequest(token, currentPassword, newPassword);
+    },
+    [token],
+  );
 
   // Prefer the token's own claim; fall back to the profile if a future
   // token shape ever stops carrying one.
@@ -138,8 +194,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   const value = useMemo<AuthContextValue>(
-    () => ({ status, user, token, userId, signIn, signUp, signOut }),
-    [status, user, token, userId, signIn, signUp, signOut],
+    () => ({
+      status,
+      user,
+      token,
+      userId,
+      signIn,
+      signUp,
+      signOut,
+      signInWithGoogle: googleSignIn,
+      welcomeGoogleAccount,
+      dismissGoogleWelcome,
+      updateProfile,
+      changeAvatar,
+      changePassword,
+    }),
+    [
+      status,
+      user,
+      token,
+      userId,
+      signIn,
+      signUp,
+      signOut,
+      googleSignIn,
+      welcomeGoogleAccount,
+      dismissGoogleWelcome,
+      updateProfile,
+      changeAvatar,
+      changePassword,
+    ],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

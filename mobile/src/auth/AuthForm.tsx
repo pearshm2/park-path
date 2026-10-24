@@ -8,7 +8,8 @@
  * primary action.
  *
  * Both modes share everything but the heading, the endpoint and the
- * confirm-password field, so they share one component.
+ * fields only a new account needs (first and last name, a username, and
+ * confirming the password), so they share one component.
  */
 
 import { useRouter } from 'expo-router';
@@ -28,7 +29,9 @@ import { Button, BodyText, Heading, Kicker, TextField } from '../components';
 import { GoogleButton, OrDivider } from '../components/GoogleButton';
 import { colors, radius, shadow, space } from '../theme';
 import { useAuth } from './AuthContext';
-import { GoogleSignInUnavailableError, signInWithGoogle } from './googleSignIn';
+import { GoogleSignInCancelled, GoogleSignInUnavailableError } from './googleSignIn';
+import { UsernameField } from './UsernameField';
+import { normalizeUsername, usernameRuleProblem, useUsernameCheck } from './useUsernameCheck';
 
 export type AuthMode = 'sign-in' | 'sign-up';
 
@@ -47,6 +50,9 @@ const EMAIL_SHAPE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const MIN_PASSWORD_LENGTH = 8;
 
 type FieldErrors = {
+  firstName?: string;
+  lastName?: string;
+  username?: string;
   email?: string;
   password?: string;
   confirm?: string;
@@ -70,8 +76,12 @@ const COPY: Record<AuthMode, { heading: string; sub: string; cta: string; switch
 export function AuthForm({ mode }: { mode: AuthMode }) {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { signIn, signUp } = useAuth();
+  const { signIn, signUp, signInWithGoogle } = useAuth();
 
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
+  const [username, setUsername] = useState('');
+  const usernameStatus = useUsernameCheck(username);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
@@ -79,6 +89,9 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
+  const lastNameRef = useRef<TextInput>(null);
+  const usernameRef = useRef<TextInput>(null);
+  const emailRef = useRef<TextInput>(null);
   const passwordRef = useRef<TextInput>(null);
   const confirmRef = useRef<TextInput>(null);
 
@@ -88,6 +101,19 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
   function validate(): FieldErrors {
     const errors: FieldErrors = {};
     const trimmedEmail = email.trim();
+
+    if (isSignUp) {
+      if (!firstName.trim()) errors.firstName = 'Enter your first name.';
+      if (!lastName.trim()) errors.lastName = 'Enter your last name.';
+      const handle = normalizeUsername(username);
+      if (!handle) errors.username = 'Choose a username.';
+      else {
+        const problem =
+          usernameRuleProblem(handle) ??
+          (usernameStatus.state === 'problem' ? usernameStatus.message : null);
+        if (problem) errors.username = problem;
+      }
+    }
 
     if (!trimmedEmail) errors.email = 'Enter your email address.';
     else if (!EMAIL_SHAPE.test(trimmedEmail)) errors.email = 'That does not look like an email address.';
@@ -113,8 +139,14 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
     setSubmitting(true);
     try {
       const credentials = { email: email.trim(), password };
-      if (isSignUp) await signUp(credentials);
-      else await signIn(credentials);
+      if (isSignUp) {
+        await signUp({
+          ...credentials,
+          username: normalizeUsername(username),
+          first_name: firstName.trim(),
+          last_name: lastName.trim(),
+        });
+      } else await signIn(credentials);
       // The root layout's groups react to the session change, so there is
       // nothing to navigate to here — (tabs) and quiz guard themselves.
     } catch (error) {
@@ -125,9 +157,8 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
   }
 
   /**
-   * Google is not wired up yet — see src/auth/googleSignIn.ts for the two
-   * pieces that are missing. The handler is written as if it were, so
-   * finishing it means changing that file and nothing here.
+   * Google: see src/auth/googleSignIn.ts. A new account lands in the app
+   * like any sign-up, then UsernamePrompt offers to change its name.
    */
   async function onGooglePress() {
     if (submitting) return;
@@ -136,11 +167,14 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
     try {
       await signInWithGoogle();
     } catch (error) {
-      setFormError(
-        error instanceof GoogleSignInUnavailableError
-          ? error.message
-          : 'Could not continue with Google. Try your email and password.',
-      );
+      // Backing out of Google's picker isn't an error worth showing.
+      if (!(error instanceof GoogleSignInCancelled)) {
+        setFormError(
+          error instanceof GoogleSignInUnavailableError
+            ? error.message
+            : 'Could not continue with Google. Try your email and password.',
+        );
+      }
     } finally {
       setSubmitting(false);
     }
@@ -186,7 +220,61 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
         </View>
 
         <View style={styles.form}>
+          {isSignUp ? (
+            <>
+              <View style={styles.nameRow}>
+                <TextField
+                  label="First name"
+                  value={firstName}
+                  onChangeText={(next) => {
+                    setFirstName(next);
+                    if (fieldErrors.firstName) setFieldErrors((prev) => ({ ...prev, firstName: undefined }));
+                  }}
+                  error={fieldErrors.firstName}
+                  placeholder="Jane"
+                  autoCapitalize="words"
+                  autoComplete="given-name"
+                  returnKeyType="next"
+                  onSubmitEditing={() => lastNameRef.current?.focus()}
+                  editable={!submitting}
+                  containerStyle={styles.nameField}
+                />
+                <TextField
+                  ref={lastNameRef}
+                  label="Last name"
+                  value={lastName}
+                  onChangeText={(next) => {
+                    setLastName(next);
+                    if (fieldErrors.lastName) setFieldErrors((prev) => ({ ...prev, lastName: undefined }));
+                  }}
+                  error={fieldErrors.lastName}
+                  placeholder="Doe"
+                  autoCapitalize="words"
+                  autoComplete="family-name"
+                  returnKeyType="next"
+                  onSubmitEditing={() => usernameRef.current?.focus()}
+                  editable={!submitting}
+                  containerStyle={styles.nameField}
+                />
+              </View>
+              <UsernameField
+                ref={usernameRef}
+                value={username}
+                onChangeText={(next) => {
+                  setUsername(next);
+                  if (fieldErrors.username) setFieldErrors((prev) => ({ ...prev, username: undefined }));
+                }}
+                status={usernameStatus}
+                error={fieldErrors.username}
+                returnKeyType="next"
+                onSubmitEditing={() => emailRef.current?.focus()}
+                editable={!submitting}
+              />
+            </>
+          ) : null}
+
           <TextField
+            ref={emailRef}
             label="Email"
             value={email}
             onChangeText={(next) => {
@@ -296,7 +384,9 @@ function describeAuthError(error: unknown, mode: AuthMode): string {
 
   if (error instanceof ApiError) {
     if (error.status === 409) {
-      return 'An account with that email already exists. Try signing in instead.';
+      return error.message === 'That username is taken'
+        ? 'That username is taken. Try another.'
+        : 'An account with that email already exists. Try signing in instead.';
     }
     if (error.status === 401) return 'Incorrect email or password.';
     if (error.status === 422) return error.message;
@@ -361,6 +451,13 @@ const styles = StyleSheet.create({
   },
   form: {
     gap: space[4],
+  },
+  nameRow: {
+    flexDirection: 'row',
+    gap: space[3],
+  },
+  nameField: {
+    flex: 1,
   },
   // Right-aligned under the password field, where the eye looks after
   // failing to remember it.

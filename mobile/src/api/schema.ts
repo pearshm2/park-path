@@ -96,6 +96,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/auth/google": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Google Sign In
+         * @description Sign in with Google. The same Google account always reaches the same
+         *     ParkPath account; a Google account whose (verified) email already has
+         *     a ParkPath account is linked to it; otherwise a new account is made
+         *     from the Google profile, with a username from the email that the app
+         *     then offers to change.
+         */
+        post: operations["google_sign_in_auth_google_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/auth/me": {
         parameters: {
             query?: never;
@@ -110,6 +134,63 @@ export interface paths {
          *     `current_user: User = Depends(get_current_user)` as a parameter.
          */
         get: operations["read_current_user_auth_me_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update Current User */
+        patch: operations["update_current_user_auth_me_patch"];
+        trace?: never;
+    };
+    "/auth/me/password": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Change Password */
+        post: operations["change_password_auth_me_password_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/me/avatar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Set Avatar */
+        put: operations["set_avatar_auth_me_avatar_put"];
+        post?: never;
+        /** Remove Avatar */
+        delete: operations["remove_avatar_auth_me_avatar_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/username-available": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Username Available
+         * @description Public, so the sign-up form can check as you type. Says only whether a
+         *     name is free, never whose it is.
+         */
+        get: operations["username_available_auth_username_available_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -439,6 +520,41 @@ export interface paths {
         patch: operations["update_trip_trips__trip_id__patch"];
         trace?: never;
     };
+    "/trips/{trip_id}/comments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Comments */
+        get: operations["list_comments_trips__trip_id__comments_get"];
+        put?: never;
+        /** Add Comment */
+        post: operations["add_comment_trips__trip_id__comments_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/trips/{trip_id}/comments/{comment_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Comment */
+        delete: operations["delete_comment_trips__trip_id__comments__comment_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/passport": {
         parameters: {
             query?: never;
@@ -473,6 +589,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/users/{user_id}/avatar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read Avatar */
+        get: operations["read_avatar_users__user_id__avatar_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -491,6 +624,19 @@ export interface components {
             progress: number;
             /** Goal */
             goal: number;
+        };
+        /**
+         * AvatarUpload
+         * @description PUT /auth/me/avatar: the picture, base64-encoded (at most ~300 KB).
+         */
+        AvatarUpload: {
+            /**
+             * Content Type
+             * @enum {string}
+             */
+            content_type: "image/jpeg" | "image/png";
+            /** Data */
+            data: string;
         };
         /**
          * BrochureMapOut
@@ -519,13 +665,15 @@ export interface components {
             /** Since */
             since: string | null;
         };
-        /** FriendRequestCreate */
+        /**
+         * FriendRequestCreate
+         * @description Who to ask: by email, or by username (typed, or from their QR code).
+         */
         FriendRequestCreate: {
-            /**
-             * Email
-             * Format: email
-             */
-            email: string;
+            /** Email */
+            email?: string | null;
+            /** Username */
+            username?: string | null;
         };
         /**
          * FriendshipOut
@@ -548,6 +696,26 @@ export interface components {
             accepted_at: string | null;
             requester: components["schemas"]["UserOut"];
             addressee: components["schemas"]["UserOut"];
+        };
+        /**
+         * GoogleSignIn
+         * @description POST /auth/google: the ID token the phone got from Google.
+         */
+        GoogleSignIn: {
+            /** Id Token */
+            id_token: string;
+        };
+        /** GoogleToken */
+        GoogleToken: {
+            /** Access Token */
+            access_token: string;
+            /**
+             * Token Type
+             * @default bearer
+             */
+            token_type: string;
+            /** Created */
+            created: boolean;
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -652,12 +820,20 @@ export interface components {
             /** Latest Trip Id */
             latest_trip_id: number | null;
         };
+        /** PasswordChange */
+        PasswordChange: {
+            /** Current Password */
+            current_password: string;
+            /** New Password */
+            new_password: string;
+        };
         /**
          * PhotoUploadOut
-         * @description A signed form for one photo upload. The app sends a multipart POST to
-         *     `upload_url`: every entry of `fields` first, in order, then the file as
-         *     the last part named `file`. Then it passes `key` in `photo_keys` when it
-         *     saves the trip. The form stops working after `expires_in` seconds.
+         * @description A signed form for one photo or video upload. The app sends a multipart
+         *     POST to `upload_url`: every entry of `fields` first, in order, then the
+         *     file as the last part named `file`. Then it passes `key` in `photos`
+         *     when it saves the trip. The form stops working after `expires_in`
+         *     seconds.
          */
         PhotoUploadOut: {
             /** Key */
@@ -675,14 +851,14 @@ export interface components {
         };
         /**
          * PhotoUploadRequest
-         * @description Ask for permission to upload one photo.
+         * @description Ask for permission to upload one photo or video.
          */
         PhotoUploadRequest: {
             /**
              * Content Type
              * @enum {string}
              */
-            content_type: "image/jpeg" | "image/png" | "image/webp" | "image/heic";
+            content_type: "image/jpeg" | "image/png" | "image/webp" | "image/heic" | "video/mp4" | "video/quicktime";
             /** Size Bytes */
             size_bytes: number;
         };
@@ -834,6 +1010,24 @@ export interface components {
             /** Paths */
             paths: number[][][];
         };
+        /** TripCommentCreate */
+        TripCommentCreate: {
+            /** Body */
+            body: string;
+        };
+        /** TripCommentOut */
+        TripCommentOut: {
+            /** Id */
+            id: number;
+            author: components["schemas"]["UserOut"];
+            /** Body */
+            body: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
         /** TripCreate */
         TripCreate: {
             /** Park Code */
@@ -855,10 +1049,14 @@ export interface components {
             notes: string;
             /** Rating */
             rating?: number | null;
+            /** Trails */
+            trails?: string[] | null;
             /** Stamp */
             stamp?: string | null;
             /** @default private */
             visibility: components["schemas"]["Visibility"];
+            /** Photos */
+            photos?: components["schemas"]["TripPhotoIn"][] | null;
             /** Photo Keys */
             photo_keys?: string[];
             /** Companion Ids */
@@ -884,6 +1082,8 @@ export interface components {
             notes: string;
             /** Rating */
             rating: number | null;
+            /** Trails */
+            trails: string[];
             /** Stamp */
             stamp: string | null;
             visibility: components["schemas"]["Visibility"];
@@ -891,6 +1091,11 @@ export interface components {
             photos: components["schemas"]["TripPhotoOut"][];
             /** Companions */
             companions: components["schemas"]["UserOut"][];
+            /**
+             * Comment Count
+             * @default 0
+             */
+            comment_count: number;
             /**
              * Created At
              * Format: date-time
@@ -902,16 +1107,45 @@ export interface components {
              */
             updated_at: string;
         };
+        /**
+         * TripPhotoIn
+         * @description A photo or video on a trip: its key from the upload, and its caption.
+         */
+        TripPhotoIn: {
+            /** Key */
+            key: string;
+            /**
+             * Caption
+             * @default
+             */
+            caption: string;
+            /** Duration Ms */
+            duration_ms?: number | null;
+        };
         /** TripPhotoOut */
         TripPhotoOut: {
             /** Key */
             key: string;
             /** Url */
             url: string | null;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "photo" | "video";
+            /** Caption */
+            caption: string;
+            /** Duration Ms */
+            duration_ms: number | null;
         };
         /**
          * TripUpdate
-         * @description Only the fields sent change. `rating` and `stamp` can be set to null to clear them.
+         * @description Only the fields sent change. `rating` can be set to null to clear it.
+         *
+         *     `trails` replaces the list. `stamp`, the older one-trail form, sets the
+         *     first trail (keeping the rest), or removes it when null; it's ignored
+         *     when `trails` is sent. Likewise `photos` replaces the photos and their
+         *     captions, and `photo_keys` (keys only) is ignored when it's sent.
          */
         TripUpdate: {
             /** Visited On */
@@ -922,9 +1156,13 @@ export interface components {
             notes?: string | null;
             /** Rating */
             rating?: number | null;
+            /** Trails */
+            trails?: string[] | null;
             /** Stamp */
             stamp?: string | null;
             visibility?: components["schemas"]["Visibility"] | null;
+            /** Photos */
+            photos?: components["schemas"]["TripPhotoIn"][] | null;
             /** Photo Keys */
             photo_keys?: string[] | null;
             /** Companion Ids */
@@ -939,6 +1177,12 @@ export interface components {
             email: string;
             /** Password */
             password: string;
+            /** Username */
+            username: string;
+            /** First Name */
+            first_name: string;
+            /** Last Name */
+            last_name: string;
         };
         /** UserLogin */
         UserLogin: {
@@ -959,6 +1203,43 @@ export interface components {
              * Format: email
              */
             email: string;
+            /** Username */
+            username: string;
+            /** First Name */
+            first_name: string;
+            /** Last Name */
+            last_name: string;
+            /** Avatar Url */
+            avatar_url?: string | null;
+        };
+        /**
+         * UserUpdate
+         * @description PATCH /auth/me: any of these; the rest are left as they are. Changing
+         *     the email also needs the current password.
+         */
+        UserUpdate: {
+            /** Username */
+            username?: string | null;
+            /** First Name */
+            first_name?: string | null;
+            /** Last Name */
+            last_name?: string | null;
+            /** Email */
+            email?: string | null;
+            /** Current Password */
+            current_password?: string | null;
+        };
+        /**
+         * UsernameCheck
+         * @description GET /auth/username-available: whether it's free, and if not, why.
+         */
+        UsernameCheck: {
+            /** Username */
+            username: string;
+            /** Available */
+            available: boolean;
+            /** Reason */
+            reason?: string | null;
         };
         /** ValidationError */
         ValidationError: {
@@ -1122,6 +1403,39 @@ export interface operations {
             };
         };
     };
+    google_sign_in_auth_google_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GoogleSignIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GoogleToken"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     read_current_user_auth_me_get: {
         parameters: {
             query?: never;
@@ -1138,6 +1452,154 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["UserOut"];
+                };
+            };
+        };
+    };
+    update_current_user_auth_me_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UserUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    change_password_auth_me_password_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PasswordChange"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_avatar_auth_me_avatar_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AvatarUpload"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    remove_avatar_auth_me_avatar_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserOut"];
+                };
+            };
+        };
+    };
+    username_available_auth_username_available_get: {
+        parameters: {
+            query: {
+                username: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UsernameCheck"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -1832,6 +2294,102 @@ export interface operations {
             };
         };
     };
+    list_comments_trips__trip_id__comments_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                trip_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TripCommentOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    add_comment_trips__trip_id__comments_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                trip_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TripCommentCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TripCommentOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_comment_trips__trip_id__comments__comment_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                trip_id: number;
+                comment_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     my_passport_passport_get: {
         parameters: {
             query?: never;
@@ -1870,6 +2428,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PassportOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_avatar_users__user_id__avatar_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */

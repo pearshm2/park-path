@@ -1,7 +1,7 @@
 """
-Photo storage: signed-URL uploads to S3.
+Photo and video storage: signed-URL uploads to S3.
 
-Photos never pass through the API. The flow:
+Photos and videos never pass through the API. The flow:
 
   1. The app asks POST /trips/photos/upload-url for permission to upload one
      photo. The API picks a storage key under the caller's own folder
@@ -39,8 +39,24 @@ ALLOWED_CONTENT_TYPES = {
     "image/png": "png",
     "image/webp": "webp",
     "image/heic": "heic",
+    "video/mp4": "mp4",
+    "video/quicktime": "mov",
 }
+VIDEO_EXTENSIONS = {"mp4", "mov"}
 MAX_PHOTO_BYTES = 10 * 1024 * 1024  # 10 MB; phone photos are ~1 to 4 MB
+# The app takes clips up to a minute; a minute of 1080p phone video is
+# roughly 60 to 130 MB depending on the phone.
+MAX_VIDEO_BYTES = 150 * 1024 * 1024
+
+
+def max_bytes_for(content_type: str) -> int:
+    """The largest upload allowed for a content type."""
+    return MAX_VIDEO_BYTES if content_type.startswith("video/") else MAX_PHOTO_BYTES
+
+
+def media_kind(key: str) -> str:
+    """"video" or "photo", from the extension the key was given at upload."""
+    return "video" if key.rsplit(".", 1)[-1].lower() in VIDEO_EXTENSIONS else "photo"
 
 
 @dataclass
@@ -92,7 +108,7 @@ class S3Storage:
             Fields={"Content-Type": content_type},
             Conditions=[
                 {"Content-Type": content_type},
-                ["content-length-range", 1, MAX_PHOTO_BYTES],
+                ["content-length-range", 1, max_bytes_for(content_type)],
             ],
             ExpiresIn=expires,
         )

@@ -20,7 +20,8 @@ from sqlalchemy import delete
 from app.database import SessionLocal
 from app.main import app
 from app.models import Site, User
-from app.storage import MAX_PHOTO_BYTES, SignedUpload, get_storage, user_prefix
+from app.storage import MAX_PHOTO_BYTES, MAX_VIDEO_BYTES, SignedUpload, get_storage, user_prefix
+from tests.helpers import new_names
 
 client = TestClient(app)
 
@@ -68,7 +69,10 @@ def no_storage():
 class Person:
     def __init__(self):
         self.email = f"trip-{uuid.uuid4().hex[:10]}@example.com"
-        resp = client.post("/auth/signup", json={"email": self.email, "password": "correct-horse"})
+        resp = client.post(
+            "/auth/signup",
+            json={"email": self.email, "password": "correct-horse", **new_names()},
+        )
         self.headers = {"Authorization": f"Bearer {resp.json()['access_token']}"}
         self.id = client.get("/auth/me", headers=self.headers).json()["id"]
 
@@ -471,6 +475,131 @@ def test_photo_urls_work_for_friends_reading_a_shared_trip(people, codes, storag
     key = ann.upload(storage)
     trip_id = ann.log(codes[0], visibility="friends", photo_keys=[key]).json()["id"]
     assert bob.get(trip_id).json()["photos"][0]["url"].endswith("?signed=1")
+
+
+# --- trails, captions and videos ------------------------------------------------
+
+
+def test_several_trails_in_order(people, codes):
+    ann = people()
+    resp = ann.log(codes[0], trails=["  Angels Landing ", "The Narrows", "", "angels landing"])
+    assert resp.status_code == 201, resp.text
+    body = resp.json()
+    # Trimmed, blanks and repeats (any case) dropped, order kept.
+    assert body["trails"] == ["Angels Landing", "The Narrows"]
+    assert body["stamp"] == "Angels Landing"  # the first, for older clients
+
+
+def test_stamp_is_the_older_one_trail_form(people, codes):
+    ann = people()
+    trip = ann.log(codes[0], stamp="Observation Point").json()
+    assert trip["trails"] == ["Observation Point"]
+    # `trails` wins when both are sent.
+    both = ann.log(codes[0], stamp="Ignored", trails=["Kept"]).json()
+    assert both["trails"] == ["Kept"]
+
+
+def test_patch_trails_and_stamp(people, codes):
+    ann = people()
+    trip_id = ann.log(codes[0], trails=["A", "B", "C"]).json()["id"]
+
+    def patch(body):
+        resp = client.patch(f"/trips/{trip_id}", json=body, headers=ann.headers)
+        assert resp.status_code == 200, resp.text
+        return resp.json()["trails"]
+
+    assert patch({"trails": ["C", "A"]}) == ["C", "A"]
+    # The older form changes only the first trail...
+    assert patch({"stamp": "Z"}) == ["Z", "A"]
+    # ...and null removes it, keeping the rest.
+    assert patch({"stamp": None}) == ["A"]
+    assert patch({"trails": []}) == []
+    assert client.patch(
+        f"/trips/{trip_id}", json={"trails": None}, headers=ann.headers
+    ).status_code == 400
+
+
+def test_at_most_twenty_trails_of_200_characters(people, codes):
+    ann = people()
+    assert ann.log(codes[0], trails=[f"t{i}" for i in range(21)]).status_code == 422
+    assert ann.log(codes[0], trails=["x" * 201]).status_code == 422
+
+
+def test_photos_with_captions(people, codes, storage):
+    ann = people()
+    a, b = ann.upload(storage), ann.upload(storage)
+    resp = ann.log(
+        codes[0], photos=[{"key": a, "caption": "First light"}, {"key": b}]
+    )
+    assert resp.status_code == 201, resp.text
+    photos = resp.json()["photos"]
+    assert [(p["key"], p["caption"], p["kind"]) for p in photos] == [
+        (a, "First light", "photo"),
+        (b, "", "photo"),
+    ]
+
+
+def test_patch_captions_and_keys_only_keeps_them(people, codes, storage):
+    ann = people()
+    a, b = ann.upload(storage), ann.upload(storage)
+    trip_id = ann.log(codes[0], photos=[{"key": a, "caption": "One"}, {"key": b}]).json()["id"]
+
+    resp = client.patch(
+        f"/trips/{trip_id}",
+        json={"photos": [{"key": b, "caption": "Now first"}, {"key": a, "caption": "One"}]},
+        headers=ann.headers,
+    )
+    assert [(p["key"], p["caption"]) for p in resp.json()["photos"]] == [
+        (b, "Now first"),
+        (a, "One"),
+    ]
+    # The older keys-only form reorders without wiping the captions.
+    resp = client.patch(f"/trips/{trip_id}", json={"photo_keys": [a, b]}, headers=ann.headers)
+    assert [(p["key"], p["caption"]) for p in resp.json()["photos"]] == [
+        (a, "One"),
+        (b, "Now first"),
+    ]
+
+
+def test_captions_have_a_length_limit(people, codes, storage):
+    ann = people()
+    key = ann.upload(storage)
+    assert ann.log(codes[0], photos=[{"key": key, "caption": "x" * 501}]).status_code == 422
+
+
+def test_videos_upload_and_come_back_as_videos(people, codes, storage):
+    ann = people()
+    mp4 = ann.upload(storage, content_type="video/mp4")
+    mov = ann.upload(storage, content_type="video/quicktime")
+    assert mp4.endswith(".mp4") and mov.endswith(".mov")
+    resp = ann.log(
+        codes[0],
+        photos=[
+            {"key": mp4, "caption": "Wading in", "duration_ms": 12_500},
+            {"key": mov},
+        ],
+    )
+    assert resp.status_code == 201, resp.text
+    photos = resp.json()["photos"]
+    assert [(p["kind"], p["duration_ms"]) for p in photos] == [("video", 12_500), ("video", None)]
+
+
+def test_videos_get_a_bigger_size_limit_than_photos(people, storage):
+    ann = people()
+
+    def ask(content_type, size_bytes):
+        return client.post(
+            "/trips/photos/upload-url",
+            json={"content_type": content_type, "size_bytes": size_bytes},
+            headers=ann.headers,
+        )
+
+    video = ask("video/mp4", 50 * 1024 * 1024)
+    assert video.status_code == 200, video.text
+    assert video.json()["max_bytes"] == MAX_VIDEO_BYTES
+    # The same size is too big for a photo.
+    assert ask("image/jpeg", 50 * 1024 * 1024).status_code == 422
+    assert ask("video/mp4", MAX_VIDEO_BYTES + 1).status_code == 422
 
 
 # --- the real S3 signer, offline ----------------------------------------------------

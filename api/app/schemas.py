@@ -7,17 +7,85 @@ of accidental data leaks.
 """
 
 from datetime import date, datetime, timedelta
-from typing import Literal
+from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
 
-from app.storage import MAX_PHOTO_BYTES
+from app.storage import MAX_VIDEO_BYTES, max_bytes_for
 from app.visibility import Visibility
+
+Name = Annotated[str, Field(min_length=1, max_length=50)]
+
+
+def _clean_name(value: str) -> str:
+    value = " ".join(value.split())
+    if not value:
+        raise ValueError("Enter a name")
+    return value
 
 
 class UserCreate(BaseModel):
     email: EmailStr
     password: str
+    # Checked against app/usernames.py's rules in the route, so the error
+    # can say what's wrong.
+    username: str
+    first_name: Name
+    last_name: Name
+
+    _names = field_validator("first_name", "last_name")(_clean_name)
+
+
+class UserUpdate(BaseModel):
+    """
+    PATCH /auth/me: any of these; the rest are left as they are. Changing
+    the email also needs the current password.
+    """
+
+    username: str | None = None
+    first_name: Name | None = None
+    last_name: Name | None = None
+    email: EmailStr | None = None
+    current_password: str | None = None
+
+    @field_validator("first_name", "last_name")
+    @classmethod
+    def _names(cls, value: str | None) -> str | None:
+        return None if value is None else _clean_name(value)
+
+
+class GoogleSignIn(BaseModel):
+    """POST /auth/google: the ID token the phone got from Google."""
+
+    id_token: str = Field(min_length=20, max_length=5000)
+
+
+class GoogleToken(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    # True when this sign-in made a new account: the app then offers to
+    # change the name and username it was given.
+    created: bool
+
+
+class PasswordChange(BaseModel):
+    current_password: str
+    new_password: str = Field(min_length=8, max_length=200)
+
+
+class AvatarUpload(BaseModel):
+    """PUT /auth/me/avatar: the picture, base64-encoded (at most ~300 KB)."""
+
+    content_type: Literal["image/jpeg", "image/png"]
+    data: str = Field(max_length=420_000)
+
+
+class UsernameCheck(BaseModel):
+    """GET /auth/username-available: whether it's free, and if not, why."""
+
+    username: str
+    available: bool
+    reason: str | None = None
 
 
 class UserLogin(BaseModel):
@@ -30,6 +98,11 @@ class UserOut(BaseModel):
 
     id: int
     email: EmailStr
+    username: str
+    first_name: str
+    last_name: str
+    # GET this (with your token) for their profile picture; null without one.
+    avatar_url: str | None = None
 
 
 class Token(BaseModel):
@@ -66,7 +139,16 @@ class SiteOut(BaseModel):
 
 
 class FriendRequestCreate(BaseModel):
-    email: EmailStr
+    """Who to ask: by email, or by username (typed, or from their QR code)."""
+
+    email: EmailStr | None = None
+    username: str | None = None
+
+    @model_validator(mode="after")
+    def _one_of(self):
+        if (self.email is None) == (self.username is None):
+            raise ValueError("Give an email or a username")
+        return self
 
 
 class FriendshipOut(BaseModel):
@@ -222,21 +304,35 @@ class ParkMapOut(BaseModel):
 
 MAX_TRIP_PHOTOS = 8
 MAX_TRIP_COMPANIONS = 20
+MAX_TRIP_TRAILS = 20
+MAX_CAPTION_LENGTH = 500
+# Longest video length the API accepts; the app itself takes a minute.
+MAX_VIDEO_MS = 5 * 60 * 1000
 
 
 class PhotoUploadRequest(BaseModel):
-    """Ask for permission to upload one photo."""
+    """Ask for permission to upload one photo or video."""
 
-    content_type: Literal["image/jpeg", "image/png", "image/webp", "image/heic"]
-    size_bytes: int = Field(gt=0, le=MAX_PHOTO_BYTES)
+    content_type: Literal[
+        "image/jpeg", "image/png", "image/webp", "image/heic", "video/mp4", "video/quicktime"
+    ]
+    size_bytes: int = Field(gt=0, le=MAX_VIDEO_BYTES)
+
+    @model_validator(mode="after")
+    def within_its_limit(self) -> "PhotoUploadRequest":
+        # Photos have a smaller limit than videos.
+        if self.size_bytes > max_bytes_for(self.content_type):
+            raise ValueError(f"size_bytes is over the limit for {self.content_type}")
+        return self
 
 
 class PhotoUploadOut(BaseModel):
     """
-    A signed form for one photo upload. The app sends a multipart POST to
-    `upload_url`: every entry of `fields` first, in order, then the file as
-    the last part named `file`. Then it passes `key` in `photo_keys` when it
-    saves the trip. The form stops working after `expires_in` seconds.
+    A signed form for one photo or video upload. The app sends a multipart
+    POST to `upload_url`: every entry of `fields` first, in order, then the
+    file as the last part named `file`. Then it passes `key` in `photos`
+    when it saves the trip. The form stops working after `expires_in`
+    seconds.
     """
 
     key: str
@@ -246,10 +342,26 @@ class PhotoUploadOut(BaseModel):
     max_bytes: int
 
 
+class TripPhotoIn(BaseModel):
+    """A photo or video on a trip: its key from the upload, and its caption."""
+
+    key: str
+    caption: str = Field("", max_length=MAX_CAPTION_LENGTH)
+    # A video's length in ms, as the phone measured it.
+    duration_ms: int | None = Field(None, ge=0, le=MAX_VIDEO_MS)
+
+
 class TripPhotoOut(BaseModel):
     key: str
     # Short-lived signed link; fetch the trip again for a fresh one.
     url: str | None
+    kind: Literal["photo", "video"]
+    caption: str
+    duration_ms: int | None
+
+
+# Each trail or spot: up to 200 characters.
+Trail = Annotated[str, Field(max_length=200)]
 
 
 class TripCreate(BaseModel):
@@ -258,9 +370,15 @@ class TripCreate(BaseModel):
     title: str = Field("", max_length=200)
     notes: str = Field("", max_length=10_000)
     rating: int | None = Field(None, ge=1, le=5)
+    # Trails or spots they loved, in order.
+    trails: list[Trail] | None = Field(None, max_length=MAX_TRIP_TRAILS)
+    # The older form of `trails`: one trail. Ignored when `trails` is sent.
     stamp: str | None = Field(None, max_length=200)
     visibility: Visibility = Visibility.PRIVATE
-    # Keys from POST /trips/photos/upload-url, in the order to show them.
+    # Uploads from POST /trips/photos/upload-url, in the order to show them.
+    photos: list[TripPhotoIn] | None = Field(None, max_length=MAX_TRIP_PHOTOS)
+    # The older form of `photos`: keys only, no captions. Ignored when
+    # `photos` is sent.
     photo_keys: list[str] = Field(default_factory=list, max_length=MAX_TRIP_PHOTOS)
     # User ids of friends who were there.
     companion_ids: list[int] = Field(default_factory=list, max_length=MAX_TRIP_COMPANIONS)
@@ -275,14 +393,23 @@ class TripCreate(BaseModel):
 
 
 class TripUpdate(BaseModel):
-    """Only the fields sent change. `rating` and `stamp` can be set to null to clear them."""
+    """
+    Only the fields sent change. `rating` can be set to null to clear it.
+
+    `trails` replaces the list. `stamp`, the older one-trail form, sets the
+    first trail (keeping the rest), or removes it when null; it's ignored
+    when `trails` is sent. Likewise `photos` replaces the photos and their
+    captions, and `photo_keys` (keys only) is ignored when it's sent.
+    """
 
     visited_on: date | None = None
     title: str | None = Field(None, max_length=200)
     notes: str | None = Field(None, max_length=10_000)
     rating: int | None = Field(None, ge=1, le=5)
+    trails: list[Trail] | None = Field(None, max_length=MAX_TRIP_TRAILS)
     stamp: str | None = Field(None, max_length=200)
     visibility: Visibility | None = None
+    photos: list[TripPhotoIn] | None = Field(None, max_length=MAX_TRIP_PHOTOS)
     photo_keys: list[str] | None = Field(None, max_length=MAX_TRIP_PHOTOS)
     companion_ids: list[int] | None = Field(None, max_length=MAX_TRIP_COMPANIONS)
 
@@ -303,12 +430,36 @@ class TripOut(BaseModel):
     title: str
     notes: str
     rating: int | None
+    trails: list[str]
+    # The first trail, for older clients; null without any.
     stamp: str | None
     visibility: Visibility
     photos: list[TripPhotoOut]
     companions: list[UserOut]
+    comment_count: int = 0
     created_at: datetime
     updated_at: datetime
+
+
+class TripCommentCreate(BaseModel):
+    body: str = Field(min_length=1, max_length=1000)
+
+    @field_validator("body")
+    @classmethod
+    def _not_blank(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("Write something first")
+        return value
+
+
+class TripCommentOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    author: UserOut = Field(validation_alias="user")
+    body: str
+    created_at: datetime
 
 
 # --- Passport (GET /passport) -----------------------------------------------

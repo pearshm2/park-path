@@ -10,11 +10,24 @@
  *
  * `placement="bottom"` sits it low on the screen, for choices about
  * something the person should still see above it.
+ *
+ * It opens with its own quick fade and rise rather than the popup's
+ * built-in fade, which on Android is slow and shows what's behind through
+ * the card as it goes. Android first lays the popup out a little short of
+ * the screen, then stretches it under the navigation bar; so the card
+ * stays hidden until the popup is full height (or 250 ms have passed), and
+ * never shows in one place and then jumps to another.
  */
 
-import type { ReactNode } from 'react';
-import { Modal, Pressable, StyleSheet, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useEffect, type ReactNode } from 'react';
+import { Dimensions, Modal, Pressable, StyleSheet, View } from 'react-native';
+import Animated, {
+  Easing,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from 'react-native-reanimated';
+import { initialWindowMetrics } from 'react-native-safe-area-context';
 
 import { colors, fonts, radius, shadow, space } from '../theme';
 import { BodyText, Heading } from './Typography';
@@ -44,25 +57,58 @@ export function Dialog({
   onDismiss: () => void;
   placement?: 'center' | 'bottom';
 }) {
-  const insets = useSafeAreaInsets();
+  // The screen's own insets, fixed: inside the popup the live ones arrive a
+  // moment late and move the card after it's shown.
+  const bottomInset = initialWindowMetrics?.insets.bottom ?? 0;
+
+  // 0 hidden, 1 shown. Starts once the popup is full height.
+  const shown = useSharedValue(0);
+  function reveal() {
+    if (shown.value > 0) return;
+    shown.value = withTiming(1, { duration: 180, easing: Easing.out(Easing.cubic) });
+  }
+  useEffect(() => {
+    if (!visible) {
+      shown.value = 0;
+      return;
+    }
+    // Should the popup never quite reach the screen's height, show anyway.
+    const fallback = setTimeout(reveal, 250);
+    return () => clearTimeout(fallback);
+    // reveal only reads the shared value.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visible, shown]);
+  const backdropStyle = useAnimatedStyle(() => ({ opacity: shown.value }));
+  const cardStyle = useAnimatedStyle(() => ({
+    // Solid early, so what's behind doesn't show through it for long.
+    opacity: Math.min(1, shown.value * 3),
+    transform: [{ translateY: (1 - shown.value) * (placement === 'bottom' ? 28 : 12) }],
+  }));
+
   return (
     <Modal
       visible={visible}
       transparent
-      animationType="fade"
+      // Our own animation instead (see above).
+      animationType="none"
+      hardwareAccelerated
       onRequestClose={onDismiss}
       // Dim the whole screen on Android, status and navigation bars too.
       statusBarTranslucent
       navigationBarTranslucent
     >
       <View
+        onLayout={(event) => {
+          if (event.nativeEvent.layout.height >= Dimensions.get('screen').height - 2) reveal();
+        }}
         style={[
           styles.overlay,
-          placement === 'bottom' && [styles.overlayBottom, { paddingBottom: insets.bottom + space[4] }],
+          placement === 'bottom' && [styles.overlayBottom, { paddingBottom: bottomInset + space[4] }],
         ]}
       >
+        <Animated.View style={[StyleSheet.absoluteFill, styles.backdrop, backdropStyle]} />
         <Pressable style={StyleSheet.absoluteFill} onPress={onDismiss} accessibilityLabel="Close" />
-        <View style={styles.card} accessibilityViewIsModal>
+        <Animated.View style={[styles.card, cardStyle]} accessibilityViewIsModal>
           {icon ? <View style={styles.icon}>{icon}</View> : null}
           <Heading size={21} style={styles.title}>
             {title}
@@ -94,7 +140,7 @@ export function Dialog({
               );
             })}
           </View>
-        </View>
+        </Animated.View>
       </View>
     </Modal>
   );
@@ -106,6 +152,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     padding: space[6],
+  },
+  backdrop: {
     backgroundColor: 'rgba(32, 30, 29, 0.42)',
   },
   overlayBottom: {

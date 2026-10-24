@@ -5,15 +5,25 @@
  * portrait when it closes. Everything else is laid out for a tall phone,
  * so the rest of the app is locked to portrait (see the root layout).
  *
- * The map runs edge to edge; only the controls floating over it keep
- * clear of the notch and home bar. Sideways the map is limited by the
+ * The map runs edge to edge, under the status and navigation bars (on
+ * Android a modal otherwise stops short of both, and the screen behind
+ * shows along those edges), with the status bar hidden like a video's
+ * full screen; only the controls floating over it keep clear of the notch
+ * and home bar. Sideways the map is limited by the
  * screen's height, so it sits clear of the notch at the sides anyway.
  *
  * Tapping a park shows its name with a View button, which closes this
  * view and opens that park's card in Explore.
+ *
+ * Opening it quickly: the expand button calls turnSideways() as it's
+ * pressed, so the screen starts turning before anything re-renders; the
+ * modal appears at once (no fade of its own: the map fades in once the
+ * screen has turned); and its window is the page's cream, not black, so
+ * the part of the screen Android hasn't redrawn mid-turn isn't a dark band.
  */
 
 import * as ScreenOrientation from 'expo-screen-orientation';
+import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
 import { Modal, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -50,6 +60,11 @@ type FullMapViewProps = {
   onView: (site: Site) => void;
 };
 
+/** Starts turning the screen sideways; call it as the map is opened. */
+export function turnSideways() {
+  ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE).catch(() => {});
+}
+
 export function FullMapView(props: FullMapViewProps) {
   const { visible, onClose } = props;
 
@@ -57,7 +72,8 @@ export function FullMapView(props: FullMapViewProps) {
   // upright again when it closes.
   useEffect(() => {
     if (!visible) return;
-    ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE).catch(() => {});
+    // Usually already asked for by the expand button; harmless twice.
+    turnSideways();
     return () => {
       ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP).catch(() => {});
     };
@@ -66,14 +82,19 @@ export function FullMapView(props: FullMapViewProps) {
   return (
     <Modal
       visible={visible}
-      animationType="fade"
+      animationType="none"
+      backdropColor={colors.bg}
       onRequestClose={onClose}
+      // Under the system bars, so the map fills the whole screen.
+      statusBarTranslucent
+      navigationBarTranslucent
       // iOS keeps a modal portrait unless it's told otherwise.
       supportedOrientations={['landscape-left', 'landscape-right']}
     >
       {/* Its own safe-area provider: the app's one, outside the modal, keeps
           the upright insets after the phone turns, which cut the map short. */}
       <SafeAreaProvider>
+        {visible ? <StatusBar hidden /> : null}
         <FullMapBody {...props} />
       </SafeAreaProvider>
     </Modal>
@@ -94,6 +115,9 @@ function FullMapBody({
   const insets = useSafeAreaInsets();
   const { width, height } = useWindowDimensions();
   const landscape = width > height;
+  // The screen's sides, long and short, whichever way it's held now.
+  const long = Math.max(width, height);
+  const short = Math.min(width, height);
   const [selected, setSelected] = useState<Site | null>(null);
   /** A completed region whose pins were tapped back into view. */
   const [revealed, setRevealed] = useState<RegionId | null>(null);
@@ -106,12 +130,16 @@ function FullMapBody({
   return (
     // Gestures inside a modal need their own root on Android.
     <GestureHandlerRootView style={styles.screen}>
-      {/* Nothing but the background until the screen has turned: drawing the
-          map before then lays it out for an upright screen, and it visibly
-          jumps into place once the rotation lands. The same check hides it
-          the moment the screen starts turning back on close. */}
-      {landscape ? (
-        <Animated.View entering={FadeIn.duration(FADE_MS)} style={styles.fill}>
+      {/* The map starts drawing straight away, hidden, at the size the
+          screen will be once it has turned (its long side across), so it's
+          ready the moment the rotation lands instead of starting then. A
+          fixed size also means it doesn't lay out for the upright screen
+          and jump into place. It shows only once the screen is sideways,
+          and hides the moment it starts turning back on close. */}
+      <View
+        pointerEvents={landscape ? 'auto' : 'none'}
+        style={[styles.mapBox, { width: long, height: short, opacity: landscape ? 1 : 0 }]}
+      >
           <ParkMap
             sites={sites}
             rankById={rankById}
@@ -138,6 +166,10 @@ function FullMapBody({
             controlInset={{ top: insets.top, right: insets.right }}
             style={styles.map}
           />
+      </View>
+
+      {landscape ? (
+        <Animated.View entering={FadeIn.duration(FADE_MS)} style={styles.fill} pointerEvents="box-none">
 
           {/* Top left, because the map's own Reset button takes the top right. */}
           <View
@@ -227,6 +259,11 @@ const styles = StyleSheet.create({
   },
   fill: {
     flex: 1,
+  },
+  mapBox: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
   },
   map: {
     position: 'absolute',

@@ -75,10 +75,11 @@ import Animated, {
   Easing,
   useAnimatedProps,
   useSharedValue,
+  withDelay,
   withTiming,
   type SharedValue,
 } from 'react-native-reanimated';
-import Svg, { Circle, G, Path, Text as SvgText, type GProps } from 'react-native-svg';
+import Svg, { Circle, ClipPath, Defs, G, Path, Text as SvgText, type GProps } from 'react-native-svg';
 import { scheduleOnRN } from 'react-native-worklets';
 
 import type { Site, SiteStatus } from '../data/parks';
@@ -188,6 +189,13 @@ type ParkMapProps = {
   /** A completed region whose pins show anyway, without zooming onto it. */
   revealedRegion?: RegionId | null;
   /**
+   * A region just completed, filling in as you watch: drawn unfilled, then
+   * its completed colours and gold edge spread out from its middle. Once
+   * it's full, `onFilled` is called and its stamp shows.
+   */
+  fillingRegion?: RegionId | null;
+  onFilled?: () => void;
+  /**
    * Tuck a completed region's pins away behind its stamp. On by default;
    * off for the map of your visits, where those pins are the point.
    */
@@ -223,6 +231,8 @@ export function ParkMap({
   onSelectRegion,
   completedRegions,
   revealedRegion,
+  fillingRegion,
+  onFilled,
   tuckCompleted = true,
   style,
   canvas,
@@ -464,7 +474,12 @@ export function ParkMap({
     if (!projected) return [];
     const states = projected.statePaths.map((state) => {
       const region = STATE_REGION[state.id];
-      return { ...state, region, earned: region != null && completedRegions?.has(region.id) };
+      // The region filling in is drawn unfilled; the fill goes over it.
+      return {
+        ...state,
+        region,
+        earned: region != null && region.id !== fillingRegion && completedRegions?.has(region.id),
+      };
     });
     const land = (state: (typeof states)[number]) => (
       <Path
@@ -502,16 +517,63 @@ export function ParkMap({
         {earned ? [...inGroup.map(edge), ...inGroup.map(land)] : inGroup.map(land)}
       </G>
     ));
-  }, [projected, shownRegion, completedRegions]);
+  }, [projected, shownRegion, completedRegions, fillingRegion]);
+
+  // The region filling in: its states, where the fill spreads from, and how
+  // far it has to reach to cover them.
+  const filling = useMemo(() => {
+    if (!projected || !fillingRegion) return null;
+    const region = REGIONS.find((r) => r.id === fillingRegion);
+    if (!region) return null;
+    const states = projected.statePaths.filter((state) => STATE_REGION[state.id]?.id === fillingRegion);
+    const centre = regionCentre(region.states, projected);
+    let reach = 0;
+    for (const feature of US_STATES.filter((f) => region.states.includes(f.id))) {
+      const [[x0, y0], [x1, y1]] = projected.toPath.bounds(feature);
+      for (const [x, y] of [[x0, y0], [x1, y0], [x0, y1], [x1, y1]]) {
+        reach = Math.max(reach, Math.hypot(x - centre.x, y - centre.y));
+      }
+    }
+    return { region, states, centre, reach: reach * 1.05 };
+  }, [projected, fillingRegion]);
+  // The fill's spread, 0 to 1; and whether it's finished.
+  const fillProgress = useSharedValue(0);
+  // Which region has finished filling (so a new one starts unfilled).
+  const [filledRegion, setFilledRegion] = useState<RegionId | null>(null);
+  const filled = filledRegion != null && filledRegion === fillingRegion;
+  useEffect(() => {
+    if (!filling) return;
+    const id = filling.region.id;
+    fillProgress.value = 0;
+    fillProgress.value = withDelay(
+      FILL_DELAY_MS,
+      withTiming(1, { duration: FILL_MS, easing: Easing.inOut(Easing.cubic) }, (finished) => {
+        if (finished) scheduleOnRN(setFilledRegion, id);
+      }),
+    );
+    // Starts once per region filled in.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filling]);
+  useEffect(() => {
+    if (filled) onFilled?.();
+    // Once, as it finishes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filled]);
+  const fillClipProps = useAnimatedProps(() => ({
+    r: (filling?.reach ?? 0) * fillProgress.value,
+  }));
 
   /** Where each completed region's stamp goes, in map coordinates. */
   const stampSpots = useMemo(() => {
     if (!projected || !completedRegions?.size) return [];
-    return REGIONS.filter((region) => completedRegions.has(region.id)).map((region) => ({
+    return REGIONS.filter(
+      // The region filling in gets its stamp once it's full.
+      (region) => completedRegions.has(region.id) && (region.id !== fillingRegion || filled),
+    ).map((region) => ({
       region: region.id,
       ...regionCentre(region.states, projected),
     }));
-  }, [projected, completedRegions]);
+  }, [projected, completedRegions, fillingRegion, filled]);
 
   if (!projected || size.height < 1) {
     return <View style={[styles.container, style]} onLayout={onLayout} />;
@@ -692,6 +754,38 @@ export function ParkMap({
               canvas above it (`lift`). */}
           <Zoomed view={live} lift={lift}>
             {stateShapes}
+            {filling ? (
+              <>
+                <Defs>
+                  <ClipPath id="region-fill">
+                    <AnimatedCircle cx={filling.centre.x} cy={filling.centre.y} animatedProps={fillClipProps} />
+                  </ClipPath>
+                </Defs>
+                <G clipPath="url(#region-fill)">
+                  {filling.states.map((state) => (
+                    <Path
+                      key={`fill-edge-${state.id}`}
+                      d={state.d}
+                      fill="none"
+                      stroke={EARNED_EDGE}
+                      strokeWidth={EARNED_EDGE_WIDTH}
+                      strokeLinejoin="round"
+                      vectorEffect="non-scaling-stroke"
+                    />
+                  ))}
+                  {filling.states.map((state) => (
+                    <Path
+                      key={`fill-${state.id}`}
+                      d={state.d}
+                      fill={filling.region.earned}
+                      stroke={colors.bg}
+                      strokeWidth={1}
+                      vectorEffect="non-scaling-stroke"
+                    />
+                  ))}
+                </G>
+              </>
+            ) : null}
           </Zoomed>
 
           {/* Stamps on the completed regions, while their pins are tucked away. */}
@@ -759,6 +853,12 @@ export function ParkMap({
     </View>
   );
 }
+
+const AnimatedCircle = Animated.createAnimatedComponent(Circle);
+
+/** How long a region takes to fill in, and how long it waits first. */
+const FILL_MS = 1400;
+const FILL_DELAY_MS = 500;
 
 const AnimatedG = Animated.createAnimatedComponent(
   // `matrix` is the native group's transform, which the animated props set

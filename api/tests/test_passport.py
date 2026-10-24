@@ -17,6 +17,7 @@ from app.database import SessionLocal
 from app.main import app
 from app.models import Site, User
 from app.regions import REGION_LABELS, region_for_states
+from tests.helpers import new_names
 
 client = TestClient(app)
 
@@ -24,7 +25,10 @@ client = TestClient(app)
 class Person:
     def __init__(self):
         self.email = f"pass-{uuid.uuid4().hex[:10]}@example.com"
-        resp = client.post("/auth/signup", json={"email": self.email, "password": "correct-horse"})
+        resp = client.post(
+            "/auth/signup",
+            json={"email": self.email, "password": "correct-horse", **new_names()},
+        )
         self.headers = {"Authorization": f"Bearer {resp.json()['access_token']}"}
         self.id = client.get("/auth/me", headers=self.headers).json()["id"]
 

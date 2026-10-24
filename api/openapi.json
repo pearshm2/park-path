@@ -147,6 +147,48 @@
         }
       }
     },
+    "/auth/google": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Google Sign In",
+        "description": "Sign in with Google. The same Google account always reaches the same\nParkPath account; a Google account whose (verified) email already has\na ParkPath account is linked to it; otherwise a new account is made\nfrom the Google profile, with a username from the email that the app\nthen offers to change.",
+        "operationId": "google_sign_in_auth_google_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GoogleSignIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GoogleToken"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/auth/me": {
       "get": {
         "tags": [
@@ -172,6 +214,203 @@
             "OAuth2PasswordBearer": []
           }
         ]
+      },
+      "patch": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Update Current User",
+        "operationId": "update_current_user_auth_me_patch",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UserUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      }
+    },
+    "/auth/me/password": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Change Password",
+        "operationId": "change_password_auth_me_password_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PasswordChange"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      }
+    },
+    "/auth/me/avatar": {
+      "put": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Set Avatar",
+        "operationId": "set_avatar_auth_me_avatar_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AvatarUpload"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Remove Avatar",
+        "operationId": "remove_avatar_auth_me_avatar_delete",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserOut"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      }
+    },
+    "/auth/username-available": {
+      "get": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Username Available",
+        "description": "Public, so the sign-up form can check as you type. Says only whether a\nname is free, never whose it is.",
+        "operationId": "username_available_auth_username_available_get",
+        "parameters": [
+          {
+            "name": "username",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "maxLength": 40,
+              "title": "Username"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UsernameCheck"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/sites": {
@@ -1216,6 +1455,161 @@
         }
       }
     },
+    "/trips/{trip_id}/comments": {
+      "get": {
+        "tags": [
+          "trips"
+        ],
+        "summary": "List Comments",
+        "operationId": "list_comments_trips__trip_id__comments_get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "trip_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Trip Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TripCommentOut"
+                  },
+                  "title": "Response List Comments Trips  Trip Id  Comments Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "trips"
+        ],
+        "summary": "Add Comment",
+        "operationId": "add_comment_trips__trip_id__comments_post",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "trip_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Trip Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TripCommentCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TripCommentOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/trips/{trip_id}/comments/{comment_id}": {
+      "delete": {
+        "tags": [
+          "trips"
+        ],
+        "summary": "Delete Comment",
+        "operationId": "delete_comment_trips__trip_id__comments__comment_id__delete",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "trip_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Trip Id"
+            }
+          },
+          {
+            "name": "comment_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Comment Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/passport": {
       "get": {
         "tags": [
@@ -1288,6 +1682,51 @@
           }
         }
       }
+    },
+    "/users/{user_id}/avatar": {
+      "get": {
+        "tags": [
+          "users"
+        ],
+        "summary": "Read Avatar",
+        "operationId": "read_avatar_users__user_id__avatar_get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "User Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -1329,6 +1768,30 @@
           "goal"
         ],
         "title": "AchievementOut"
+      },
+      "AvatarUpload": {
+        "properties": {
+          "content_type": {
+            "type": "string",
+            "enum": [
+              "image/jpeg",
+              "image/png"
+            ],
+            "title": "Content Type"
+          },
+          "data": {
+            "type": "string",
+            "maxLength": 420000,
+            "title": "Data"
+          }
+        },
+        "type": "object",
+        "required": [
+          "content_type",
+          "data"
+        ],
+        "title": "AvatarUpload",
+        "description": "PUT /auth/me/avatar: the picture, base64-encoded (at most ~300 KB)."
       },
       "BrochureMapOut": {
         "properties": {
@@ -1401,16 +1864,32 @@
       "FriendRequestCreate": {
         "properties": {
           "email": {
-            "type": "string",
-            "format": "email",
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "email"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Email"
+          },
+          "username": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Username"
           }
         },
         "type": "object",
-        "required": [
-          "email"
-        ],
-        "title": "FriendRequestCreate"
+        "title": "FriendRequestCreate",
+        "description": "Who to ask: by email, or by username (typed, or from their QR code)."
       },
       "FriendshipOut": {
         "properties": {
@@ -1461,6 +1940,45 @@
         ],
         "title": "FriendshipOut",
         "description": "A friend request, pending or accepted, with both people named."
+      },
+      "GoogleSignIn": {
+        "properties": {
+          "id_token": {
+            "type": "string",
+            "maxLength": 5000,
+            "minLength": 20,
+            "title": "Id Token"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id_token"
+        ],
+        "title": "GoogleSignIn",
+        "description": "POST /auth/google: the ID token the phone got from Google."
+      },
+      "GoogleToken": {
+        "properties": {
+          "access_token": {
+            "type": "string",
+            "title": "Access Token"
+          },
+          "token_type": {
+            "type": "string",
+            "title": "Token Type",
+            "default": "bearer"
+          },
+          "created": {
+            "type": "boolean",
+            "title": "Created"
+          }
+        },
+        "type": "object",
+        "required": [
+          "access_token",
+          "created"
+        ],
+        "title": "GoogleToken"
       },
       "HTTPValidationError": {
         "properties": {
@@ -1775,6 +2293,26 @@
         "title": "PassportStampOut",
         "description": "One national park's stamp: earned by logging a visit."
       },
+      "PasswordChange": {
+        "properties": {
+          "current_password": {
+            "type": "string",
+            "title": "Current Password"
+          },
+          "new_password": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 8,
+            "title": "New Password"
+          }
+        },
+        "type": "object",
+        "required": [
+          "current_password",
+          "new_password"
+        ],
+        "title": "PasswordChange"
+      },
       "PhotoUploadOut": {
         "properties": {
           "key": {
@@ -1810,7 +2348,7 @@
           "max_bytes"
         ],
         "title": "PhotoUploadOut",
-        "description": "A signed form for one photo upload. The app sends a multipart POST to\n`upload_url`: every entry of `fields` first, in order, then the file as\nthe last part named `file`. Then it passes `key` in `photo_keys` when it\nsaves the trip. The form stops working after `expires_in` seconds."
+        "description": "A signed form for one photo or video upload. The app sends a multipart\nPOST to `upload_url`: every entry of `fields` first, in order, then the\nfile as the last part named `file`. Then it passes `key` in `photos`\nwhen it saves the trip. The form stops working after `expires_in`\nseconds."
       },
       "PhotoUploadRequest": {
         "properties": {
@@ -1820,13 +2358,15 @@
               "image/jpeg",
               "image/png",
               "image/webp",
-              "image/heic"
+              "image/heic",
+              "video/mp4",
+              "video/quicktime"
             ],
             "title": "Content Type"
           },
           "size_bytes": {
             "type": "integer",
-            "maximum": 10485760.0,
+            "maximum": 157286400.0,
             "exclusiveMinimum": 0.0,
             "title": "Size Bytes"
           }
@@ -1837,7 +2377,7 @@
           "size_bytes"
         ],
         "title": "PhotoUploadRequest",
-        "description": "Ask for permission to upload one photo."
+        "description": "Ask for permission to upload one photo or video."
       },
       "PlaceOut": {
         "properties": {
@@ -2401,6 +2941,49 @@
         ],
         "title": "TrailOut"
       },
+      "TripCommentCreate": {
+        "properties": {
+          "body": {
+            "type": "string",
+            "maxLength": 1000,
+            "minLength": 1,
+            "title": "Body"
+          }
+        },
+        "type": "object",
+        "required": [
+          "body"
+        ],
+        "title": "TripCommentCreate"
+      },
+      "TripCommentOut": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "author": {
+            "$ref": "#/components/schemas/UserOut"
+          },
+          "body": {
+            "type": "string",
+            "title": "Body"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "author",
+          "body",
+          "created_at"
+        ],
+        "title": "TripCommentOut"
+      },
       "TripCreate": {
         "properties": {
           "park_code": {
@@ -2437,6 +3020,22 @@
             ],
             "title": "Rating"
           },
+          "trails": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string",
+                  "maxLength": 200
+                },
+                "type": "array",
+                "maxItems": 20
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trails"
+          },
           "stamp": {
             "anyOf": [
               {
@@ -2452,6 +3051,21 @@
           "visibility": {
             "$ref": "#/components/schemas/Visibility",
             "default": "private"
+          },
+          "photos": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/TripPhotoIn"
+                },
+                "type": "array",
+                "maxItems": 8
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Photos"
           },
           "photo_keys": {
             "items": {
@@ -2518,6 +3132,13 @@
             ],
             "title": "Rating"
           },
+          "trails": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Trails"
+          },
           "stamp": {
             "anyOf": [
               {
@@ -2546,6 +3167,11 @@
             "type": "array",
             "title": "Companions"
           },
+          "comment_count": {
+            "type": "integer",
+            "title": "Comment Count",
+            "default": 0
+          },
           "created_at": {
             "type": "string",
             "format": "date-time",
@@ -2567,6 +3193,7 @@
           "title",
           "notes",
           "rating",
+          "trails",
           "stamp",
           "visibility",
           "photos",
@@ -2575,6 +3202,39 @@
           "updated_at"
         ],
         "title": "TripOut"
+      },
+      "TripPhotoIn": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "caption": {
+            "type": "string",
+            "maxLength": 500,
+            "title": "Caption",
+            "default": ""
+          },
+          "duration_ms": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 300000.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration Ms"
+          }
+        },
+        "type": "object",
+        "required": [
+          "key"
+        ],
+        "title": "TripPhotoIn",
+        "description": "A photo or video on a trip: its key from the upload, and its caption."
       },
       "TripPhotoOut": {
         "properties": {
@@ -2592,12 +3252,38 @@
               }
             ],
             "title": "Url"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "photo",
+              "video"
+            ],
+            "title": "Kind"
+          },
+          "caption": {
+            "type": "string",
+            "title": "Caption"
+          },
+          "duration_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration Ms"
           }
         },
         "type": "object",
         "required": [
           "key",
-          "url"
+          "url",
+          "kind",
+          "caption",
+          "duration_ms"
         ],
         "title": "TripPhotoOut"
       },
@@ -2652,6 +3338,22 @@
             ],
             "title": "Rating"
           },
+          "trails": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string",
+                  "maxLength": 200
+                },
+                "type": "array",
+                "maxItems": 20
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trails"
+          },
           "stamp": {
             "anyOf": [
               {
@@ -2673,6 +3375,21 @@
                 "type": "null"
               }
             ]
+          },
+          "photos": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/TripPhotoIn"
+                },
+                "type": "array",
+                "maxItems": 8
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Photos"
           },
           "photo_keys": {
             "anyOf": [
@@ -2707,7 +3424,7 @@
         },
         "type": "object",
         "title": "TripUpdate",
-        "description": "Only the fields sent change. `rating` and `stamp` can be set to null to clear them."
+        "description": "Only the fields sent change. `rating` can be set to null to clear it.\n\n`trails` replaces the list. `stamp`, the older one-trail form, sets the\nfirst trail (keeping the rest), or removes it when null; it's ignored\nwhen `trails` is sent. Likewise `photos` replaces the photos and their\ncaptions, and `photo_keys` (keys only) is ignored when it's sent."
       },
       "UserCreate": {
         "properties": {
@@ -2719,12 +3436,31 @@
           "password": {
             "type": "string",
             "title": "Password"
+          },
+          "username": {
+            "type": "string",
+            "title": "Username"
+          },
+          "first_name": {
+            "type": "string",
+            "maxLength": 50,
+            "minLength": 1,
+            "title": "First Name"
+          },
+          "last_name": {
+            "type": "string",
+            "maxLength": 50,
+            "minLength": 1,
+            "title": "Last Name"
           }
         },
         "type": "object",
         "required": [
           "email",
-          "password"
+          "password",
+          "username",
+          "first_name",
+          "last_name"
         ],
         "title": "UserCreate"
       },
@@ -2757,14 +3493,137 @@
             "type": "string",
             "format": "email",
             "title": "Email"
+          },
+          "username": {
+            "type": "string",
+            "title": "Username"
+          },
+          "first_name": {
+            "type": "string",
+            "title": "First Name"
+          },
+          "last_name": {
+            "type": "string",
+            "title": "Last Name"
+          },
+          "avatar_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avatar Url"
           }
         },
         "type": "object",
         "required": [
           "id",
-          "email"
+          "email",
+          "username",
+          "first_name",
+          "last_name"
         ],
         "title": "UserOut"
+      },
+      "UserUpdate": {
+        "properties": {
+          "username": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Username"
+          },
+          "first_name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 50,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "First Name"
+          },
+          "last_name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 50,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Name"
+          },
+          "email": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "email"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          },
+          "current_password": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Password"
+          }
+        },
+        "type": "object",
+        "title": "UserUpdate",
+        "description": "PATCH /auth/me: any of these; the rest are left as they are. Changing\nthe email also needs the current password."
+      },
+      "UsernameCheck": {
+        "properties": {
+          "username": {
+            "type": "string",
+            "title": "Username"
+          },
+          "available": {
+            "type": "boolean",
+            "title": "Available"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "username",
+          "available"
+        ],
+        "title": "UsernameCheck",
+        "description": "GET /auth/username-available: whether it's free, and if not, why."
       },
       "ValidationError": {
         "properties": {

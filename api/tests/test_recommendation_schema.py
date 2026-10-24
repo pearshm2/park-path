@@ -22,7 +22,12 @@ def db():
 
 @pytest.fixture
 def user_and_site(db):
-    user = User(email=f"schema-{uuid.uuid4().hex[:10]}@example.com", hashed_password="x")
+    user = User(
+        email=f"schema-{uuid.uuid4().hex[:10]}@example.com",
+        username=f"s_{uuid.uuid4().hex[:12]}",
+        first_name="Schema",
+        hashed_password="x",
+    )
     site = Site(park_code=f"t{uuid.uuid4().hex[:8]}", name="Schema Test Park")
     db.add_all([user, site])
     db.commit()
@@ -100,7 +105,12 @@ def test_feedback_needs_a_real_user_and_site(db, user_and_site):
 
 
 def test_deleting_user_or_site_cascades(db):
-    user = User(email=f"schema-{uuid.uuid4().hex[:10]}@example.com", hashed_password="x")
+    user = User(
+        email=f"schema-{uuid.uuid4().hex[:10]}@example.com",
+        username=f"s_{uuid.uuid4().hex[:12]}",
+        first_name="Schema",
+        hashed_password="x",
+    )
     site = Site(park_code=f"t{uuid.uuid4().hex[:8]}", name="Cascade Park")
     db.add_all([user, site])
     db.commit()
