@@ -29,7 +29,7 @@ import { Button, BodyText, Heading, Kicker, TextField } from '../components';
 import { GoogleButton, OrDivider } from '../components/GoogleButton';
 import { colors, radius, shadow, space } from '../theme';
 import { useAuth } from './AuthContext';
-import { GoogleSignInUnavailableError, signInWithGoogle } from './googleSignIn';
+import { GoogleSignInCancelled, GoogleSignInUnavailableError } from './googleSignIn';
 import { UsernameField } from './UsernameField';
 import { normalizeUsername, usernameRuleProblem, useUsernameCheck } from './useUsernameCheck';
 
@@ -76,7 +76,7 @@ const COPY: Record<AuthMode, { heading: string; sub: string; cta: string; switch
 export function AuthForm({ mode }: { mode: AuthMode }) {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { signIn, signUp } = useAuth();
+  const { signIn, signUp, signInWithGoogle } = useAuth();
 
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
@@ -157,9 +157,8 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
   }
 
   /**
-   * Google is not wired up yet — see src/auth/googleSignIn.ts for the two
-   * pieces that are missing. The handler is written as if it were, so
-   * finishing it means changing that file and nothing here.
+   * Google: see src/auth/googleSignIn.ts. A new account lands in the app
+   * like any sign-up, then UsernamePrompt offers to change its name.
    */
   async function onGooglePress() {
     if (submitting) return;
@@ -168,11 +167,14 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
     try {
       await signInWithGoogle();
     } catch (error) {
-      setFormError(
-        error instanceof GoogleSignInUnavailableError
-          ? error.message
-          : 'Could not continue with Google. Try your email and password.',
-      );
+      // Backing out of Google's picker isn't an error worth showing.
+      if (!(error instanceof GoogleSignInCancelled)) {
+        setFormError(
+          error instanceof GoogleSignInUnavailableError
+            ? error.message
+            : 'Could not continue with Google. Try your email and password.',
+        );
+      }
     } finally {
       setSubmitting(false);
     }

@@ -147,6 +147,48 @@
         }
       }
     },
+    "/auth/google": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Google Sign In",
+        "description": "Sign in with Google. The same Google account always reaches the same\nParkPath account; a Google account whose (verified) email already has\na ParkPath account is linked to it; otherwise a new account is made\nfrom the Google profile, with a username from the email that the app\nthen offers to change.",
+        "operationId": "google_sign_in_auth_google_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GoogleSignIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GoogleToken"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/auth/me": {
       "get": {
         "tags": [
@@ -1898,6 +1940,45 @@
         ],
         "title": "FriendshipOut",
         "description": "A friend request, pending or accepted, with both people named."
+      },
+      "GoogleSignIn": {
+        "properties": {
+          "id_token": {
+            "type": "string",
+            "maxLength": 5000,
+            "minLength": 20,
+            "title": "Id Token"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id_token"
+        ],
+        "title": "GoogleSignIn",
+        "description": "POST /auth/google: the ID token the phone got from Google."
+      },
+      "GoogleToken": {
+        "properties": {
+          "access_token": {
+            "type": "string",
+            "title": "Access Token"
+          },
+          "token_type": {
+            "type": "string",
+            "title": "Token Type",
+            "default": "bearer"
+          },
+          "created": {
+            "type": "boolean",
+            "title": "Created"
+          }
+        },
+        "type": "object",
+        "required": [
+          "access_token",
+          "created"
+        ],
+        "title": "GoogleToken"
       },
       "HTTPValidationError": {
         "properties": {

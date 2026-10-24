@@ -24,6 +24,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { AuthProvider, useAuth } from '../auth/AuthContext';
+import { UsernamePrompt } from '../auth/UsernamePrompt';
 import { QuizProvider, useQuiz } from '../quiz/QuizContext';
 import { ArrivalBanner } from '../arrivals/ArrivalBanner';
 import { ArrivalsProvider } from '../arrivals/ArrivalsContext';
@@ -79,6 +80,8 @@ export default function RootLayout() {
                           and notifications of what a trip earned. */}
                       <ArrivalBanner />
                       <CelebrationBanner />
+                      {/* Once, after Google sign-in makes a new account. */}
+                      <UsernamePrompt />
                     </TextSizeProvider>
                   </ArrivalsProvider>
                 </CelebrationsProvider>

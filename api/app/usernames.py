@@ -27,6 +27,16 @@ RESERVED = frozenset(
 )
 
 
+def username_base(email: str) -> str:
+    """A username made from an email's local part: "Jane.Doe+x@..." -> "jane.doex"."""
+    local = email.split("@")[0].lower()
+    name = re.sub(r"[^a-z0-9._]", "", local).strip("._")
+    name = re.sub(r"[._]{2,}", ".", name)[:17] or "hiker"
+    if len(name) < 3 or name in RESERVED:
+        name = (name + "hiker")[:17]
+    return name
+
+
 def normalize_username(value: str) -> str:
     """Trim, drop a leading @, and lowercase."""
     return value.strip().removeprefix("@").lower()

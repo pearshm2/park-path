@@ -54,6 +54,20 @@ class UserUpdate(BaseModel):
         return None if value is None else _clean_name(value)
 
 
+class GoogleSignIn(BaseModel):
+    """POST /auth/google: the ID token the phone got from Google."""
+
+    id_token: str = Field(min_length=20, max_length=5000)
+
+
+class GoogleToken(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    # True when this sign-in made a new account: the app then offers to
+    # change the name and username it was given.
+    created: bool
+
+
 class PasswordChange(BaseModel):
     current_password: str
     new_password: str = Field(min_length=8, max_length=200)

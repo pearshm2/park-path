@@ -12,6 +12,9 @@ export type TokenResponse = components['schemas']['Token'];
 /** api/app/schemas.py :: UserOut */
 export type User = components['schemas']['UserOut'];
 
+/** api/app/schemas.py :: GoogleToken: a token, and whether it made a new account. */
+export type GoogleTokenResponse = components['schemas']['GoogleToken'];
+
 /** api/app/schemas.py :: UserLogin */
 export type Credentials = components['schemas']['UserLogin'];
 

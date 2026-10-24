@@ -3,6 +3,7 @@ Auth routes:
 
   POST  /auth/signup               new account: email, password, username, first and last name
   POST  /auth/login                email + password, for a token
+  POST  /auth/google               a Google ID token, for a token (signs up if new)
   GET   /auth/me                   who's signed in
   PATCH /auth/me                   change your name, username, or email (email needs your password)
   POST  /auth/me/password          change your password
@@ -17,6 +18,7 @@ sign up, log in, tokens"). Those are natural follow-ups, not regressions.
 
 import base64
 import binascii
+import secrets
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
@@ -26,9 +28,16 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.dependencies import get_current_user
+from app.google_auth import (
+    GoogleNotConfigured,
+    InvalidGoogleToken,
+    verify_google_id_token,
+)
 from app.models import User
 from app.schemas import (
     AvatarUpload,
+    GoogleSignIn,
+    GoogleToken,
     PasswordChange,
     Token,
     UserCreate,
@@ -38,7 +47,7 @@ from app.schemas import (
     UserUpdate,
 )
 from app.security import create_access_token, hash_password, verify_password
-from app.usernames import normalize_username, username_problem
+from app.usernames import normalize_username, username_base, username_problem
 
 router = APIRouter()
 
@@ -110,6 +119,73 @@ def login(payload: UserLogin, db: Session = Depends(get_db)):
 
     token = create_access_token(subject=str(user.id))
     return Token(access_token=token)
+
+
+def _free_username(db: Session, email: str) -> str:
+    """A username from the email that nobody has, with a number on if need be."""
+    base = username_base(email)
+    candidate, n = base, 1
+    while _username_taken(db, candidate):
+        n += 1
+        candidate = f"{base}{n}"
+    return candidate
+
+
+@router.post("/google", response_model=GoogleToken)
+def google_sign_in(payload: GoogleSignIn, db: Session = Depends(get_db)):
+    """
+    Sign in with Google. The same Google account always reaches the same
+    ParkPath account; a Google account whose (verified) email already has
+    a ParkPath account is linked to it; otherwise a new account is made
+    from the Google profile, with a username from the email that the app
+    then offers to change.
+    """
+    try:
+        google = verify_google_id_token(payload.id_token)
+    except GoogleNotConfigured:
+        raise HTTPException(
+            status.HTTP_503_SERVICE_UNAVAILABLE, detail="Google sign-in isn't set up yet"
+        )
+    except InvalidGoogleToken:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Google sign-in failed")
+    if not google.email_verified:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST, detail="That Google account's email isn't verified"
+        )
+
+    created = False
+    user = db.scalars(select(User).where(User.google_sub == google.subject)).first()
+    if user is None:
+        user = db.scalars(
+            select(User).where(func.lower(User.email) == google.email.lower())
+        ).first()
+        if user is not None:
+            # Google has confirmed they own this email: link the accounts.
+            user.google_sub = google.subject
+        else:
+            user = User(
+                email=google.email,
+                username=_free_username(db, google.email),
+                first_name=(google.first_name or google.email.split("@")[0])[:50],
+                last_name=google.last_name[:50],
+                google_sub=google.subject,
+                # No password of their own; they sign in with Google.
+                hashed_password=hash_password(secrets.token_urlsafe(32)),
+            )
+            db.add(user)
+            created = True
+        try:
+            db.commit()
+        except IntegrityError:
+            # The same new account made twice at once: the other one won.
+            db.rollback()
+            user = db.scalars(select(User).where(User.google_sub == google.subject)).first()
+            if user is None:
+                raise HTTPException(status.HTTP_409_CONFLICT, detail="Try signing in again")
+            created = False
+        db.refresh(user)
+
+    return GoogleToken(access_token=create_access_token(subject=str(user.id)), created=created)
 
 
 @router.get("/me", response_model=UserOut)

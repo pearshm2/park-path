@@ -10,6 +10,7 @@
 import { request } from './client';
 import type {
   Credentials,
+  GoogleTokenResponse,
   ProfileChanges,
   SignUpDetails,
   TokenResponse,
@@ -95,4 +96,12 @@ export function setAvatar(token: string, base64: string): Promise<User> {
 /** DELETE /auth/me/avatar — the updated you, without a picture. */
 export function removeAvatar(token: string): Promise<User> {
   return request<User>('/auth/me/avatar', { method: 'DELETE', token });
+}
+
+/**
+ * POST /auth/google — a Google ID token for a ParkPath token. Signs in,
+ * links an account with the same email, or makes a new one (`created`).
+ */
+export function googleSignIn(idToken: string): Promise<GoogleTokenResponse> {
+  return request<GoogleTokenResponse>('/auth/google', { method: 'POST', body: { id_token: idToken } });
 }

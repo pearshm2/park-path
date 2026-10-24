@@ -96,6 +96,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/auth/google": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Google Sign In
+         * @description Sign in with Google. The same Google account always reaches the same
+         *     ParkPath account; a Google account whose (verified) email already has
+         *     a ParkPath account is linked to it; otherwise a new account is made
+         *     from the Google profile, with a username from the email that the app
+         *     then offers to change.
+         */
+        post: operations["google_sign_in_auth_google_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/auth/me": {
         parameters: {
             query?: never;
@@ -672,6 +696,26 @@ export interface components {
             accepted_at: string | null;
             requester: components["schemas"]["UserOut"];
             addressee: components["schemas"]["UserOut"];
+        };
+        /**
+         * GoogleSignIn
+         * @description POST /auth/google: the ID token the phone got from Google.
+         */
+        GoogleSignIn: {
+            /** Id Token */
+            id_token: string;
+        };
+        /** GoogleToken */
+        GoogleToken: {
+            /** Access Token */
+            access_token: string;
+            /**
+             * Token Type
+             * @default bearer
+             */
+            token_type: string;
+            /** Created */
+            created: boolean;
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -1346,6 +1390,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Token"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    google_sign_in_auth_google_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GoogleSignIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GoogleToken"];
                 };
             };
             /** @description Validation Error */

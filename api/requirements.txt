@@ -9,6 +9,8 @@ python-dotenv==1.0.1
 # auth
 pyjwt==2.9.0
 bcrypt==4.0.1
+google-auth==2.35.0  # checks Google sign-in tokens (app/google_auth.py)
+requests==2.32.3  # google-auth fetches Google's signing keys with it
 pydantic[email]==2.9.2  # adds EmailStr validation used in app/schemas.py
 
 # dev / test / lint

@@ -61,6 +61,8 @@ class User(Base):
     avatar: Mapped[bytes | None] = mapped_column(LargeBinary, deferred=True)
     avatar_type: Mapped[str | None] = mapped_column(String(30))
     avatar_updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Google's id for their account, once they've signed in with Google.
+    google_sub: Mapped[str | None] = mapped_column(String(255), unique=True, index=True)
     hashed_password: Mapped[str] = mapped_column(String(255), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(UTC)
