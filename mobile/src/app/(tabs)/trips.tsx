@@ -465,6 +465,10 @@ export default function TripsScreen() {
               visitedBefore: visitedIds,
               parks: sites.filter((s) => s.isNamedPark),
               allSites: sites,
+              // The journal before this save (an edit doesn't count again).
+              togetherBefore: entries.filter((e) => e.id !== entry.id && e.with.length > 0).length,
+              withFriend:
+                entry.with.length > 0 && !entries.some((e) => e.id === entry.id && e.with.length > 0),
             });
             if (stamp) {
               router.navigate({ pathname: '/passport', params: { show: 'stamp', park: stamp } });

@@ -192,21 +192,65 @@ def test_region_states():
 
 
 def test_achievements(people, parks):
-    ann, bob = people(), people()
-    ann.befriend(bob)
+    """The same three groups the app's Passport shows (mobile/src/data/achievements.ts)."""
+    ann = people()
     body = ann.passport().json()
-    assert achievement(body, "first_stamp")["earned"] is False
+    ids = [a["id"] for a in body["achievements"]]
+    assert ids[0] == "parks-1" and "parks-all" in ids
+    assert "region-southwest" in ids and "region-pnw" in ids
+    assert "sites-5" in ids and "sites-all" in ids
+    assert not any(a["earned"] for a in body["achievements"])
+    # Park tiers come first, smallest first.
+    park_goals = [a["goal"] for a in body["achievements"] if a["id"].startswith("parks-")]
+    assert park_goals == sorted(park_goals)
 
-    ann.log(parks[0], rating=5, companion_ids=[bob.id])
-    ann.log(parks[0])
+    ann.log(parks[0])  # a national park in Utah
+    ann.log(parks[3])  # an NPS site that isn't a national park
     body = ann.passport().json()
-    assert achievement(body, "first_stamp")["earned"] is True
-    assert achievement(body, "return_visitor")["earned"] is True
-    assert achievement(body, "five_star")["earned"] is True
-    assert achievement(body, "with_friends")["earned"] is True
-    five = achievement(body, "five_parks")
-    assert five["earned"] is False and five["progress"] == 1 and five["goal"] == 5
-    assert achievement(body, "photographer")["progress"] == 0
+    assert achievement(body, "parks-1")["earned"] is True
+    three = achievement(body, "parks-3")
+    assert three["earned"] is False and three["progress"] == 1 and three["goal"] == 3
+    southwest = achievement(body, "region-southwest")
+    assert southwest["title"] == "Desert wanderer"
+    assert southwest["progress"] == 1 and not southwest["earned"]
+    assert southwest["description"].startswith("Every national park in Southwest desert")
+    # Both trips count towards the all-sites tiers.
+    assert achievement(body, "sites-5")["progress"] == 2
+
+
+def test_friend_achievements(people, parks):
+    ann, bob = people(), people()
+    body = ann.passport().json()
+    assert [a["id"] for a in body["achievements"][-4:]] == [
+        "friends-1",
+        "friends-3",
+        "together-1",
+        "together-3",
+    ]
+    assert achievement(body, "friends-1")["earned"] is False
+
+    ann.befriend(bob)
+    ann.log(parks[0], companion_ids=[bob.id])
+    ann.log(parks[1])  # alone: doesn't count
+    body = ann.passport().json()
+    assert achievement(body, "friends-1")["earned"] is True
+    assert achievement(body, "friends-3")["progress"] == 1
+    assert achievement(body, "together-1")["earned"] is True
+    together3 = achievement(body, "together-3")
+    assert together3["progress"] == 1 and together3["goal"] == 3
+    # Bob, tagged on Ann's trip, has a friend but no trips of his own with one.
+    bob_body = bob.passport().json()
+    assert achievement(bob_body, "friends-1")["earned"] is True
+    assert achievement(bob_body, "together-1")["earned"] is False
+
+
+def test_completing_a_region(people, parks):
+    """Washington holds one test park; if it's the region's only park, logging it completes it."""
+    ann = people()
+    ann.log(parks[2])
+    pnw = achievement(ann.passport().json(), "region-pnw")
+    assert pnw["progress"] == 1
+    assert pnw["earned"] is (pnw["goal"] == 1)
 
 
 # --- what a friend sees -----------------------------------------------------------

@@ -1,13 +1,16 @@
 /**
- * Passport achievements, in three groups:
+ * Passport achievements, in four groups (30 in all):
  *
  *  - National parks: tiers by how many of the national parks are stamped,
  *    the last being every one, however many the API lists.
  *  - Regions: one per map region, for stamping every national park in it.
  *  - All NPS sites: tiers by how many sites of any kind (monuments,
  *    historic sites, seashores, parks...) have a trip logged.
+ *  - Friends: friends on ParkPath, and trips logged with a friend tagged.
  *
- * Everything here is worked out from the trip journal; nothing is stored.
+ * Everything here is worked out from the trip journal and the friends
+ * list; nothing is stored. The server's passport (api/app/passport.py)
+ * has the same list for a friend's passport; keep the two in step.
  */
 
 import type { RegionId } from './regions';
@@ -22,7 +25,8 @@ export type AchievementIcon =
   | 'binoculars'
   | 'map'
   | 'pin'
-  | 'star';
+  | 'star'
+  | 'friends';
 
 export type Achievement = {
   /** Unique across every group. */
@@ -46,6 +50,12 @@ export const ACHIEVEMENT_ICON: Record<AchievementIcon, string[]> = {
   map: ['M3 6l6-3 6 3 6-3v15l-6 3-6-3-6 3z', 'M9 3v15', 'M15 6v15'],
   pin: ['M12 21s-7-6.5-7-12a7 7 0 0114 0c0 5.5-7 12-7 12z', 'M12 7a2 2 0 100 4 2 2 0 000-4z'],
   star: ['M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z'],
+  friends: [
+    'M9 11a3.5 3.5 0 100-7 3.5 3.5 0 000 7z',
+    'M2.5 20c.8-3.6 3.3-5.5 6.5-5.5s5.7 1.9 6.5 5.5',
+    'M16 4.3a3.5 3.5 0 010 6.4',
+    'M18 14.8c1.8.8 3 2.6 3.5 5.2',
+  ],
 };
 
 /** Tiers by national parks stamped. */
@@ -144,6 +154,22 @@ export function siteAchievements(totalSites: number): Achievement[] {
     },
   ];
   return tiers.filter((tier) => tier.need <= totalSites);
+}
+
+/** Tiers by how many friends you have on ParkPath. */
+export function friendAchievements(): Achievement[] {
+  return [
+    { id: 'friends-1', need: 1, title: 'First friend', body: 'Add a friend on ParkPath.', icon: 'friends' },
+    { id: 'friends-3', need: 3, title: 'Trail crew', body: 'Three friends on ParkPath.', icon: 'friends' },
+  ];
+}
+
+/** Tiers by how many trips you've logged with a friend tagged as going along. */
+export function togetherAchievements(): Achievement[] {
+  return [
+    { id: 'together-1', need: 1, title: 'Better together', body: 'Log a trip with a friend along.', icon: 'boot' },
+    { id: 'together-3', need: 3, title: 'Never hike alone', body: 'Three trips with friends along.', icon: 'compass' },
+  ];
 }
 
 /**
