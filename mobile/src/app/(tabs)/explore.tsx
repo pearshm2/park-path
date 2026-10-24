@@ -53,6 +53,7 @@ import { scheduleOnRN } from 'react-native-worklets';
 
 import { listSites } from '../../api/parks';
 import { recommendations, type Recommendation } from '../../api/recommendations';
+import { useAuth } from '../../auth/AuthContext';
 import {
   activeFilterCount,
   BodyText,
@@ -253,9 +254,13 @@ export default function ExploreScreen() {
 
   // Scored across every site so wishlist cards and search results have
   // a match too; the picks themselves are drawn from the parks only.
+  // Signed in, the engine also uses your trips (visited parks move down),
+  // so the list is refetched when a trip is logged.
+  const { token } = useAuth();
+  const { visitedIds, visitSummary } = useTrips();
   const { data: sharedMatches = [] } = useQuery({
-    queryKey: ['recommendations', answers, 'all'],
-    queryFn: () => recommendations(answers, 'all'),
+    queryKey: ['recommendations', answers, 'all', token, visitedIds.size],
+    queryFn: () => recommendations(answers, 'all', token),
   });
 
   // The site list is shared and carries no per-person status, so your
@@ -263,7 +268,6 @@ export default function ExploreScreen() {
   // the wishlist view) reads it from site.status. Visited outranks it.
   const { ids: wishlistIds, toggle: toggleWishlist } = useWishlist();
   // Visited comes from your trip journal: a park with an entry is visited.
-  const { visitedIds, visitSummary } = useTrips();
   const withStatus = useCallback(
     (site: Site): Site => {
       const status: SiteStatus = visitedIds.has(site.id)

@@ -974,7 +974,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
       }
     },
     "/wishlist": {
@@ -2490,6 +2495,10 @@
           },
           "signals": {
             "$ref": "#/components/schemas/SignalScores"
+          },
+          "visited": {
+            "type": "boolean",
+            "title": "Visited"
           }
         },
         "type": "object",
@@ -2497,7 +2506,8 @@
           "park_code",
           "score",
           "reason",
-          "signals"
+          "signals",
+          "visited"
         ],
         "title": "RecommendationOut"
       },

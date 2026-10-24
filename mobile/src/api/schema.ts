@@ -899,6 +899,8 @@ export interface components {
             /** Reason */
             reason: string | null;
             signals: components["schemas"]["SignalScores"];
+            /** Visited */
+            visited: boolean;
         };
         /** RecommendationRequest */
         RecommendationRequest: {
