@@ -136,7 +136,13 @@ export interface paths {
         get: operations["read_current_user_auth_me_get"];
         put?: never;
         post?: never;
-        delete?: never;
+        /**
+         * Delete Account
+         * @description Deletes the account for good: its trips (and their photos), comments,
+         *     friendships, wishlist and profile picture all go with it (the database
+         *     removes everything that belongs to a user along with them).
+         */
+        delete: operations["delete_account_auth_me_delete"];
         options?: never;
         head?: never;
         /** Update Current User */
@@ -610,6 +616,16 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /**
+         * AccountDelete
+         * @description DELETE /auth/me: "DELETE" typed out, and the password (not for Google accounts).
+         */
+        AccountDelete: {
+            /** Confirm */
+            confirm: string;
+            /** Password */
+            password?: string | null;
+        };
         /** AchievementOut */
         AchievementOut: {
             /** Id */
@@ -1211,6 +1227,11 @@ export interface components {
             last_name: string;
             /** Avatar Url */
             avatar_url?: string | null;
+            /**
+             * Signs In With Google
+             * @default false
+             */
+            signs_in_with_google: boolean;
         };
         /**
          * UserUpdate
@@ -1452,6 +1473,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["UserOut"];
+                };
+            };
+        };
+    };
+    delete_account_auth_me_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AccountDelete"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

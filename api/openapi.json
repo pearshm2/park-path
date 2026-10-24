@@ -215,6 +215,44 @@
           }
         ]
       },
+      "delete": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Delete Account",
+        "description": "Deletes the account for good: its trips (and their photos), comments,\nfriendships, wishlist and profile picture all go with it (the database\nremoves everything that belongs to a user along with them).",
+        "operationId": "delete_account_auth_me_delete",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AccountDelete"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      },
       "patch": {
         "tags": [
           "auth"
@@ -1731,6 +1769,31 @@
   },
   "components": {
     "schemas": {
+      "AccountDelete": {
+        "properties": {
+          "confirm": {
+            "type": "string",
+            "title": "Confirm"
+          },
+          "password": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Password"
+          }
+        },
+        "type": "object",
+        "required": [
+          "confirm"
+        ],
+        "title": "AccountDelete",
+        "description": "DELETE /auth/me: \"DELETE\" typed out, and the password (not for Google accounts)."
+      },
       "AchievementOut": {
         "properties": {
           "id": {
@@ -3516,6 +3579,11 @@
               }
             ],
             "title": "Avatar Url"
+          },
+          "signs_in_with_google": {
+            "type": "boolean",
+            "title": "Signs In With Google",
+            "default": false
           }
         },
         "type": "object",

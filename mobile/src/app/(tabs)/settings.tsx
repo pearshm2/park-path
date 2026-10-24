@@ -8,7 +8,8 @@
  *
  *  - Profile: your picture, name and @username (what friends see), your
  *    starting location, and your quiz answers.
- *  - Account: your email and password, the server, and logging out.
+ *  - Account: your email and password, the server, logging out, and
+ *    deleting the account.
  *  - Privacy: who sees a new trip by default, what friends can see of you,
  *    and location.
  *  - Notifications: the chime and buzz, and arrival reminders.
@@ -414,6 +415,7 @@ function ProfileSection() {
 
 function AccountSection() {
   const { user, signOut, updateProfile, changePassword } = useAuth();
+  const [deleting, setDeleting] = useState(false);
 
   const [emailOpen, setEmailOpen] = useState(false);
   const [email, setEmail] = useState('');
@@ -595,14 +597,82 @@ function AccountSection() {
 
       {/* Doesn't clear the quiz answers: they're kept per account for the
           next sign-in. Profile → Retake the quiz starts over. */}
-      <Row last>
+      <Row>
         <RowText
           title="Log out"
           description="Sign out of ParkPath on this phone."
           control={<SmallButton label="Log out" onPress={signOut} />}
         />
       </Row>
+
+      <Row last>
+        <RowText
+          title="Delete account"
+          description="Permanently delete your account and everything in it: trips, photos, friends and comments."
+          control={deleting ? null : <SmallButton label="Delete" danger onPress={() => setDeleting(true)} />}
+        />
+        {deleting && user ? (
+          <DeleteAccountForm google={user.signs_in_with_google ?? false} onCancel={() => setDeleting(false)} />
+        ) : null}
+      </Row>
     </>
+  );
+}
+
+/**
+ * The last step before deleting the account: type DELETE, and the password
+ * (not for an account that signs in with Google). Deleting signs out.
+ */
+function DeleteAccountForm({ google, onCancel }: { google: boolean; onCancel: () => void }) {
+  const { deleteAccount } = useAuth();
+  const [confirm, setConfirm] = useState('');
+  const [password, setPassword] = useState('');
+  const [note, setNote] = useState<Note>(null);
+  const [busy, setBusy] = useState(false);
+  const ready = confirm.trim().toUpperCase() === 'DELETE' && (google || password.length > 0);
+
+  async function remove() {
+    setBusy(true);
+    setNote(null);
+    try {
+      await deleteAccount(confirm.trim(), google ? undefined : password);
+      // Signed out: the app goes back to sign-in.
+    } catch (err) {
+      setNote({ ok: false, text: err instanceof Error ? err.message : "Couldn't delete it. Try again." });
+      setBusy(false);
+    }
+  }
+
+  return (
+    <View style={styles.dangerBox}>
+      <BodyText size={13} weight="semibold" color={colors.accentRamp[800]}>
+        This can&apos;t be undone. Your trips, photos, stamps, friends and comments will be gone for
+        good, and friends will no longer see you.
+      </BodyText>
+      {google ? null : (
+        <TextField
+          label="Your password"
+          value={password}
+          onChangeText={setPassword}
+          secureTextEntry
+          autoCapitalize="none"
+          autoComplete="current-password"
+        />
+      )}
+      <TextField
+        label="Type DELETE to confirm"
+        value={confirm}
+        onChangeText={setConfirm}
+        autoCapitalize="characters"
+        autoCorrect={false}
+        placeholder="DELETE"
+      />
+      <NoteText note={note} />
+      <View style={styles.buttons}>
+        <SmallButton label="Cancel" onPress={onCancel} />
+        <SmallButton label="Delete forever" danger primary disabled={!ready} busy={busy} onPress={() => void remove()} />
+      </View>
+    </View>
   );
 }
 
@@ -732,12 +802,15 @@ function SmallButton({
   label,
   onPress,
   primary = false,
+  danger = false,
   disabled = false,
   busy = false,
 }: {
   label: string;
   onPress: () => void;
   primary?: boolean;
+  /** Red: for deleting the account. */
+  danger?: boolean;
   disabled?: boolean;
   busy?: boolean;
 }) {
@@ -750,7 +823,7 @@ function SmallButton({
       accessibilityState={{ disabled: disabled || busy }}
       style={({ pressed }) => [
         styles.smallButton,
-        primary ? styles.smallPrimary : styles.smallPlain,
+        primary ? (danger ? styles.smallDanger : styles.smallPrimary) : danger ? styles.smallDangerPlain : styles.smallPlain,
         pressed && (primary ? styles.smallPrimaryPressed : styles.smallPlainPressed),
         (disabled || busy) && styles.smallDisabled,
       ]}
@@ -758,7 +831,11 @@ function SmallButton({
       {busy ? (
         <ActivityIndicator size="small" color={primary ? colors.neutral[100] : colors.accent} />
       ) : (
-        <BodyText size={13} weight="semibold" color={primary ? colors.neutral[100] : colors.neutral[900]}>
+        <BodyText
+          size={13}
+          weight="semibold"
+          color={primary ? colors.neutral[100] : danger ? DANGER : colors.neutral[900]}
+        >
           {label}
         </BodyText>
       )}
@@ -845,6 +922,9 @@ function crowdsLabel(crowds: QuizAnswers['crowds']): string {
 }
 
 /** The folded menu: a strip of icons. */
+/** For deleting the account: a clear red, apart from the app's terracotta. */
+const DANGER = '#a82424';
+
 const NAV_FOLDED = 60;
 const RULE = 'rgba(32, 30, 29, 0.12)';
 
@@ -1012,6 +1092,22 @@ const styles = StyleSheet.create({
   },
   smallPrimaryPressed: {
     backgroundColor: colors.accentRamp[600],
+  },
+  smallDanger: {
+    backgroundColor: DANGER,
+  },
+  smallDangerPlain: {
+    borderWidth: 1,
+    borderColor: 'rgba(168, 36, 36, 0.45)',
+    backgroundColor: colors.neutral[100],
+  },
+  dangerBox: {
+    gap: space[3],
+    padding: space[3],
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: 'rgba(168, 36, 36, 0.3)',
+    backgroundColor: 'rgba(168, 36, 36, 0.05)',
   },
   smallDisabled: {
     opacity: 0.45,

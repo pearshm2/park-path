@@ -9,6 +9,7 @@ Auth routes:
   POST  /auth/me/password          change your password
   PUT   /auth/me/avatar            set your profile picture
   DELETE /auth/me/avatar           remove it
+  DELETE /auth/me                  delete the account and everything in it, for good
   GET   /auth/username-available   ?username=..., for the sign-up form to check as you type
 
 Scope note: this is access-token-only (no refresh tokens, no password
@@ -33,8 +34,9 @@ from app.google_auth import (
     InvalidGoogleToken,
     verify_google_id_token,
 )
-from app.models import User
+from app.models import TripEntry, TripPhoto, User
 from app.schemas import (
+    AccountDelete,
     AvatarUpload,
     GoogleSignIn,
     GoogleToken,
@@ -47,6 +49,7 @@ from app.schemas import (
     UserUpdate,
 )
 from app.security import create_access_token, hash_password, verify_password
+from app.storage import Storage, get_storage
 from app.usernames import normalize_username, username_base, username_problem
 
 router = APIRouter()
@@ -301,3 +304,43 @@ def username_available(username: str = Query(..., max_length=40), db: Session = 
     if _username_taken(db, name):
         return UsernameCheck(username=name, available=False, reason=USERNAME_TAKEN)
     return UsernameCheck(username=name, available=True)
+
+
+@router.delete("/me", status_code=status.HTTP_204_NO_CONTENT)
+def delete_account(
+    payload: AccountDelete,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    storage: Storage | None = Depends(get_storage),
+):
+    """
+    Deletes the account for good: its trips (and their photos), comments,
+    friendships, wishlist and profile picture all go with it (the database
+    removes everything that belongs to a user along with them).
+    """
+    if payload.confirm.strip().upper() != "DELETE":
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail='Type DELETE to confirm')
+    # A Google account may have no password of its own; everyone else
+    # proves it's them.
+    if not current_user.signs_in_with_google and not (
+        payload.password and verify_password(payload.password, current_user.hashed_password)
+    ):
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=WRONG_PASSWORD)
+
+    photo_keys = db.scalars(
+        select(TripPhoto.storage_key)
+        .join(TripEntry, TripPhoto.entry_id == TripEntry.id)
+        .where(TripEntry.user_id == current_user.id)
+    ).all()
+    db.delete(current_user)
+    db.commit()
+
+    # Best effort, after the account is gone: an object left behind is an
+    # orphan in the bucket, not a reason to keep the account.
+    if storage is not None:
+        for key in photo_keys:
+            try:
+                storage.delete(key)
+            except Exception:  # noqa: BLE001
+                pass
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

@@ -69,6 +69,11 @@ class User(Base):
     )
 
     @property
+    def signs_in_with_google(self) -> bool:
+        """Linked to a Google account (and so may have no password they know)."""
+        return self.google_sub is not None
+
+    @property
     def avatar_url(self) -> str | None:
         """
         Where to fetch the profile picture (GET /users/{id}/avatar), with

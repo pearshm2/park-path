@@ -68,6 +68,13 @@ class GoogleToken(BaseModel):
     created: bool
 
 
+class AccountDelete(BaseModel):
+    """DELETE /auth/me: "DELETE" typed out, and the password (not for Google accounts)."""
+
+    confirm: str
+    password: str | None = None
+
+
 class PasswordChange(BaseModel):
     current_password: str
     new_password: str = Field(min_length=8, max_length=200)
@@ -103,6 +110,8 @@ class UserOut(BaseModel):
     last_name: str
     # GET this (with your token) for their profile picture; null without one.
     avatar_url: str | None = None
+    # Signs in with Google: deleting the account then asks for no password.
+    signs_in_with_google: bool = False
 
 
 class Token(BaseModel):
