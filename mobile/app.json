@@ -2,6 +2,7 @@
   "expo": {
     "name": "ParkPath",
     "slug": "park-path",
+    "owner": "hallusynations-team",
     "version": "1.0.0",
     "orientation": "default",
     "icon": "./assets/images/icon.png",
@@ -55,6 +56,11 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "eas": {
+        "projectId": "1b8b8039-51ec-4ce9-8a65-0ea12beefc9b"
+      }
     }
   }
 }
