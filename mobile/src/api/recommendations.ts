@@ -6,7 +6,9 @@
  * them best first, by park_code only. This joins them back onto the sites
  * from GET /sites so the cards have names, photos and the rest.
  *
- * The endpoint is public and saves nothing, so no token is sent.
+ * The endpoint works without an account. When a token is passed, the
+ * engine also uses the person's logged trips: visited parks move down the
+ * list, and terrains they rated highly get a small boost.
  */
 
 import { request } from './client';
@@ -33,6 +35,7 @@ export type Recommendation = {
 export async function recommendations(
   answers: QuizAnswers,
   scope: SiteScope = 'parks',
+  token?: string | null,
 ): Promise<Recommendation[]> {
   // The engine rejects an unfinished quiz (422), and Explore is only
   // reached after finishing it, so there is nothing to ask for here.
@@ -42,6 +45,7 @@ export async function recommendations(
     request<RecommendationOut[]>('/recommendations', {
       method: 'POST',
       body: engineRequest(answers),
+      token,
     }),
     listSites(scope),
   ]);
