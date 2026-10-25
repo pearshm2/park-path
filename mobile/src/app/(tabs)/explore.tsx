@@ -719,9 +719,9 @@ export default function ExploreScreen() {
               onLayout={(event) => measureSpare('above', event.nativeEvent.layout.height)}
             />
           ) : null}
-          {/* The title and the map slide (rather than jump) to where the
-              sheet leaves them, in step with the sheet and the key. */}
-          <Animated.View layout={LinearTransition.duration(SHEET_MS)} style={styles.titleSlot}>
+          {/* The title and the map jump to where the sheet leaves them (see
+              the note on the map below). */}
+          <Animated.View style={styles.titleSlot}>
           {focusRegion ? (
             <RegionTitle
               region={focusRegion}
@@ -744,8 +744,10 @@ export default function ExploreScreen() {
             </View>
           )}
           </Animated.View>
+          {/* No layout transition here or on the title: tapping a park while
+              the previous slide was still running left the map box drawn in
+              the wrong place (blank map, dead "Full map" button; Bug 1). */}
           <Animated.View
-            layout={LinearTransition.duration(SHEET_MS)}
             style={[
               styles.map,
               // Open, the map's empty top margin tucks under its title.
