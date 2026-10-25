@@ -234,6 +234,9 @@ class RecommendationOut(BaseModel):
     # True when the signed-in user has logged a trip here (always false
     # without a token). Visited parks are moved down the list.
     visited: bool
+    # True for at most one site: the best national park with a terrain the
+    # signed-in user hasn't visited or asked for. The app shows it at #4.
+    different: bool = False
 
 
 # --- Park maps (GET /sites/{park_code}/map) ---------------------------------

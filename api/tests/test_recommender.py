@@ -268,3 +268,35 @@ def test_low_rated_trips_give_no_boost():
     with_history = rank([make_site()], answers(seasons=("summer",)), history={"zion": meh})[0]
     without = rank([make_site()], answers(seasons=("summer",)))[0]
     assert with_history["score"] == without["score"]
+
+
+# --- something different ----------------------------------------------------
+
+
+def test_something_different_needs_trips():
+    park = make_site("desert", terrain_group="desert", is_named_park=True)
+    assert rank([park], answers())[0]["different"] is False
+
+
+def test_something_different_is_the_best_new_terrain_park():
+    zion = Visit(park_code="zion", name="Zion", terrain_group="canyon", rating=5)
+    sites = [
+        make_site("canyon2", is_named_park=True),  # their answer: not different
+        make_site("forest", terrain_group="forest", is_named_park=True),  # tried below
+        make_site("dunes", terrain_group="dunes", is_named_park=True, annual_visits_millions=0.5),
+        make_site("desert", terrain_group="desert", is_named_park=True, annual_visits_millions=2.0),
+        make_site("monument", terrain_group="coast", is_named_park=False),  # not a park
+    ]
+    oak = Visit(park_code="oak", name="Oak", terrain_group="forest", rating=4)
+    results = rank(sites, answers(), history={"zion": zion, "oak": oak})
+    flagged = [r for r in results if r["different"]]
+    # Dunes count as desert, so the two desert parks tie; the busier one wins.
+    assert [r["park_code"] for r in flagged] == ["desert"]
+    assert flagged[0]["reason"] == "Something different: no desert parks in your trips yet"
+
+
+def test_nothing_different_when_every_terrain_is_covered():
+    zion = Visit(park_code="zion", name="Zion", terrain_group="canyon", rating=5)
+    park = make_site("canyon2", is_named_park=True)
+    results = rank([park], answers(), history={"zion": zion})
+    assert not any(r["different"] for r in results)

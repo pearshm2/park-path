@@ -24,7 +24,7 @@ import { monthLabel, useTrips, type TripEntry } from '../trips/TripsContext';
 import { regionForState } from '../data/regions';
 import { colors, radius, shadow, space } from '../theme';
 import { STATUS_DOT } from './ParkMap';
-import { Tag } from './Tag';
+import { Tag, type TagTone } from './Tag';
 import { TERRAIN_LABEL, TerrainIcon, terrainTone } from './TerrainIcon';
 import { ExpandIcon } from './ExpandIcon';
 import { BodyText, Heading } from './Typography';
@@ -38,6 +38,7 @@ const EFFORT_LABEL: Record<number, string> = {
 export function ParkCard({
   site,
   reason,
+  match,
   rank,
   markWishlist = false,
   onOpenTrip,
@@ -52,6 +53,8 @@ export function ParkCard({
 }: {
   site: Site;
   reason?: string;
+  /** How well it matches you, 0–1, shown as a percentage beside the reason. */
+  match?: number;
   /** 1-based position among the picks, shown as a badge on the band. */
   rank?: number;
   /** Flags a wishlist park on the band, for decks that mix them with others. */
@@ -88,7 +91,7 @@ export function ParkCard({
       onPress={onPress}
       disabled={!onPress}
       accessibilityRole={onPress ? 'button' : undefined}
-      accessibilityLabel={[site.name, reason]
+      accessibilityLabel={[site.name, match !== undefined ? `${matchPercent(match)}% match` : null, reason]
         .filter(Boolean)
         .join('. ')}
       style={({ pressed }) => [styles.card, style, pressed && onPress && styles.pressed]}
@@ -189,28 +192,45 @@ export function ParkCard({
             </BodyText>
           </View>
 
-          {reason ? (
-            <BodyText
-              size={12.5}
-              weight="medium"
-              lineHeightRatio={1.4}
-              color={colors.accentRamp[800]}
-              style={styles.reason}
-              numberOfLines={1}
-            >
-              {reason}
-            </BodyText>
+          {reason || match !== undefined ? (
+            <View style={styles.reasonRow}>
+              {match !== undefined ? (
+                <View style={styles.matchPill}>
+                  <BodyText size={11} weight="bold" color={colors.neutral[100]}>
+                    {`${matchPercent(match)}%`}
+                  </BodyText>
+                </View>
+              ) : null}
+              {reason ? (
+                <BodyText
+                  size={12.5}
+                  weight="medium"
+                  lineHeightRatio={1.4}
+                  color={colors.accentRamp[800]}
+                  style={styles.reasonText}
+                  numberOfLines={1}
+                >
+                  {reason}
+                </BodyText>
+              ) : null}
+            </View>
           ) : null}
 
-          {/* One row only; anything that does not fit is clipped. */}
-          <View style={styles.tags}>
-            {site.permit ? <Tag tone="accent" label="Permit needed" /> : null}
-            {site.vis !== null ? <Tag tone="accent2" label={crowdLabel(site.vis)} /> : null}
-            {site.feature ? <Tag tone="outline" label={site.feature} /> : null}
-            {site.effort !== null ? (
-              <Tag tone="neutral" label={EFFORT_LABEL[site.effort] ?? `Effort ${site.effort}`} />
-            ) : null}
-          </View>
+          {/* One row only: tags that don't fit whole are left out (Facts has them all). */}
+          <FittingTags
+            tags={[
+              site.permit ? { key: 'permit', tone: 'accent', label: 'Permit needed' } : null,
+              site.vis !== null ? { key: 'crowd', tone: 'accent2', label: crowdLabel(site.vis) } : null,
+              site.feature ? { key: 'feature', tone: 'outline', label: site.feature } : null,
+              site.effort !== null
+                ? {
+                    key: 'effort',
+                    tone: 'neutral',
+                    label: EFFORT_LABEL[site.effort] ?? `Effort ${site.effort}`,
+                  }
+                : null,
+            ]}
+          />
 
           {/* A visited park links to the trip it was part of, or asks for one. */}
           {site.status === 'visited' ? (
@@ -450,6 +470,49 @@ export function BookmarkIcon({ filled, size = 14 }: { filled: boolean; size?: nu
   );
 }
 
+type CardTag = { key: string; tone: TagTone; label: string };
+
+/**
+ * One row of tags, showing only the ones that fit whole: a tag cut off at
+ * the card's edge looked broken. Each tag reports where it ends; any that
+ * runs past the row is hidden (kept in place, so the measurements hold).
+ */
+function FittingTags({ tags }: { tags: (CardTag | null)[] }) {
+  const [rowWidth, setRowWidth] = useState(0);
+  const [ends, setEnds] = useState<Record<string, number>>({});
+  return (
+    <View
+      style={styles.tags}
+      onLayout={(event) => {
+        const width = event.nativeEvent.layout.width;
+        setRowWidth((current) => (Math.abs(current - width) > 0.5 ? width : current));
+      }}
+    >
+      {tags.map((tag) => {
+        if (!tag) return null;
+        const end = ends[tag.key];
+        const fits = rowWidth === 0 || end === undefined || end <= rowWidth + 0.5;
+        return (
+          <View
+            key={tag.key}
+            style={!fits && styles.tagHidden}
+            importantForAccessibility={fits ? 'auto' : 'no-hide-descendants'}
+            onLayout={(event) => {
+              const { x, width } = event.nativeEvent.layout;
+              const next = x + width;
+              setEnds((current) =>
+                Math.abs((current[tag.key] ?? -1) - next) > 0.5 ? { ...current, [tag.key]: next } : current,
+              );
+            }}
+          >
+            <Tag tone={tag.tone} label={tag.label} />
+          </View>
+        );
+      })}
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   card: {
     borderRadius: radius.card,
@@ -581,8 +644,20 @@ const styles = StyleSheet.create({
   metaText: {
     flexShrink: 1,
   },
-  reason: {
+  reasonRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space[2],
     marginTop: space[2],
+  },
+  reasonText: {
+    flexShrink: 1,
+  },
+  matchPill: {
+    paddingHorizontal: 7,
+    paddingVertical: 1,
+    borderRadius: radius.pill,
+    backgroundColor: colors.accentRamp[700],
   },
   details: {
     flex: 1,
@@ -645,4 +720,13 @@ const styles = StyleSheet.create({
     marginTop: space[2],
     overflow: 'hidden',
   },
+  // Still laid out (so its measurement holds), just not shown.
+  tagHidden: {
+    opacity: 0,
+  },
 });
+
+/** A 0–1 match as a whole percentage. */
+export function matchPercent(score: number): number {
+  return Math.round(score * 100);
+}

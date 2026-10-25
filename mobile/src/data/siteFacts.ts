@@ -7,7 +7,8 @@
 import { colors } from '../theme';
 import type { Site } from './parks';
 
-export type FactRow = { label: string; value: string; color: string };
+/** `note` is a smaller line under the value, where there is one. */
+export type FactRow = { label: string; value: string; color: string; note?: string };
 
 /** A plus in green, everything else plain. */
 const YES = colors.accent2Ramp[700];
@@ -79,7 +80,8 @@ export function factRows(site: Site, referenceVisits?: number): FactRow[] {
       const crowd = crowdLabel(site.vis);
       rows.push({
         label: 'Crowding',
-        value: `${crowd} · ${share < 1 ? 'under 1' : Math.round(share)}% of Smokies traffic`,
+        value: crowd,
+        note: `${share < 1 ? 'Under 1' : Math.round(share)}% of the Smokies' traffic`,
         color: crowd === 'Quiet' ? YES : PLAIN,
       });
     }

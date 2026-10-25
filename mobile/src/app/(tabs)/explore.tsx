@@ -52,8 +52,7 @@ import Svg, { Path } from 'react-native-svg';
 import { scheduleOnRN } from 'react-native-worklets';
 
 import { listSites } from '../../api/parks';
-import { recommendations, type Recommendation } from '../../api/recommendations';
-import { useAuth } from '../../auth/AuthContext';
+import { useRecommendations, type Recommendation } from '../../api/recommendations';
 import {
   activeFilterCount,
   BodyText,
@@ -88,12 +87,13 @@ import {
   type Region,
   type RegionId,
 } from '../../data/regions';
-import { useQuiz } from '../../quiz/QuizContext';
 import { useCelebrations } from '../../celebrations/CelebrationsContext';
 import { useSnoozed } from '../../wishlist/useSnoozed';
 import { useWishlist } from '../../wishlist/useWishlist';
 import { CapTextScale, colors, radius, shadow, space, useTextScale } from '../../theme';
 
+/** Where the "something different" pick goes among them (0-based: #4). */
+const DIFFERENT_AT = 3;
 /** How many recommendations get a numbered pin and a card. */
 const TOP_N = 10;
 
@@ -213,7 +213,6 @@ export default function ExploreScreen() {
   const insets = useSafeAreaInsets();
   const { width: windowWidth } = useWindowDimensions();
   const textScale = useTextScale();
-  const { answers } = useQuiz();
 
   const [scope, setScope] = useState<MapScope>('parks');
   /**
@@ -256,12 +255,8 @@ export default function ExploreScreen() {
   // a match too; the picks themselves are drawn from the parks only.
   // Signed in, the engine also uses your trips (visited parks move down),
   // so the list is refetched when a trip is logged.
-  const { token } = useAuth();
-  const { visitedIds, visitSummary } = useTrips();
-  const { data: sharedMatches = [] } = useQuery({
-    queryKey: ['recommendations', answers, 'all', token, visitedIds.size],
-    queryFn: () => recommendations(answers, 'all', token),
-  });
+  const { visitedIds, visitSummary, entries: tripEntries } = useTrips();
+  const { data: sharedMatches = [] } = useRecommendations();
 
   // The site list is shared and carries no per-person status, so your
   // wishlist is applied here, once, and everything below (map pins, cards,
@@ -321,8 +316,19 @@ export default function ExploreScreen() {
     [matches],
   );
 
-  // The engine's top 10, untouched by the filters.
-  const picks = useMemo(() => parkMatches.slice(0, TOP_N), [parkMatches]);
+  // The engine's top 10, untouched by the filters. Its "something
+  // different" pick (a terrain new to you; only with trips logged) takes
+  // #4 unless it already ranks higher.
+  const picks = useMemo(() => {
+    const top = parkMatches.slice(0, TOP_N);
+    const different = parkMatches.find((match) => match.different);
+    if (!different) return top;
+    const at = top.indexOf(different);
+    if (at > -1 && at < DIFFERENT_AT) return top;
+    const rest = top.filter((match) => match !== different);
+    rest.splice(DIFFERENT_AT, 0, different);
+    return rest.slice(0, TOP_N);
+  }, [parkMatches]);
   const rankById = useMemo(
     () => new Map(picks.map(({ site }, index) => [site.id, index + 1])),
     [picks],
@@ -636,7 +642,12 @@ export default function ExploreScreen() {
                   ? `Where you've been: ${visited.length} so far`
                   : matchIds.size > 0
                   ? `Where to next? ${matchIds.size} more fit your filters`
-                  : 'Where to next?'}
+                  : // The engine uses your trips (signed in, as Explore always is).
+                    tripEntries.length === 0
+                    ? 'Matched to your quiz'
+                    : tripEntries.length === 1
+                      ? 'Tuned by your trip'
+                      : `Tuned by your ${tripEntries.length} trips`}
             </BodyText>
           </View>
         </View>
@@ -852,6 +863,7 @@ export default function ExploreScreen() {
                 <ParkCard
                   site={item.site}
                   reason={item.reason}
+                  match={item.score}
                   rank={item.rank}
                   // The full decks mix saved parks in with everything else.
                   markWishlist={scope === 'parks' || scope === 'all'}
