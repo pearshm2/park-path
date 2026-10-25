@@ -14,7 +14,7 @@ Trip journal routes (all require a signed-in user):
 
 Logging an entry is what marks a park visited (see app/passport.py).
 Who may read an entry is decided in app/visibility.py: entries start
-private, and "friends" shares one with accepted friends only.
+shared with accepted friends ("friends"), and "private" keeps one to its owner.
 
 Not-found vs forbidden: an entry you may not see is 404, never 403, so ids
 don't reveal what exists. A friend who can read an entry but isn't its owner

@@ -3,10 +3,10 @@
  * token.
  *
  * The server keeps a trip's park, date, title, notes, rating, trails, who
- * was there and who can see it, and its photos and videos with their
- * captions. Those go to S3 by a signed upload, not wired up here yet (the
- * server has no bucket), so for now they stay on the phone; see
- * trips/TripsContext.tsx.
+ * was there and who can see it (always friends, from the app), and its
+ * photos and videos with their captions. Those go to S3 by a signed upload
+ * (POST /trips/photos/upload-url), which the app doesn't call yet, so for
+ * now they stay on the phone; see trips/TripsContext.tsx.
  */
 
 import { request } from './client';

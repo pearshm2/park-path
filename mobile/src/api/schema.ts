@@ -1053,7 +1053,7 @@ export interface components {
             trails?: string[] | null;
             /** Stamp */
             stamp?: string | null;
-            /** @default private */
+            /** @default friends */
             visibility: components["schemas"]["Visibility"];
             /** Photos */
             photos?: components["schemas"]["TripPhotoIn"][] | null;

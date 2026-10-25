@@ -1,56 +1,56 @@
-# Welcome to your Expo app 👋
+# ParkPath app
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+The ParkPath Android app: Expo (SDK 57), React Native and Expo Router.
+It talks to the ParkPath API in `../api`.
 
-## Get started
+## Run it on your phone
 
-1. Install dependencies
+1. Install the packages (from this `mobile` folder):
 
    ```bash
    npm install
    ```
 
-2. Start the app
+2. Tell the app where the API is. In `mobile/.env`:
+
+   ```
+   EXPO_PUBLIC_API_URL=https://parkpath-api.onrender.com
+   ```
+
+   Or your computer's LAN address (e.g. `http://192.168.1.20:8000`) to use
+   the API running locally in Docker.
+
+3. Start it, then scan the QR code with **Expo Go**:
 
    ```bash
    npx expo start
    ```
 
-In the output, you'll find options to open the app in a
+   After changing `.env`, restart with `npx expo start --clear`.
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+Expo Go runs the app in development mode, which is noticeably slower than
+the real app. Judge speed on the APK.
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+## Installable APK
 
-## Get a fresh project
+See `docs/apk.md` in the repo root. Builds run on Expo's servers with
+`npx eas-cli@latest build --platform android --profile preview`.
 
-When you're ready, run:
+## Checks (the same ones CI runs)
 
 ```bash
-npm run reset-project
+npm run lint
+npm run typecheck
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+## Where things are
 
-### Other setup steps
-
-- To set up ESLint for linting, run `npx expo lint`, or follow our guide on ["Using ESLint and Prettier"](https://docs.expo.dev/guides/using-eslint/)
-- If you'd like to set up unit testing, follow our guide on ["Unit Testing with Jest"](https://docs.expo.dev/develop/unit-testing/)
-- Learn more about the TypeScript setup in this template in our guide on ["Using TypeScript"](https://docs.expo.dev/guides/typescript/)
-
-## Learn more
-
-To learn more about developing your project with Expo, look at the following resources:
-
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
-
-## Join the community
-
-Join our community of developers creating universal apps.
-
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+- `src/app/`: the screens (Expo Router: one file per route; `(tabs)` is
+  the tab bar, `(auth)` sign-in and sign-up)
+- `src/components/`: shared pieces (map, cards, sheets, passport, trips)
+- `src/api/`: calls to the API. `schema.ts` is generated from
+  `api/openapi.json`; after the API changes, run `npm run api:types`
+- `src/data/`: static data (regions, quiz, achievements)
+- `src/theme/`: colours, fonts and spacing
+- Contexts for app-wide state: `src/auth`, `src/trips`, `src/quiz`,
+  `src/wishlist`, `src/celebrations`, `src/arrivals`

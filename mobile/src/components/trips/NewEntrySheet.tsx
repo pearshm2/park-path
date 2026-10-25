@@ -1,7 +1,7 @@
 /**
  * The prototype's "New journal entry" sheet: the park visited (searched
  * from every site, national parks first), the exact date, a title, notes, a
- * star rating, who can see it (only you, or your friends too), trails and spots you loved (any number: the park's own
+ * star rating, trails and spots you loved (any number: the park's own
  * trails as chips to toggle, plus any typed in), who was with you (your
  * friends), photos and videos, each with its own caption for Relive, and a
  * photo of the park's official stamp in your passport book (a souvenir of
@@ -50,7 +50,6 @@ import { scheduleOnRN } from 'react-native-worklets';
 import Svg, { Path } from 'react-native-svg';
 
 import { firstName } from '../../api/friends';
-import { defaultVisibility } from '../../lib/tripDefaults';
 import { fetchParkMap } from '../../api/parkMaps';
 import { listSites } from '../../api/parks';
 import { useFriends } from '../../friends/useFriends';
@@ -124,7 +123,8 @@ export function NewEntrySheet({
   const [trailText, setTrailText] = useState('');
   const [withIds, setWithIds] = useState<number[]>(start.withIds);
   const [media, setMedia] = useState<TripMedia[]>(start.media);
-  const [visibility, setVisibility] = useState<Visibility>(start.visibility);
+  // Every trip is shared with friends; there's no "only me" any more.
+  const visibility: Visibility = 'friends';
   const [passportStamp, setPassportStamp] = useState<string | null>(start.passportStamp);
   const [stampNote, setStampNote] = useState<string | null>(null);
   /** Why a picked video was left out (too long), until the next pick. */
@@ -179,7 +179,6 @@ export function NewEntrySheet({
     setTrailText('');
     setWithIds([]);
     setMedia([]);
-    setVisibility(defaultVisibility());
     setPassportStamp(null);
     setProblem(null);
   }
@@ -606,29 +605,6 @@ export function NewEntrySheet({
                 </BodyText>
               )}
 
-              <Label>Who can see it</Label>
-              <View style={styles.visibility} accessibilityRole="radiogroup">
-                {VISIBILITY.map((option) => {
-                  const on = visibility === option.value;
-                  return (
-                    <Pressable
-                      key={option.value}
-                      onPress={() => setVisibility(option.value)}
-                      accessibilityRole="radio"
-                      accessibilityState={{ selected: on }}
-                      style={[styles.visibilityOption, on && styles.visibilityOn]}
-                    >
-                      <BodyText size={13} weight="semibold" color={on ? colors.neutral[100] : colors.neutral[800]}>
-                        {option.label}
-                      </BodyText>
-                      <BodyText size={11} color={on ? colors.accentRamp[100] : colors.neutral[600]}>
-                        {option.hint}
-                      </BodyText>
-                    </Pressable>
-                  );
-                })}
-              </View>
-
               <Label>Photos &amp; videos</Label>
               <Pressable
                 onPress={pickMedia}
@@ -806,7 +782,8 @@ function fromEntry(entry: TripEntry): Omit<EntryDraft, 'savedAt'> {
     trails: entry.trails,
     withIds: entry.with.map((p) => p.id),
     media: entry.media,
-    visibility: entry.visibility,
+    // Saving an older "only me" trip shares it with friends too.
+    visibility: 'friends',
     passportStamp: entry.passportStamp,
   };
 }
@@ -822,8 +799,7 @@ function blankDraft(initialSiteId: string | undefined): Omit<EntryDraft, 'savedA
     trails: [],
     withIds: [],
     media: [],
-    // Settings → Privacy chooses who sees a new trip.
-    visibility: defaultVisibility(),
+    visibility: 'friends',
     passportStamp: null,
   };
 }
@@ -868,12 +844,8 @@ function Label({ children }: { children: string }) {
   );
 }
 
-const VISIBILITY: { value: Visibility; label: string; hint: string }[] = [
-  { value: 'private', label: 'Only me', hint: 'Just in your journal' },
-  { value: 'friends', label: 'Friends', hint: "In your friends' feed" },
-];
-
-const RATING_WORDS = ['Not great', 'Okay', 'Good', 'Great', 'Unforgettable'];
+// Okay is the middle of the five.
+const RATING_WORDS = ['Awful', 'Poor', 'Okay', 'Good', 'Great'];
 
 /** A star for the rating: filled orange when on, outlined when off. */
 export function StarIcon({ filled, size = 28 }: { filled: boolean; size?: number }) {
@@ -1097,24 +1069,6 @@ const styles = StyleSheet.create({
   },
   addText: {
     flex: 1,
-  },
-  visibility: {
-    flexDirection: 'row',
-    gap: space[2],
-  },
-  visibilityOption: {
-    flex: 1,
-    gap: 2,
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-    borderRadius: radius.md,
-    borderWidth: 1.5,
-    borderColor: colors.neutral[300],
-    backgroundColor: colors.neutral[100],
-  },
-  visibilityOn: {
-    borderColor: colors.accent,
-    backgroundColor: colors.accent,
   },
   passportButtons: {
     flexDirection: 'row',

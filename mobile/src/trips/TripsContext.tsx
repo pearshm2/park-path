@@ -211,7 +211,7 @@ function parseDraft(raw: string | null): EntryDraft | null {
       ...rest,
       media: draft.media ?? (photos ?? []).map(asPhoto),
       trails: draft.trails ?? (stamp?.trim() ? [stamp.trim()] : []),
-      visibility: draft.visibility ?? 'private',
+      visibility: draft.visibility ?? 'friends',
       passportStamp: draft.passportStamp ?? null,
     };
   } catch {
@@ -246,7 +246,7 @@ function parse(raw: string | null): TripEntry[] {
         // Saved with one trail, or none.
         trails: e.trails ?? (stamp ? [stamp] : []),
         // Saved before trips could be shared.
-        visibility: e.visibility ?? 'private',
+        visibility: e.visibility ?? 'friends',
         // Saved before passport stamps.
         passportStamp: e.passportStamp ?? null,
         // Saved before the server: send it.
