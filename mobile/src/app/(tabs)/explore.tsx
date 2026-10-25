@@ -229,6 +229,8 @@ export default function ExploreScreen() {
   const [deckTopId, setDeckTopId] = useState<string | null>(null);
   /** Lets the user reopen the key while the sheet is open. */
   const [keyOpen, setKeyOpen] = useState(false);
+  /** Bumped when the sheet is minimised, to undo any pinch on the map. */
+  const [recenter, setRecenter] = useState(0);
   /** The key folded away with the sheet down, for more room (stays as set). */
   const [keyFolded, setKeyFolded] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -445,9 +447,13 @@ export default function ExploreScreen() {
   function openSheet(open: boolean) {
     setSheetOpen(open);
     setKeyOpen(false);
-    // Closing tucks the cards away but keeps the map where it is: "Full
-    // map" (or tapping the park's pin again) zooms back out.
-    if (!open) setMoreOpen(false);
+    // Closing tucks the cards away and recenters the map (undoing any
+    // pinch), staying on the region in focus: "Full map" (or tapping the
+    // park's pin again) zooms back out.
+    if (!open) {
+      setMoreOpen(false);
+      setRecenter((n) => n + 1);
+    }
   }
 
   /**
@@ -791,6 +797,7 @@ export default function ExploreScreen() {
             tuckCompleted={scope !== 'visited'}
             canvas={mapCanvas}
             obscuredBottom={mapCovered}
+            recenterKey={recenter}
             style={styles.mapFill}
           />
           </Animated.View>
