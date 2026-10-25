@@ -7,7 +7,10 @@ import pytest
 
 from app.recommender import (
     DEFAULT_WEIGHTS,
+    TERRAIN_MISS_FACTOR,
+    VISITED_FACTOR,
     SiteData,
+    Visit,
     combine,
     crowds_score,
     distance_score,
@@ -105,7 +108,7 @@ def test_miles_between_known_cities():
 
 def test_distance_score_fades_with_miles():
     assert distance_score(50) == 1.0
-    assert distance_score(800) == pytest.approx(0.5)
+    assert distance_score(1300) == pytest.approx(0.5)  # halfway from 100 to 2500 miles
     assert distance_score(3000) == 0.0
     assert distance_score(None) is None
 
@@ -115,8 +118,9 @@ def test_distance_score_fades_with_miles():
 
 def test_combine_is_a_weighted_average():
     signals = {"distance": 1.0, "terrain": 0.0, "season": None, "crowds": None}
-    # Only distance (0.36) and terrain (0.28) are in use.
-    assert combine(signals, DEFAULT_WEIGHTS) == pytest.approx(0.36 / 0.64)
+    # Only distance and terrain are in use, so their weights are rescaled.
+    w = DEFAULT_WEIGHTS
+    assert combine(signals, w) == pytest.approx(w["distance"] / (w["distance"] + w["terrain"]))
 
 
 def test_combine_with_nothing_in_use():
@@ -187,13 +191,80 @@ def test_reason_falls_back_when_nothing_matches():
 
 
 def test_custom_weights_change_the_order():
-    terrain_fit = make_site("terrain_fit", seasons=["winter"])
-    season_fit = make_site("season_fit", terrain_group="coast")
-    a = answers(terrains=("canyon",), seasons=("spring",))
+    # Both match on terrain; one is in season, the other is busier.
+    in_season = make_site("in_season", seasons=["spring"], annual_visits_millions=0.5)
+    busy = make_site("busy", seasons=["winter"], annual_visits_millions=5.0)
+    a = answers(seasons=("spring",), crowds="icons")
 
-    default = rank([season_fit, terrain_fit], a)
-    assert default[0]["park_code"] == "terrain_fit"  # terrain outweighs season
+    default = rank([busy, in_season], a)
+    assert default[0]["park_code"] == "in_season"  # season outweighs crowds
 
-    season_first = {**DEFAULT_WEIGHTS, "season": 0.5}
-    custom = rank([season_fit, terrain_fit], a, weights=season_first)
-    assert custom[0]["park_code"] == "season_fit"
+    crowds_first = {**DEFAULT_WEIGHTS, "crowds": 1.0}
+    custom = rank([busy, in_season], a, weights=crowds_first)
+    assert custom[0]["park_code"] == "busy"
+
+
+# --- v2: terrain gate, "every season", trip history -------------------------
+
+
+def test_terrain_miss_cuts_the_score():
+    match = make_site("match")
+    miss = make_site("miss", terrain_group="coast")
+    results = {r["park_code"]: r for r in rank([match, miss], answers())}
+    assert results["match"]["score"] == 1.0
+    # Same season fit, but the wrong terrain: its score is cut by the gate.
+    assert results["miss"]["score"] == pytest.approx(
+        round(
+            (DEFAULT_WEIGHTS["season"] / (DEFAULT_WEIGHTS["season"] + DEFAULT_WEIGHTS["terrain"]))
+            * TERRAIN_MISS_FACTOR,
+            3,
+        )
+    )
+
+
+def test_nearby_wrong_terrain_loses_to_distant_match():
+    # v1's bug: a close forest park beat far canyon parks for a canyon fan.
+    near_forest = make_site("near", terrain_group="forest", latitude=35.6, longitude=-83.5)
+    far_canyon = make_site("far", latitude=37.3, longitude=-113.0)
+    charlotte = Location(lat=35.23, lon=-80.84)
+    results = rank([near_forest, far_canyon], answers(), charlotte)
+    assert [r["park_code"] for r in results] == ["far", "near"]
+
+
+def test_all_four_seasons_means_any_season():
+    site = make_site(seasons=["fall"])
+    assert season_score(site, ["winter", "spring", "summer", "fall"]) is None
+    assert season_score(site, ["winter", "spring", "summer"]) == 0.0
+
+
+def test_no_history_means_nothing_visited():
+    results = rank([make_site()], answers())
+    assert results[0]["visited"] is False
+
+
+def test_visited_parks_move_down():
+    visited = make_site("been", annual_visits_millions=4.0)
+    fresh = make_site("new", annual_visits_millions=0.2)
+    history = {"been": Visit(park_code="been", name="Park been", terrain_group="canyon", rating=3)}
+    results = rank([visited, fresh], answers(), history=history)
+    assert [r["park_code"] for r in results] == ["new", "been"]
+    been = results[1]
+    assert been["visited"] is True
+    assert been["score"] == pytest.approx(VISITED_FACTOR)
+
+
+def test_loved_terrain_gives_a_boost_and_a_reason():
+    zion = Visit(park_code="zion", name="Zion", terrain_group="canyon", rating=5)
+    similar = make_site("similar", seasons=["summer"])  # canyon, out of season
+    other = make_site("other", seasons=["summer"])
+    loved = rank([similar], answers(), history={"zion": zion})[0]
+    plain = rank([other], answers())[0]
+    assert loved["score"] > plain["score"]
+    assert loved["reason"].startswith("Like Zion, which you loved")
+
+
+def test_low_rated_trips_give_no_boost():
+    meh = Visit(park_code="zion", name="Zion", terrain_group="canyon", rating=2)
+    with_history = rank([make_site()], answers(seasons=("summer",)), history={"zion": meh})[0]
+    without = rank([make_site()], answers(seasons=("summer",)))[0]
+    assert with_history["score"] == without["score"]

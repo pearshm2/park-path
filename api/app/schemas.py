@@ -231,6 +231,9 @@ class RecommendationOut(BaseModel):
     score: float | None
     reason: str | None
     signals: SignalScores
+    # True when the signed-in user has logged a trip here (always false
+    # without a token). Visited parks are moved down the list.
+    visited: bool
 
 
 # --- Park maps (GET /sites/{park_code}/map) ---------------------------------
