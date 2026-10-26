@@ -3060,7 +3060,7 @@
           },
           "visibility": {
             "$ref": "#/components/schemas/Visibility",
-            "default": "private"
+            "default": "friends"
           },
           "photos": {
             "anyOf": [

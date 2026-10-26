@@ -172,9 +172,9 @@ def test_log_a_trip(people, codes):
     assert ann.get(body["id"]).json() == body
 
 
-def test_new_trips_are_private_by_default(people, codes):
+def test_new_trips_are_shared_with_friends_by_default(people, codes):
     ann = people()
-    assert ann.log(codes[0]).json()["visibility"] == "private"
+    assert ann.log(codes[0]).json()["visibility"] == "friends"
 
 
 def test_park_code_is_case_insensitive_and_unknown_is_404(people, codes):
@@ -213,8 +213,8 @@ def test_list_is_mine_newest_visit_first_and_filters_by_park(people, codes):
 def test_private_trips_are_invisible_to_everyone_else(people, codes):
     ann, bob, stranger = people(), people(), people()
     ann.befriend(bob)
-    trip_id = ann.log(codes[0]).json()["id"]
-    assert bob.get(trip_id).status_code == 404  # friends too, until shared
+    trip_id = ann.log(codes[0], visibility="private").json()["id"]
+    assert bob.get(trip_id).status_code == 404  # friends too
     assert stranger.get(trip_id).status_code == 404
 
 
@@ -272,7 +272,7 @@ def test_feed_shows_only_friends_shared_trips_newest_first(people, codes):
     ann.befriend(bob)
     ann.befriend(cat)
     first = bob.log(codes[0], visibility="friends").json()["id"]
-    bob.log(codes[0])  # private: not in the feed
+    bob.log(codes[0], visibility="private")  # not in the feed
     second = cat.log(codes[1], visibility="friends").json()["id"]
     stranger.log(codes[0], visibility="friends")  # not a friend
     ann.log(codes[0], visibility="friends")  # my own trips aren't in my feed

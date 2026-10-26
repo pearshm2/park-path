@@ -214,6 +214,11 @@ type ParkMapProps = {
   canvas?: { top: number; height: number };
   /** The box's y and height within its parent, when they change. */
   onFrame?: (y: number, height: number) => void;
+  /**
+   * Changing this undoes any pinch or drag, easing back to where the map
+   * should rest (the whole country, or the region in focus).
+   */
+  recenterKey?: number;
 };
 
 export function ParkMap({
@@ -237,6 +242,7 @@ export function ParkMap({
   style,
   canvas,
   onFrame,
+  recenterKey,
 }: ParkMapProps) {
   const [size, setSize] = useState({ width: 0, height: 0 });
 
@@ -378,6 +384,23 @@ export function ParkMap({
     tx.set(withTiming(target.tx, ZOOM_EASE));
     ty.set(withTiming(target.ty, ZOOM_EASE));
   }
+  // Asked to recenter (the sheet was minimised): forget any pinch or drag
+  // now, and ease the map back to where it should rest.
+  const [seenRecenter, setSeenRecenter] = useState(recenterKey);
+  if (recenterKey !== seenRecenter) {
+    setSeenRecenter(recenterKey);
+    if (moved) setMovedFrom(null);
+  }
+  const easedRecenter = useRef(recenterKey);
+  useEffect(() => {
+    if (recenterKey === easedRecenter.current) return;
+    easedRecenter.current = recenterKey;
+    k.set(withTiming(target.k, ZOOM_EASE));
+    tx.set(withTiming(target.tx, ZOOM_EASE));
+    ty.set(withTiming(target.ty, ZOOM_EASE));
+    // Only when asked; the target effect above handles everything else.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [recenterKey]);
   function beginMove(atK: number, atX: number, atY: number) {
     setLeaving(null);
     setMovedFrom(target);

@@ -42,7 +42,6 @@ import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   Extrapolation,
   interpolate,
-  LinearTransition,
   useAnimatedStyle,
   useSharedValue,
   withTiming,
@@ -231,6 +230,10 @@ export default function ExploreScreen() {
   const [deckTopId, setDeckTopId] = useState<string | null>(null);
   /** Lets the user reopen the key while the sheet is open. */
   const [keyOpen, setKeyOpen] = useState(false);
+  /** Bumped when the sheet is minimised, to undo any pinch on the map. */
+  const [recenter, setRecenter] = useState(0);
+  /** The key folded away with the sheet down, for more room (stays as set). */
+  const [keyFolded, setKeyFolded] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [fullMapOpen, setFullMapOpen] = useState(false);
   // The screen starts turning on the press itself, before Explore re-renders.
@@ -448,10 +451,12 @@ export default function ExploreScreen() {
   function openSheet(open: boolean) {
     setSheetOpen(open);
     setKeyOpen(false);
-    // Closing tucks the cards away and returns to the whole map.
+    // Closing tucks the cards away and recenters the map (undoing any
+    // pinch), staying on the region in focus: "Full map" (or tapping the
+    // park's pin again) zooms back out.
     if (!open) {
-      clearFocus();
       setMoreOpen(false);
+      setRecenter((n) => n + 1);
     }
   }
 
@@ -676,12 +681,9 @@ export default function ExploreScreen() {
           setStageFrame((f) => (Math.abs(f.height - height) > 1 ? { ...f, height } : f));
         }}
       >
-        <Animated.View
-          // The layout transition keeps a stale height when the key's
-          // content grows on its own (the filter swatch adds a line, or the
-          // spare room is measured), so remount it whenever either changes.
-          key={`${matchIds.size > 0 ? 'key-with-matches' : 'key'}-${keyRoom}`}
-          layout={LinearTransition.duration(SHEET_MS)}
+        {/* No layout transition: an interrupted one left the key cut off at
+            its folded height after the sheet closed. */}
+        <View
           // Collapsed, the key moves up a little to give the map the room.
           style={[styles.keyWrap, sheetOpen && styles.keyWrapOpen]}
         >
@@ -689,13 +691,15 @@ export default function ExploreScreen() {
               doesn't crowd out the map it explains. */}
           <CapTextScale max={1.1}>
             <MapKey
-              collapsed={sheetOpen && !keyOpen}
+              collapsed={sheetOpen ? !keyOpen : keyFolded}
               room={keyRoom}
               showMatches={matchIds.size > 0}
-              onToggle={sheetOpen ? () => setKeyOpen((open) => !open) : undefined}
+              onToggle={() =>
+                sheetOpen ? setKeyOpen((open) => !open) : setKeyFolded((folded) => !folded)
+              }
             />
           </CapTextScale>
-        </Animated.View>
+        </View>
 
         {/* Deliberately not a layout-animated view: the map has to be told
             its new size when the sheet opens, or it overflows under it. */}
@@ -782,8 +786,10 @@ export default function ExploreScreen() {
                 // Tapping the top card's pin again zooms back out.
                 setAnchor(null);
               } else if (regionDeck?.some((item) => item.site.id === site.id)) {
-                // Another park in the same region: bring its card to the top.
+                // Another park in the same region: bring its card to the top
+                // (opening the sheet, if it was minimised over the region).
                 setDeckTopId(site.id);
+                if (!sheetOpen) openSheet(true);
               } else {
                 focusPark(site);
               }
@@ -795,6 +801,7 @@ export default function ExploreScreen() {
             tuckCompleted={scope !== 'visited'}
             canvas={mapCanvas}
             obscuredBottom={mapCovered}
+            recenterKey={recenter}
             style={styles.mapFill}
           />
           </Animated.View>
