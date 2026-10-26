@@ -5,9 +5,11 @@
  * The server keeps a trip's park, date, title, notes, rating, trails, who
  * was there and who can see it (always friends, from the app), and its
  * photos and videos with their captions. Those go to S3 by a signed upload
- * (POST /trips/photos/upload-url) before the trip is sent; see
- * trips/TripsContext.tsx.
+ * (requestUpload, then sendUpload, below); trips/TripsContext.tsx uploads
+ * them as part of each sync.
  */
+
+import { File, UploadType } from 'expo-file-system';
 
 import { ApiError, request } from './client';
 import type { components } from './schema';
@@ -116,19 +118,23 @@ export function contentTypeFor(uri: string): PhotoContentType | undefined {
 }
 
 /**
- * Send a file to S3 with the signed form: every field first, in order,
- * then the file, as S3 requires. Throws an ApiError with S3's status if
- * S3 turns it down, or a plain Error if there's no connection.
+ * Send a file to S3 with the signed form: a multipart POST of the form's
+ * fields, then the file as the part named `file` (S3 needs it last). Done
+ * natively by expo-file-system, which streams the file from disk: Expo's
+ * `fetch` can't send a file from a path inside FormData ("Unsupported
+ * FormDataPart implementation"). Throws an ApiError with S3's status if S3
+ * turns it down, or a plain Error if there's no connection.
  */
 export async function sendUpload(upload: PhotoUpload, uri: string, contentType: string): Promise<void> {
-  const form = new FormData();
-  for (const [name, value] of Object.entries(upload.fields)) form.append(name, value);
-  const name = uri.split('/').pop() || 'upload';
-  // React Native's FormData takes a file as { uri, name, type }.
-  form.append('file', { uri, name, type: contentType } as unknown as Blob);
-  const response = await fetch(upload.upload_url, { method: 'POST', body: form });
-  if (!response.ok) {
-    throw new ApiError(response.status, `S3 refused the upload (${response.status})`);
+  const result = await new File(uri).upload(upload.upload_url, {
+    httpMethod: 'POST',
+    uploadType: UploadType.MULTIPART,
+    fieldName: 'file',
+    mimeType: contentType,
+    parameters: upload.fields,
+  });
+  if (result.status < 200 || result.status >= 300) {
+    throw new ApiError(result.status, `S3 refused the upload (${result.status})`);
   }
 }
 

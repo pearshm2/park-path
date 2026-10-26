@@ -354,6 +354,23 @@ function toFields(entry: TripEntry): TripFields {
   };
 }
 
+/** A trip's photos as the server has them, with fresh links. */
+function serverMedia(trip: TripOut): TripMedia[] {
+  return trip.photos.flatMap((p) =>
+    p.url
+      ? [
+          {
+            uri: p.url,
+            kind: p.kind,
+            caption: p.caption,
+            key: p.key,
+            ...(p.duration_ms != null ? { duration: p.duration_ms } : {}),
+          },
+        ]
+      : [],
+  );
+}
+
 /** The server's copy of a trip, over the phone's (whose extras it keeps). */
 function fromServer(trip: TripOut, local?: TripEntry): TripEntry {
   // Links to the server's photos expire, so ones this phone shows from the
@@ -375,22 +392,15 @@ function fromServer(trip: TripOut, local?: TripEntry): TripEntry {
     // Photos stay as the phone has them; a trip new to this phone shows the
     // server's (links that expire; fetched fresh on each sync).
     media: local
-      ? local.media.map((m) =>
-          m.key && isWeb(m.uri) ? { ...m, uri: freshUrl.get(m.key) ?? m.uri } : m,
-        )
-      : trip.photos.flatMap((p) =>
-          p.url
-            ? [
-                {
-                  uri: p.url,
-                  kind: p.kind,
-                  caption: p.caption,
-                  key: p.key,
-                  ...(p.duration_ms != null ? { duration: p.duration_ms } : {}),
-                },
-              ]
-            : [],
-        ),
+      ? [
+          ...local.media.map((m) =>
+            m.key && isWeb(m.uri) ? { ...m, uri: freshUrl.get(m.key) ?? m.uri } : m,
+          ),
+          // Photos added on another phone since this one last saw the trip.
+          // (Kept, too, so editing it here doesn't remove them from the server.)
+          ...serverMedia(trip).filter((m) => !local.media.some((own) => own.key === m.key)),
+        ]
+      : serverMedia(trip),
     createdAt: local?.createdAt ?? trip.created_at,
     serverId: trip.id,
     serverPark: trip.park_code,
