@@ -273,30 +273,99 @@ def test_low_rated_trips_give_no_boost():
 # --- something different ----------------------------------------------------
 
 
+def top_ten(code="top", **overrides) -> list[SiteData]:
+    """Ten strong canyon parks (the quiz's answer) that fill the usual top 10."""
+    fields = dict(is_named_park=True, states="UT", annual_visits_millions=5.0)
+    fields.update(overrides)
+    return [make_site(f"{code}{i}", **fields) for i in range(10)]
+
+
+def visit(code, terrain, states="UT", rating=4) -> Visit:
+    return Visit(
+        park_code=code, name=code.title(), terrain_group=terrain, rating=rating, states=states
+    )
+
+
+def flagged(results) -> list[dict]:
+    return [r for r in results if r["different"]]
+
+
 def test_something_different_needs_trips():
-    park = make_site("desert", terrain_group="desert", is_named_park=True)
-    assert rank([park], answers())[0]["different"] is False
+    sites = top_ten() + [make_site("desert", terrain_group="desert", is_named_park=True)]
+    assert flagged(rank(sites, answers())) == []
 
 
-def test_something_different_is_the_best_new_terrain_park():
-    zion = Visit(park_code="zion", name="Zion", terrain_group="canyon", rating=5)
-    sites = [
-        make_site("canyon2", is_named_park=True),  # their answer: not different
-        make_site("forest", terrain_group="forest", is_named_park=True),  # tried below
+def test_something_different_comes_from_outside_the_top_ten():
+    # A new terrain, but scoring into the top 10 itself: nothing to add.
+    sites = [make_site("desert", terrain_group="desert", is_named_park=True)]
+    history = {"zion": visit("zion", "canyon")}
+    assert flagged(rank(sites, answers(), history=history)) == []
+
+
+def test_rung_one_a_terrain_new_to_them():
+    history = {"zion": visit("zion", "canyon"), "oak": visit("oak", "forest")}
+    sites = top_ten() + [
+        make_site("forest", terrain_group="forest", is_named_park=True),  # tried
         make_site("dunes", terrain_group="dunes", is_named_park=True, annual_visits_millions=0.5),
         make_site("desert", terrain_group="desert", is_named_park=True, annual_visits_millions=2.0),
         make_site("monument", terrain_group="coast", is_named_park=False),  # not a park
     ]
-    oak = Visit(park_code="oak", name="Oak", terrain_group="forest", rating=4)
-    results = rank(sites, answers(), history={"zion": zion, "oak": oak})
-    flagged = [r for r in results if r["different"]]
+    [pick] = flagged(rank(sites, answers(), history=history))
     # Dunes count as desert, so the two desert parks tie; the busier one wins.
-    assert [r["park_code"] for r in flagged] == ["desert"]
-    assert flagged[0]["reason"] == "Something different: no desert parks in your trips yet"
+    assert pick["park_code"] == "desert"
+    assert pick["reason"] == "No desert parks in your trips yet"
 
 
-def test_nothing_different_when_every_terrain_is_covered():
-    zion = Visit(park_code="zion", name="Zion", terrain_group="canyon", rating=5)
-    park = make_site("canyon2", is_named_park=True)
-    results = rank([park], answers(), history={"zion": zion})
-    assert not any(r["different"] for r in results)
+ALL_TERRAINS = ["mountain", "canyon", "desert", "forest", "coast", "water"]
+
+
+def everywhere(states="UT") -> dict[str, Visit]:
+    """A trip to a park of every terrain, all in one state."""
+    return {f"t{i}": visit(f"t{i}", terrain, states) for i, terrain in enumerate(ALL_TERRAINS)}
+
+
+def test_rung_two_a_region_never_visited():
+    sites = top_ten() + [
+        make_site("near", terrain_group="forest", is_named_park=True, states="AZ"),
+        make_site("far", terrain_group="forest", is_named_park=True, states="MI"),
+    ]
+    [pick] = flagged(rank(sites, answers(), history=everywhere(states="AZ")))
+    assert pick["park_code"] == "far"
+    assert pick["reason"] == "You haven't been to Great Lakes & Midwest yet"
+
+
+def test_rung_three_the_least_visited_terrain():
+    history = everywhere(states="UT")
+    history["t9"] = visit("t9", "forest", states="UT")  # forest twice
+    sites = top_ten() + [
+        make_site("forest", terrain_group="forest", is_named_park=True, states="UT"),
+        make_site("coast", terrain_group="coast", is_named_park=True, states="UT"),
+    ]
+    [pick] = flagged(rank(sites, answers(), history=history))
+    assert pick["park_code"] == "coast"
+    assert pick["reason"] == "You've only been to one coastal park"
+
+
+def test_rung_four_the_least_likely_park_that_keeps_their_crowd_answer():
+    # Every terrain tried, every region visited, and only canyon parks left.
+    # The three left are out of season, so they rank below the top 10.
+    sites = top_ten(annual_visits_millions=1.0) + [
+        make_site(
+            "busy", is_named_park=True, states="UT", seasons=["summer"], annual_visits_millions=9.0
+        ),
+        make_site(
+            "quiet", is_named_park=True, states="UT", seasons=["summer"], annual_visits_millions=0.1
+        ),
+        # Quiet too, though a little busier, so a slightly worse match.
+        make_site(
+            "unlikely",
+            is_named_park=True,
+            states="UT",
+            seasons=["summer"],
+            annual_visits_millions=0.3,
+        ),
+    ]
+    results = rank(sites, answers(crowds="quiet"), history=everywhere(states="UT"))
+    [pick] = flagged(results)
+    assert pick["park_code"] == "unlikely"
+    assert pick["reason"] == "The park you'd least expect, and still quiet"
