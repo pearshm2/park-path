@@ -12,7 +12,7 @@ Sizes: **S** = an hour or two · **M** = about a day · **L** = several days
 
 ## Before Wednesday's demo
 
-- [x] ~~**Decide how to demo around photo sync.**~~ Uploads landed in PR #35. Friends see a trip without its photos. Either demo on one phone, or skip showing a friend's media.
+- [x] ~~**Decide how to demo around photo sync.**~~ Uploads landed in PR #35 (fixed in #38): friends see trips with their photos and videos.
 - [ ] **Set `GOOGLE_CLIENT_IDS` on Render.** Without it, Google sign-in returns 503 on the hosted API. Otherwise demo with email login. *(Sebastian)*
 - [ ] **Check the Render database's age.** Free Render Postgres is deleted after 30 days. Upgrade it, or be ready to re-seed it. *(Sebastian)*
 - [x] **Set up demo accounts:** Halie plus three friends, with trips and comments. See `docs/demo-accounts.md`.
@@ -74,7 +74,7 @@ Engine code: `api/app/recommender.py`. (`parkpath-recommendation-engine/` is the
 - Onboarding quiz
 - Explore map with real NPS data and top-10 picks, each with a reason
 - Site detail with Google Maps directions, plus official NPS brochure maps
-- Trips journal, synced to the server (except media), with "Relive" playback
+- Trips journal, synced to the server with its photos and videos (S3), with "Relive" playback
 - Passport stamps, region map, 30 achievements and celebrations
 - Friends by username, email or QR code, with a feed, comments and notifications
 - Settings, and in-app arrival reminders
