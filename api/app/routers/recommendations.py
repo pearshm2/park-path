@@ -25,14 +25,16 @@ router = APIRouter()
 def load_history(db: Session, user: User) -> dict[str, Visit]:
     """The user's visited parks, with their best rating at each."""
     rows = db.execute(
-        select(Site.park_code, Site.name, Site.terrain_group, func.max(TripEntry.rating))
+        select(
+            Site.park_code, Site.name, Site.terrain_group, Site.states, func.max(TripEntry.rating)
+        )
         .join(TripEntry, TripEntry.site_id == Site.id)
         .where(TripEntry.user_id == user.id)
         .group_by(Site.id)
     ).all()
     return {
-        code: Visit(park_code=code, name=name, terrain_group=terrain, rating=rating)
-        for code, name, terrain, rating in rows
+        code: Visit(park_code=code, name=name, terrain_group=terrain, rating=rating, states=states)
+        for code, name, terrain, states, rating in rows
     }
 
 
@@ -53,6 +55,7 @@ def recommend(
             seasons=s.seasons,
             annual_visits_millions=s.annual_visits_millions,
             is_named_park=s.is_named_park,
+            states=s.states,
         )
         for s in db.scalars(select(Site)).all()
     ]

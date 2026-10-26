@@ -199,7 +199,7 @@ function MatchCard({ match, pending }: { match: Recommendation | undefined; pend
   return (
     <View style={styles.card}>
       <BodyText size={10} weight="semibold" color={colors.neutral[600]} style={styles.cardTitle}>
-        YOUR MATCH
+        {match.different ? 'YOUR MATCH · SOMETHING DIFFERENT' : 'YOUR MATCH'}
       </BodyText>
       <View style={styles.matchHead}>
         <Heading size={30} color={colors.accentRamp[700]}>

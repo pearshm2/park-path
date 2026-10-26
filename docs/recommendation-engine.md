@@ -38,13 +38,21 @@ The score is built in three steps:
    next?". Unvisited parks sharing a terrain with a trip they rated 4–5 stars
    get `+0.05`, and their reason says so ("Like Zion, which you loved").
 
-4. **Something different** (signed-in users with at least one trip): the
-   best-scoring national park whose terrain they have neither visited nor
-   picked in the quiz gets `"different": true` and the reason "Something
-   different: no desert parks in your trips yet". Its score isn't changed;
-   the app moves it to #4 of the top 10 so people are nudged to try new kinds
-   of parks. At most one site is flagged, and none when every terrain is
-   covered.
+4. **Something different** (signed-in users with at least one trip): one
+   national park is flagged `"different": true`, always from **outside their
+   top 10 parks** and never one they've visited, by the first of these rules
+   that finds one (best score wins within it):
+   1. a terrain they've never visited and didn't pick in the quiz ("No
+      desert parks in your trips yet");
+   2. a map region they've never been to ("You haven't been to Great Lakes
+      & Midwest yet");
+   3. their least-visited terrain outside their quiz picks ("You've only
+      been to one coastal park");
+   4. their least likely park (the lowest score) that still suits their
+      crowd answer ("The park you'd least expect, and still quiet").
+
+   Its score isn't changed; its reason says why it's different. The app
+   moves it to #4 of the top 10 and labels it "Something different".
 
 ### Signals that aren't in use
 

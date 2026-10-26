@@ -177,7 +177,7 @@ function applyFilters<T extends { site: Site }>(rows: T[], filters: FeedFilters)
 }
 
 /** A card in the deck: a park, plus its match and rank when it has them. */
-type DeckItem = { site: Site; score?: number; reason?: string; rank?: number };
+type DeckItem = { site: Site; score?: number; reason?: string; rank?: number; different?: boolean };
 
 function toDeckItem(
   site: Site,
@@ -185,7 +185,13 @@ function toDeckItem(
   rankById: ReadonlyMap<string, number>,
 ): DeckItem {
   const match = matchById.get(site.id);
-  return { site, score: match?.score, reason: match?.reason, rank: rankById.get(site.id) };
+  return {
+    site,
+    score: match?.score,
+    reason: match?.reason,
+    rank: rankById.get(site.id),
+    different: match?.different,
+  };
 }
 
 /** Picks first in rank order, then the best matches, then by name. */
@@ -399,10 +405,11 @@ export default function ExploreScreen() {
   const baseDeck = useMemo<DeckItem[]>(() => {
     if (personalList) return personalList.map((site) => toDeckItem(site, matchById, rankById));
 
-    const top = picks.map(({ site, score, reason }, index) => ({
+    const top = picks.map(({ site, score, reason, different }, index) => ({
       site,
       score,
       reason,
+      different,
       rank: index + 1,
     }));
 
@@ -918,6 +925,7 @@ export default function ExploreScreen() {
                   reason={item.reason}
                   match={item.score}
                   rank={item.rank}
+                  different={item.different}
                   // The full decks mix saved parks in with everything else.
                   markWishlist={scope === 'parks' || scope === 'all'}
                   onOpenTrip={(entry) => openTrip(item.site, entry)}

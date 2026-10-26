@@ -40,6 +40,8 @@ import math
 from bisect import bisect_left, bisect_right
 from dataclasses import dataclass
 
+from app.regions import REGION_LABELS, region_for_states
+
 # ---------------------------------------------------------------------------
 # Settings. Change these, not the code below, to retune the engine.
 # ---------------------------------------------------------------------------
@@ -117,6 +119,8 @@ class SiteData:
     # A national park (not a monument, seashore, ...); only these can be
     # "something different", since the app's top picks are parks.
     is_named_park: bool = False
+    # Its states as stored ("TN,NC"), for the map region it's in.
+    states: str | None = None
 
     @property
     def is_curated(self) -> bool:
@@ -139,6 +143,8 @@ class Visit:
     terrain_group: str | None
     # Their best rating across trips there, 1 to 5; None if never rated.
     rating: int | None
+    # The park's states ("TN,NC"), for the map region it's in.
+    states: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -350,7 +356,7 @@ def rank(
         )
 
     if history:
-        flag_something_different(results, history, answers.terrains)
+        flag_something_different(results, history, answers.terrains, answers.crowds)
 
     # Scored sites first (best score, then the better-known site), then the
     # unscored ones alphabetically.
@@ -360,30 +366,106 @@ def rank(
     return results
 
 
-def flag_something_different(results: list[dict], history: dict[str, Visit], wanted: list[str]):
+# "Something different": how far down the parks the usual picks go. The
+# wildcard always comes from outside them, so it shows something new.
+TOP_PICKS = 10
+# A crowds score at least this good still suits their crowd answer.
+CROWD_FIT = 0.5
+
+
+def flag_something_different(
+    results: list[dict], history: dict[str, Visit], wanted: list[str], crowds: str
+):
     """
-    Mark the best-scoring national park whose terrain is new to them: no
-    trip there yet, and not one of their quiz answers. Its reason says so.
-    Nothing is marked if every terrain is covered.
+    Flag one national park as "something different", from outside their top
+    10 parks and never one they've been to, by the first of these that finds
+    one (best score wins within it):
+
+      1. a terrain they've never visited and didn't pick in the quiz;
+      2. a map region they've never been to;
+      3. their least-visited terrain outside their quiz picks;
+      4. their least likely park (the lowest score) that still suits their
+         crowd answer: the biggest surprise that keeps their one stated
+         dealbreaker.
+
+    Its reason says why it's different. Needs at least one trip (the
+    caller checks).
     """
-    tried = {
-        TERRAIN_ALIASES.get(v.terrain_group, v.terrain_group)
-        for v in history.values()
-        if v.terrain_group is not None
-    }
-    candidates = [
-        r
-        for r in results
-        if r["score"] is not None
-        and r["_site"].is_named_park
-        and not r["visited"]
-        and r["_site"].quiz_terrain not in tried
-        and r["_site"].quiz_terrain not in wanted
-    ]
+    parks = [r for r in results if r["score"] and r["_site"].is_named_park]
+    parks.sort(key=lambda r: (-r["score"], -r["_visits"], r["_name"]))
+    candidates = [r for r in parks[TOP_PICKS:] if not r["visited"]]
     if not candidates:
         return
-    best = max(candidates, key=lambda r: (r["score"], r["_visits"]))
-    site = best["_site"]
-    label = TERRAIN_LABELS.get(site.terrain_group, site.terrain_group.title()).lower()
-    best["different"] = True
-    best["reason"] = f"Something different: no {label} parks in your trips yet"
+
+    def flag(pool: list[dict], reason, least: bool = False) -> bool:
+        if not pool:
+            return False
+        if least:
+            best = min(pool, key=lambda r: (r["score"], -r["_visits"]))
+        else:
+            best = max(pool, key=lambda r: (r["score"], r["_visits"]))
+        best["different"] = True
+        best["reason"] = reason(best)
+        return True
+
+    def terrain_label(site: SiteData) -> str:
+        return TERRAIN_LABELS.get(site.terrain_group, site.terrain_group.title()).lower()
+
+    # How many of their trips' parks each quiz terrain has.
+    trips_by_terrain: dict[str, int] = {}
+    for visit in history.values():
+        if visit.terrain_group is not None:
+            terrain = TERRAIN_ALIASES.get(visit.terrain_group, visit.terrain_group)
+            trips_by_terrain[terrain] = trips_by_terrain.get(terrain, 0) + 1
+
+    # 1. A terrain that's new to them.
+    new_terrain = [
+        r
+        for r in candidates
+        if r["_site"].quiz_terrain not in trips_by_terrain and r["_site"].quiz_terrain not in wanted
+    ]
+    if flag(new_terrain, lambda r: f"No {terrain_label(r['_site'])} parks in your trips yet"):
+        return
+
+    # 2. A region they've never been to.
+    been = {region_for_states(v.states) for v in history.values()}
+    new_region = [
+        r
+        for r in candidates
+        if (region := region_for_states(r["_site"].states)) is not None and region not in been
+    ]
+    if flag(
+        new_region,
+        lambda r: f"You haven't been to {REGION_LABELS[region_for_states(r['_site'].states)]} yet",
+    ):
+        return
+
+    # 3. Their least-visited terrain, outside their quiz picks.
+    others = {t: n for t, n in trips_by_terrain.items() if t not in wanted}
+    if others:
+        fewest = min(others.values())
+        rare = [r for r in candidates if others.get(r["_site"].quiz_terrain) == fewest]
+
+        def rare_reason(r: dict) -> str:
+            count = "one" if fewest == 1 else str(fewest)
+            parks_word = "park" if fewest == 1 else "parks"
+            return f"You've only been to {count} {terrain_label(r['_site'])} {parks_word}"
+
+        if flag(rare, rare_reason):
+            return
+
+    # 4. Their least likely park, still suiting their crowd answer.
+    suits = [r for r in candidates if (r["signals"]["crowds"] or 0) >= CROWD_FIT]
+    if crowds == "either":
+        suits = candidates
+    flag(
+        suits,
+        lambda r: (
+            "The park you'd least expect, and still quiet"
+            if crowds == "quiet"
+            else "The park you'd least expect, and still one of the icons"
+            if crowds == "icons"
+            else "The park you'd least expect"
+        ),
+        least=True,
+    )

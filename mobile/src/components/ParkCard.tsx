@@ -40,6 +40,7 @@ export function ParkCard({
   reason,
   match,
   rank,
+  different = false,
   markWishlist = false,
   onOpenTrip,
   saved = false,
@@ -57,6 +58,8 @@ export function ParkCard({
   match?: number;
   /** 1-based position among the picks, shown as a badge on the band. */
   rank?: number;
+  /** The engine's "something different" pick: labelled so on the band. */
+  different?: boolean;
   /** Flags a wishlist park on the band, for decks that mix them with others. */
   markWishlist?: boolean;
   /** The visited card's trip link: open that trip, or log one if none. */
@@ -130,6 +133,13 @@ export function ParkCard({
                 ]
                   .filter(Boolean)
                   .join(' · ')}
+              </BodyText>
+            </View>
+          ) : null}
+          {different ? (
+            <View style={styles.differentBadge}>
+              <BodyText size={10.5} weight="bold" color={colors.accentRamp[800]} numberOfLines={1}>
+                Something different
               </BodyText>
             </View>
           ) : null}
@@ -579,6 +589,15 @@ const styles = StyleSheet.create({
   },
   tripLinkPressed: {
     opacity: 0.6,
+  },
+  differentBadge: {
+    flexShrink: 1,
+    paddingVertical: 2,
+    paddingHorizontal: 9,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: colors.accentRamp[600],
+    backgroundColor: colors.accentRamp[100],
   },
   rankBadge: {
     paddingVertical: 2,

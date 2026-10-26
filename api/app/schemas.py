@@ -268,8 +268,9 @@ class RecommendationOut(BaseModel):
     # True when the signed-in user has logged a trip here (always false
     # without a token). Visited parks are moved down the list.
     visited: bool
-    # True for at most one site: the best national park with a terrain the
-    # signed-in user hasn't visited or asked for. The app shows it at #4.
+    # True for at most one site: the signed-in user's "something different"
+    # pick, a national park from outside their top 10 (see
+    # app/recommender.py). The app shows it at #4.
     different: bool = False
 
 
