@@ -14,10 +14,14 @@
  * another phone show up here too. Trips saved before the server existed
  * are sent up the first time.
  *
- * Photos and videos stay on the phone only until the S3 bucket exists and
- * uploads are wired up; the server already takes them with their
- * captions. They're copied into the app's own documents folder, since the
- * picker's copies can be cleared by the phone.
+ * Photos and videos are copied into the app's own documents folder (the
+ * picker's copies can be cleared by the phone), then uploaded to S3 as part
+ * of the sync, before the trip is sent with their keys, so friends see
+ * them too. An upload that can't happen now (no bucket on the server, no
+ * signal) is tried again on the next sync; one the server or S3 turns down
+ * (too big, an unknown type) stays on the phone only. Trips logged before
+ * uploads existed send their photos on the next sync. The passport-stamp
+ * photo stays on the phone: the server has nowhere to keep it yet.
  *
  * Entries saved before captions, videos and several trails existed are
  * read in the current shape: their photos with blank captions, their one
@@ -41,9 +45,12 @@ import { AppState } from 'react-native';
 import { ApiError } from '../api/client';
 import type { Person } from '../api/friends';
 import {
+  contentTypeFor,
   createTrip,
   deleteTrip,
   fetchTrips,
+  requestUpload,
+  sendUpload,
   updateTrip,
   type TripFields,
   type TripOut,
@@ -97,7 +104,16 @@ export type TripMedia = {
   caption: string;
   /** A video's length in ms, when known. */
   duration?: number;
+  /** Its storage key on the server, once uploaded (or when it came from the server). */
+  key?: string;
+  /** The server or S3 turned the upload down: kept on this phone only, not retried. */
+  localOnly?: true;
 };
+
+/** A photo or video still to be uploaded: a file on this phone with no key yet. */
+function needsUpload(media: TripMedia): boolean {
+  return !media.key && !media.localOnly && !isWeb(media.uri);
+}
 
 /** The photo to show for an entry: its first photo, skipping videos. */
 export function leadPhoto(entry: Pick<TripEntry, 'media'>): string | null {
@@ -301,9 +317,31 @@ function deleteMedia(media: TripMedia[]) {
   }
 }
 
+/**
+ * The trip's photos as the server takes them: the uploaded ones, in order.
+ * Undefined while any of its media is a web link with no key (a sample
+ * trip, or one fetched before keys were kept), so the server's list is
+ * left alone rather than cut down to what this phone can name.
+ */
+function photosFor(entry: TripEntry): TripFields['photos'] {
+  if (entry.media.some((m) => isWeb(m.uri) && !m.key)) return undefined;
+  return entry.media.flatMap((m) =>
+    m.key
+      ? [
+          {
+            key: m.key,
+            caption: m.caption.slice(0, 500),
+            duration_ms: m.duration != null ? Math.round(m.duration) : null,
+          },
+        ]
+      : [],
+  );
+}
+
 /** A trip as the server takes it. */
 function toFields(entry: TripEntry): TripFields {
   return {
+    photos: photosFor(entry),
     park_code: entry.siteId,
     visited_on: entry.date,
     title: entry.title.slice(0, 200),
@@ -318,6 +356,9 @@ function toFields(entry: TripEntry): TripFields {
 
 /** The server's copy of a trip, over the phone's (whose extras it keeps). */
 function fromServer(trip: TripOut, local?: TripEntry): TripEntry {
+  // Links to the server's photos expire, so ones this phone shows from the
+  // server get fresh links on every sync.
+  const freshUrl = new Map(trip.photos.flatMap((p) => (p.url ? [[p.key, p.url] as const] : [])));
   return {
     id: local?.id ?? `trip-server-${trip.id}`,
     siteId: trip.park_code,
@@ -333,20 +374,23 @@ function fromServer(trip: TripOut, local?: TripEntry): TripEntry {
     passportStamp: local?.passportStamp ?? null,
     // Photos stay as the phone has them; a trip new to this phone shows the
     // server's (links that expire; fetched fresh on each sync).
-    media:
-      local?.media ??
-      trip.photos.flatMap((p) =>
-        p.url
-          ? [
-              {
-                uri: p.url,
-                kind: p.kind,
-                caption: p.caption,
-                ...(p.duration_ms != null ? { duration: p.duration_ms } : {}),
-              },
-            ]
-          : [],
-      ),
+    media: local
+      ? local.media.map((m) =>
+          m.key && isWeb(m.uri) ? { ...m, uri: freshUrl.get(m.key) ?? m.uri } : m,
+        )
+      : trip.photos.flatMap((p) =>
+          p.url
+            ? [
+                {
+                  uri: p.url,
+                  kind: p.kind,
+                  caption: p.caption,
+                  key: p.key,
+                  ...(p.duration_ms != null ? { duration: p.duration_ms } : {}),
+                },
+              ]
+            : [],
+        ),
     createdAt: local?.createdAt ?? trip.created_at,
     serverId: trip.id,
     serverPark: trip.park_code,
@@ -404,6 +448,75 @@ export function TripsProvider({ children }: { children: ReactNode }) {
   );
 
   /**
+   * Change an entry's media where it's kept (matched by file, so a caption
+   * edited meanwhile isn't lost); returns the entry as it now is.
+   */
+  const setMedia = useCallback(
+    async (entry: TripEntry, change: (media: TripMedia) => TripMedia): Promise<TripEntry> => {
+      const changed = new Map(entry.media.map((m) => [m.uri, change(m)]));
+      await commit((c) => ({
+        ...c,
+        entries: c.entries.map((e) =>
+          e.id === entry.id
+            ? {
+                ...e,
+                media: e.media.map((m) => {
+                  const next = changed.get(m.uri);
+                  return next ? { ...m, key: next.key, localOnly: next.localOnly } : m;
+                }),
+              }
+            : e,
+        ),
+      }));
+      return latest.current?.entries.find((e) => e.id === entry.id) ?? entry;
+    },
+    [commit],
+  );
+
+  /**
+   * Upload an entry's photos and videos that aren't on the server yet, one
+   * at a time, keeping each key as soon as it's up. `storageOff`: the
+   * server has no bucket, so later entries needn't try.
+   */
+  const uploadMedia = useCallback(
+    async (token: string, entry: TripEntry): Promise<{ entry: TripEntry; storageOff: boolean }> => {
+      let current = entry;
+      for (const media of entry.media.filter(needsUpload)) {
+        const contentType = contentTypeFor(media.uri);
+        let size: number | null = null;
+        try {
+          size = new File(media.uri).size;
+        } catch {
+          size = null;
+        }
+        if (!contentType || !size) {
+          // Gone from the phone, or a type the server won't take.
+          current = await setMedia(current, (m) => (m.uri === media.uri ? { ...m, localOnly: true } : m));
+          continue;
+        }
+        try {
+          const upload = await requestUpload(token, contentType, size);
+          await sendUpload(upload, media.uri, contentType);
+          current = await setMedia(current, (m) => (m.uri === media.uri ? { ...m, key: upload.key } : m));
+        } catch (error) {
+          if (error instanceof ApiError && error.status === 503) {
+            return { entry: current, storageOff: true };
+          }
+          if (error instanceof ApiError && error.status >= 400 && error.status < 500 && error.status !== 401) {
+            // Too big, or refused: keep it on the phone only.
+            current = await setMedia(current, (m) => (m.uri === media.uri ? { ...m, localOnly: true } : m));
+            continue;
+          }
+          // No signal, or a hiccup: the next sync tries again.
+          return { entry: current, storageOff: false };
+        }
+      }
+      return { entry: current, storageOff: false };
+    },
+    [setMedia],
+  );
+
+  /**
    * Send what's waiting, then take the server's trips. Stops quietly when
    * offline; whatever's left goes next time.
    */
@@ -423,11 +536,26 @@ export function TripsProvider({ children }: { children: ReactNode }) {
         await commit((c) => ({ ...c, deletes: c.deletes.filter((id) => id !== serverId) }));
       }
 
-      // Trips changed on the phone.
-      const waiting = latest.current!.entries.filter((e) => e.unsent && !e.syncError);
-      for (const entry of waiting) {
+      // Trips changed on the phone, and ones with photos still to upload.
+      const waiting = latest.current!.entries.filter(
+        (e) => !e.syncError && (e.unsent || e.media.some(needsUpload)),
+      );
+      let storageOff = false;
+      for (const waitingEntry of waiting) {
+        let entry = waitingEntry;
         let saved: TripOut;
         try {
+          // Moving parks deletes the old trip, and its photos with it, so
+          // they're uploaded again for the new one.
+          const moving = entry.serverId != null && entry.serverPark !== entry.siteId;
+          if (moving && entry.media.some((m) => m.key && !isWeb(m.uri))) {
+            entry = await setMedia(entry, (m) => (isWeb(m.uri) ? m : { ...m, key: undefined }));
+          }
+          if (!storageOff && entry.media.some(needsUpload)) {
+            const uploaded = await uploadMedia(token, entry);
+            storageOff = uploaded.storageOff;
+            entry = uploaded.entry;
+          }
           if (entry.serverId != null && entry.serverPark === entry.siteId) {
             try {
               saved = await updateTrip(token, entry.serverId, toFields(entry));
@@ -505,7 +633,7 @@ export function TripsProvider({ children }: { children: ReactNode }) {
     } catch {
       // Offline, or the API asleep: try again next time.
     }
-  }, [userId, token, commit]);
+  }, [userId, token, commit, setMedia, uploadMedia]);
 
   const syncSoon = useCallback(() => {
     void enqueue(sync);
