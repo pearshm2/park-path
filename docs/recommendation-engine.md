@@ -1,4 +1,4 @@
-# Recommendation engine
+# Recommendation engine (v2)
 
 `POST /recommendations` takes someone's quiz answers and returns every NPS
 site, best match first. The scoring is a **weighted-sum model** in
@@ -11,26 +11,47 @@ Each of the four quiz signals gets a match score from 0 to 1:
 
 | Signal | Comes from | How it's scored |
 | --- | --- | --- |
-| **Distance** | Starting zip code (sent as lat/lon) | 1.0 within 100 miles, fading to 0 at 1,500 miles (straight line) |
+| **Distance** | Starting zip code (sent as lat/lon) | 1.0 within 100 miles, fading to 0 at 2,500 miles (straight line) |
 | **Terrain** | "What do you want under your boots?" | 1.0 if the site's terrain is one they picked, else 0 |
-| **Season** | Ranked seasons | Credit for the best-ranked season the site suits: 1st 1.0, 2nd 0.6, 3rd 0.35, 4th 0.15 |
+| **Season** | Ranked seasons | Credit for the best-ranked season the site suits: 1st 1.0, 2nd 0.6, 3rd 0.35, 4th 0.15. Ranking all four counts as no preference |
 | **Crowds** | "How do you feel about crowds?" | Where the site's visitor count falls among curated sites (0 = quietest, 1 = busiest). "Icons" uses that as-is, "Get me away" flips it |
 
-The total is a weighted average:
+The score is built in three steps:
 
-```
-total = sum(weight × score) / sum(weight)      (over the signals in use)
-```
+1. **Weighted average** of the signals in use:
 
-Default weights: distance **36%**, terrain **28%**, season **25%**, crowds
-**11%**. They live in `DEFAULT_WEIGHTS` at the top of `recommender.py`, so
-retuning them (or a future Settings reorder screen) doesn't touch the logic.
+   ```
+   base = sum(weight × score) / sum(weight)      (over the signals in use)
+   ```
+
+   Default weights: terrain **36%**, distance **28%**, season **25%**, crowds
+   **11%**. They live in `DEFAULT_WEIGHTS` at the top of `recommender.py`, so
+   retuning them (or a future Settings reorder screen) doesn't touch the logic.
+
+2. **Terrain gate:** a site whose terrain isn't one the person picked has its
+   score multiplied by `TERRAIN_MISS_FACTOR` (0.5). In v1, a nearby park with
+   the wrong scenery could outrank real matches just by being close; the
+   gate stops that.
+
+3. **Trip history** (signed-in users only): parks they've logged a trip to
+   are multiplied by `VISITED_FACTOR` (0.6), since the question is "where to
+   next?". Unvisited parks sharing a terrain with a trip they rated 4–5 stars
+   get `+0.05`, and their reason says so ("Like Zion, which you loved").
+
+4. **Something different** (signed-in users with at least one trip): the
+   best-scoring national park whose terrain they have neither visited nor
+   picked in the quiz gets `"different": true` and the reason "Something
+   different: no desert parks in your trips yet". Its score isn't changed;
+   the app moves it to #4 of the top 10 so people are nudged to try new kinds
+   of parks. At most one site is flagged, and none when every terrain is
+   covered.
 
 ### Signals that aren't in use
 
 A signal is left out, and its weight spread over the rest, when:
 
-- the answer means "no preference": **Any season works for me**, **Fine either way**
+- the answer means "no preference": **Any season works for me** (or all four
+  seasons ranked), **Fine either way**
 - no location is sent
 - the site has no data for it
 
@@ -79,9 +100,11 @@ With no strong match it says "A partial match on your answers".
 [
   {
     "park_code": "grsm",
-    "score": 0.877,
-    "reason": "About 150 miles away, Mountain terrain",
-    "signals": { "distance": 0.963, "terrain": 1.0, "season": 1.0, "crowds": 0.008 }
+    "score": 0.885,
+    "reason": "Mountain terrain, about 150 miles away",
+    "signals": { "distance": 0.978, "terrain": 1.0, "season": 1.0, "crowds": 0.008 },
+    "visited": false,
+    "different": false
   }
 ]
 ```
@@ -91,11 +114,14 @@ season list, an unknown answer or a repeated answer returns **422**.
 `location` is accepted as optional so the app can integrate before its
 zip-code lookup exists; without it, distance isn't scored.
 
-The endpoint is public, like `/sites`: nothing is saved, so no account is needed.
+The endpoint works without an account, like `/sites`. Send the usual
+`Authorization: Bearer <token>` header and it also uses that person's trips
+(see step 3 above); `visited` is then true for parks they've logged. A missing,
+bad or expired token just gives the anonymous results, never an error.
 
-## Not in v1 (planned)
+## Not yet (planned)
 
-- Thumbs-down / feedback, using the `site_feedback` and `user_tag_weights` tables
+- Star ratings and tags on trips nudging the signals (designed; after the demo)
 - A quieter alternative suggestion per site
 - Per-person signal order from a Settings screen (the weights are already one config)
 - Accessibility, once there's real per-park data

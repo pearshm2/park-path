@@ -100,5 +100,31 @@ code. The installable APK removes that; see the APK section once it exists.)
   `api/` redeploys the API, and migrations run on startup.
 - **Logs:** `parkpath-api` → **Logs** in the dashboard.
 - **Reloading data** (after the 30-day reset, or to refresh): repeat step 5.
-- **Secrets** (`SECRET_KEY`, `NPS_API_KEY`, later the S3 keys) live in
+- **Secrets** (`SECRET_KEY`, `NPS_API_KEY`, the AWS keys) live in
   `parkpath-api` → **Environment** in the dashboard, never in the repo.
+
+## Photo storage (S3)
+
+Trip photos and videos go straight from the phone to a private S3 bucket
+with short-lived signed forms; the API never handles the files (see
+`api/app/storage.py`). Set up Oct 25:
+
+- **Bucket:** `parkpath-photos` in `us-east-2`, "Block all public access"
+  on, versioning off, default encryption (SSE-S3). CORS allows `POST` and
+  `GET` from any origin.
+- **IAM user:** `parkpath-api`, with one policy: `s3:PutObject`,
+  `s3:GetObject` and `s3:DeleteObject` on `parkpath-photos/trips/*`, and
+  `s3:ListBucket` on the bucket (so a missing photo reads as "not found"
+  rather than "access denied").
+- **Render settings:** `S3_BUCKET`, `S3_REGION`, `S3_ENDPOINT_URL`
+  (`https://s3.us-east-2.amazonaws.com`), `AWS_ACCESS_KEY_ID`,
+  `AWS_SECRET_ACCESS_KEY`. Without `S3_BUCKET` the photo endpoints answer
+  503 and the app keeps photos on the phone. Without `S3_ENDPOINT_URL`,
+  uploads to a new bucket outside `us-east-1` are redirected (307) for its
+  first hours, and the app's uploads fail.
+- **Check it:** signed in, `POST /trips/photos/upload-url` with
+  `{"content_type":"image/jpeg","size_bytes":100000}` returns a form;
+  `POST /trips` with that (never uploaded) key returns 400 "A photo hasn't
+  finished uploading", which proves the API can reach the bucket.
+- **Check a real upload:** `api/s3_upload_check.py` logs in, gets a form
+  and sends a 1 KB test file to S3; it should print `204`.

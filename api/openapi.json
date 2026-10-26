@@ -1012,7 +1012,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
       }
     },
     "/wishlist": {
@@ -2553,6 +2558,15 @@
           },
           "signals": {
             "$ref": "#/components/schemas/SignalScores"
+          },
+          "visited": {
+            "type": "boolean",
+            "title": "Visited"
+          },
+          "different": {
+            "type": "boolean",
+            "title": "Different",
+            "default": false
           }
         },
         "type": "object",
@@ -2560,7 +2574,8 @@
           "park_code",
           "score",
           "reason",
-          "signals"
+          "signals",
+          "visited"
         ],
         "title": "RecommendationOut"
       },
@@ -3113,7 +3128,7 @@
           },
           "visibility": {
             "$ref": "#/components/schemas/Visibility",
-            "default": "private"
+            "default": "friends"
           },
           "photos": {
             "anyOf": [

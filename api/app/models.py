@@ -331,7 +331,7 @@ class TripEntry(Base):
 
     `visibility` is "private" or "friends" (see app/visibility.py, which
     decides who may read an entry; nothing else should compare it directly).
-    New entries are private until the owner shares them.
+    New entries are shared with friends unless the owner makes them private.
     """
 
     __tablename__ = "trip_entries"
@@ -358,7 +358,7 @@ class TripEntry(Base):
         ARRAY(String(200)), nullable=False, default=list, server_default="{}"
     )
     visibility: Mapped[str] = mapped_column(
-        String(10), nullable=False, default="private", server_default="private"
+        String(10), nullable=False, default="friends", server_default="friends"
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(UTC), server_default=func.now()

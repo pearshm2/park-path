@@ -12,8 +12,8 @@
  * the header and leave at the top of the screen.
  *
  * Every entry logs a visit, which is what marks a park visited across the
- * app. Entries live on the device for now (trips/TripsContext.tsx) until
- * the trips backend exists.
+ * app. Entries sync with the server (trips/TripsContext.tsx); their photos
+ * and videos stay on the phone until uploads to S3 are wired up.
  *
  * Opened from a visited park's card: `entry` scrolls to that entry, and
  * `add` starts a new one for that park.

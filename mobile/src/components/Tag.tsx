@@ -8,7 +8,7 @@ import { StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-na
 
 import { colors, fonts, radius, scaleType, useTextScale } from '../theme';
 
-type TagTone = 'accent' | 'accent2' | 'neutral' | 'outline';
+export type TagTone = 'accent' | 'accent2' | 'neutral' | 'outline';
 
 export function Tag({
   label,

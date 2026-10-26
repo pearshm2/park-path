@@ -49,3 +49,18 @@ services:
         generateValue: true # Render generates and stores a real random secret
       - key: NPS_API_KEY
         sync: false # entered by hand in the dashboard; never committed
+      # Trip photos and videos (see docs/deploy.md, "Photo storage").
+      - key: S3_BUCKET
+        value: parkpath-photos
+      - key: S3_REGION
+        value: us-east-2
+      # The bucket's own regional address, so uploads aren't redirected.
+      - key: S3_ENDPOINT_URL
+        value: https://s3.us-east-2.amazonaws.com
+      - key: AWS_ACCESS_KEY_ID
+        sync: false # the parkpath-api IAM user's key; never committed
+      - key: AWS_SECRET_ACCESS_KEY
+        sync: false
+      # Google sign-in: the OAuth client ids, comma-separated.
+      - key: GOOGLE_CLIENT_IDS
+        sync: false

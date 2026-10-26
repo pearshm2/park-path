@@ -915,6 +915,13 @@ export interface components {
             /** Reason */
             reason: string | null;
             signals: components["schemas"]["SignalScores"];
+            /** Visited */
+            visited: boolean;
+            /**
+             * Different
+             * @default false
+             */
+            different: boolean;
         };
         /** RecommendationRequest */
         RecommendationRequest: {
@@ -1069,7 +1076,7 @@ export interface components {
             trails?: string[] | null;
             /** Stamp */
             stamp?: string | null;
-            /** @default private */
+            /** @default friends */
             visibility: components["schemas"]["Visibility"];
             /** Photos */
             photos?: components["schemas"]["TripPhotoIn"][] | null;

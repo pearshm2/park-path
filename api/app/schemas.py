@@ -240,6 +240,12 @@ class RecommendationOut(BaseModel):
     score: float | None
     reason: str | None
     signals: SignalScores
+    # True when the signed-in user has logged a trip here (always false
+    # without a token). Visited parks are moved down the list.
+    visited: bool
+    # True for at most one site: the best national park with a terrain the
+    # signed-in user hasn't visited or asked for. The app shows it at #4.
+    different: bool = False
 
 
 # --- Park maps (GET /sites/{park_code}/map) ---------------------------------
@@ -383,7 +389,7 @@ class TripCreate(BaseModel):
     trails: list[Trail] | None = Field(None, max_length=MAX_TRIP_TRAILS)
     # The older form of `trails`: one trail. Ignored when `trails` is sent.
     stamp: str | None = Field(None, max_length=200)
-    visibility: Visibility = Visibility.PRIVATE
+    visibility: Visibility = Visibility.FRIENDS
     # Uploads from POST /trips/photos/upload-url, in the order to show them.
     photos: list[TripPhotoIn] | None = Field(None, max_length=MAX_TRIP_PHOTOS)
     # The older form of `photos`: keys only, no captions. Ignored when

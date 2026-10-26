@@ -260,7 +260,7 @@ def test_a_friends_passport_counts_only_shared_trips(people, parks):
     ann, bob = people(), people()
     ann.befriend(bob)
     ann.log(parks[0], visibility="friends")
-    ann.log(parks[1])  # private
+    ann.log(parks[1], visibility="private")
 
     seen = bob.passport(ann.id).json()
     assert seen["owner"]["id"] == ann.id
@@ -275,7 +275,7 @@ def test_a_friends_stamp_points_at_a_trip_you_can_open(people, parks):
     ann, bob = people(), people()
     ann.befriend(bob)
     ann.log(parks[0], visited_on="2024-01-01", visibility="friends")
-    ann.log(parks[0], visited_on="2024-09-01")  # newer, but private
+    ann.log(parks[0], visited_on="2024-09-01", visibility="private")  # newer
     shown = stamp(bob.passport(ann.id).json(), parks[0])
     assert shown["visit_count"] == 1 and shown["last_visited_on"] == "2024-01-01"
     assert client.get(f"/trips/{shown['latest_trip_id']}", headers=bob.headers).status_code == 200

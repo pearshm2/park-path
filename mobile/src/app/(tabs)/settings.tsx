@@ -1,17 +1,15 @@
 /**
- * Settings opens on its menu: each section full width, with its icon,
- * name and a line about it. Choosing one folds the menu into a strip of
- * icons down the left (the one you're on in orange) and opens the section
- * beside it as a title over a wide white card of rows split by hairlines.
- * Each row is a label and a line of explanation, with its control to the
- * right or below. "‹ Settings", or the orange icon, unfolds the menu again.
+ * Settings opens straight on Profile: a strip of section icons down the
+ * left (the one you're on in orange) and the section beside it as a title
+ * over a wide white card of rows split by hairlines. Each row is a label and
+ * a line of explanation, with its control to the right or below.
  *
  *  - Profile: your picture, name and @username (what friends see), your
  *    starting location, and your quiz answers.
  *  - Account: your email and password, the server, logging out, and
  *    deleting the account.
- *  - Privacy: who sees a new trip by default, what friends can see of you,
- *    and location.
+ *  - Privacy: what friends can see of you (every trip is shared with
+ *    them), and location.
  *  - Notifications: the chime and buzz, and arrival reminders.
  *  - Display: text size.
  *
@@ -32,7 +30,6 @@ import Svg, { Path } from 'react-native-svg';
 
 import { API_BASE_URL } from '../../api/client';
 import { displayName, handle } from '../../api/friends';
-import type { Visibility } from '../../api/trips';
 import { useArrivals } from '../../arrivals/ArrivalsContext';
 import { useAuth } from '../../auth/AuthContext';
 import { UsernameField } from '../../auth/UsernameField';
@@ -42,19 +39,18 @@ import { Avatar } from '../../components/Avatar';
 import { Dialog, type DialogAction } from '../../components/Dialog';
 import { isKnownZip, QUIZ_STEPS, type QuizAnswers } from '../../data/quizSpec';
 import { useSoundEffects } from '../../lib/sounds';
-import { useDefaultVisibility } from '../../lib/tripDefaults';
 import { useQuiz } from '../../quiz/QuizContext';
 import { colors, radius, space, TEXT_SIZES, useTextSize } from '../../theme';
 
 type Section = 'profile' | 'account' | 'privacy' | 'notifications' | 'display';
 
-/** Each section, its line on the menu, and its icon's strokes on a 24px grid. */
-const SECTIONS: { key: Section; label: string; blurb: string; icon: string[] }[] = [
-  { key: 'profile', label: 'Profile', blurb: 'Photo, name, username and location', icon: ['M12 12a4 4 0 100-8 4 4 0 000 8z', 'M4 20c1.5-4 4.5-6 8-6s6.5 2 8 6'] },
-  { key: 'account', label: 'Account', blurb: 'Email, password and logging out', icon: ['M8 11V8a4 4 0 118 0v3', 'M5 11h14v9H5z'] },
-  { key: 'privacy', label: 'Privacy', blurb: 'Who sees your trips', icon: ['M12 3l8 3v6c0 4.5-3.4 8-8 9-4.6-1-8-4.5-8-9V6z'] },
-  { key: 'notifications', label: 'Notifications', blurb: 'Sounds and arrival reminders', icon: ['M6 16V11a6 6 0 1112 0v5l2 2H4z', 'M10 21h4'] },
-  { key: 'display', label: 'Display', blurb: 'Text size', icon: ['M4 19L9 5l5 14', 'M5.8 14h6.4', 'M15 19l3-8 3 8', 'M16 16.5h4'] },
+/** Each section, and its icon's strokes on a 24px grid. */
+const SECTIONS: { key: Section; label: string; icon: string[] }[] = [
+  { key: 'profile', label: 'Profile', icon: ['M12 12a4 4 0 100-8 4 4 0 000 8z', 'M4 20c1.5-4 4.5-6 8-6s6.5 2 8 6'] },
+  { key: 'account', label: 'Account', icon: ['M8 11V8a4 4 0 118 0v3', 'M5 11h14v9H5z'] },
+  { key: 'privacy', label: 'Privacy', icon: ['M12 3l8 3v6c0 4.5-3.4 8-8 9-4.6-1-8-4.5-8-9V6z'] },
+  { key: 'notifications', label: 'Notifications', icon: ['M6 16V11a6 6 0 1112 0v5l2 2H4z', 'M10 21h4'] },
+  { key: 'display', label: 'Display', icon: ['M4 19L9 5l5 14', 'M5.8 14h6.4', 'M15 19l3-8 3 8', 'M16 16.5h4'] },
 ];
 
 type Note = { ok: boolean; text: string } | null;
@@ -62,59 +58,40 @@ type Note = { ok: boolean; text: string } | null;
 export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
   const tabSpace = useTabBarSpace();
-  // Null on the menu; a section once one's open.
-  const [section, setSection] = useState<Section | null>(null);
-  const open = SECTIONS.find((s) => s.key === section);
+  const [section, setSection] = useState<Section>('profile');
+  const open = SECTIONS.find((s) => s.key === section) ?? SECTIONS[0];
 
   return (
     <View style={[styles.screen, { paddingTop: insets.top + space[2] }]}>
-      {open ? (
-        <Pressable
-          onPress={() => setSection(null)}
-          hitSlop={8}
-          accessibilityRole="button"
-          accessibilityLabel="Back to all settings"
-          style={styles.titleRow}
-        >
-          <Svg width={20} height={20} viewBox="0 0 24 24">
-            <Path d="M15 5l-7 7 7 7" fill="none" stroke={colors.neutral[900]} strokeWidth={2.6} strokeLinecap="round" strokeLinejoin="round" />
-          </Svg>
-          <Heading size={26}>Settings</Heading>
-        </Pressable>
-      ) : (
-        <Heading size={26} style={styles.title}>
-          Settings
-        </Heading>
-      )}
+      <Heading size={26} style={styles.title}>
+        Settings
+      </Heading>
       <View style={styles.body}>
-        {/* Folds at once: animating it held the menu wide while the words
-            faded, which read as a lag. */}
-        <View style={[styles.nav, open ? styles.navFolded : styles.navOpen]} accessibilityRole="tablist">
+        <View style={[styles.nav, styles.navFolded]} accessibilityRole="tablist">
           {SECTIONS.map((s) => {
             const on = s.key === section;
             return (
               <Pressable
                 key={s.key}
-                // The open one's icon unfolds the menu again.
-                onPress={() => setSection(on ? null : s.key)}
+                onPress={() => setSection(s.key)}
                 accessibilityRole="tab"
                 accessibilityLabel={s.label}
                 accessibilityState={{ selected: on }}
                 style={({ pressed }) => [
                   styles.navItem,
-                  open ? styles.navItemFolded : styles.navItemOpen,
+                  styles.navItemFolded,
                   on && styles.navItemOn,
                   pressed && !on && styles.navItemPressed,
                 ]}
               >
-                <View style={[styles.navIcon, !open && styles.navIconOpen]}>
-                  <Svg width={open ? 20 : 19} height={open ? 20 : 19} viewBox="0 0 24 24">
+                <View style={styles.navIcon}>
+                  <Svg width={20} height={20} viewBox="0 0 24 24">
                     {s.icon.map((d) => (
                       <Path
                         key={d}
                         d={d}
                         fill="none"
-                        stroke={on ? colors.neutral[100] : open ? colors.neutral[600] : colors.accentRamp[700]}
+                        stroke={on ? colors.neutral[100] : colors.neutral[600]}
                         strokeWidth={2}
                         strokeLinecap="round"
                         strokeLinejoin="round"
@@ -122,45 +99,28 @@ export default function SettingsScreen() {
                     ))}
                   </Svg>
                 </View>
-                {open ? null : (
-                  <View style={styles.navWords}>
-                    <BodyText size={15} weight="semibold" numberOfLines={1}>
-                      {s.label}
-                    </BodyText>
-                    <BodyText size={12.5} color={colors.neutral[600]} numberOfLines={1}>
-                      {s.blurb}
-                    </BodyText>
-                  </View>
-                )}
-                {open ? null : (
-                  <Svg width={16} height={16} viewBox="0 0 24 24">
-                    <Path d="M9 5l7 7-7 7" fill="none" stroke={colors.neutral[500]} strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round" />
-                  </Svg>
-                )}
               </Pressable>
             );
           })}
         </View>
 
-        {open ? (
-          <Animated.View key={open.key} entering={FadeIn.duration(150)} style={styles.panel}>
-            <ScrollView
-              contentContainerStyle={[styles.panelContent, { paddingBottom: tabSpace + space[6] }]}
-              keyboardShouldPersistTaps="handled"
-            >
-              <Heading size={21} style={styles.sectionTitle}>
-                {open.label}
-              </Heading>
-              <View style={styles.card}>
-                {section === 'profile' ? <ProfileSection /> : null}
-                {section === 'account' ? <AccountSection /> : null}
-                {section === 'privacy' ? <PrivacySection /> : null}
-                {section === 'notifications' ? <NotificationsSection /> : null}
-                {section === 'display' ? <DisplaySection /> : null}
-              </View>
-            </ScrollView>
-          </Animated.View>
-        ) : null}
+        <Animated.View key={open.key} entering={FadeIn.duration(150)} style={styles.panel}>
+          <ScrollView
+            contentContainerStyle={[styles.panelContent, { paddingBottom: tabSpace + space[6] }]}
+            keyboardShouldPersistTaps="handled"
+          >
+            <Heading size={21} style={styles.sectionTitle}>
+              {open.label}
+            </Heading>
+            <View style={styles.card}>
+              {section === 'profile' ? <ProfileSection /> : null}
+              {section === 'account' ? <AccountSection /> : null}
+              {section === 'privacy' ? <PrivacySection /> : null}
+              {section === 'notifications' ? <NotificationsSection /> : null}
+              {section === 'display' ? <DisplaySection /> : null}
+            </View>
+          </ScrollView>
+        </Animated.View>
       </View>
     </View>
   );
@@ -678,31 +638,14 @@ function DeleteAccountForm({ google, onCancel }: { google: boolean; onCancel: ()
 
 // --- Privacy -------------------------------------------------------------------
 
-const VISIBILITIES: { value: Visibility; label: string }[] = [
-  { value: 'private', label: 'Only me' },
-  { value: 'friends', label: 'Friends' },
-];
-
 function PrivacySection() {
-  const [visibility, setVisibility] = useDefaultVisibility();
   const arrivals = useArrivals();
   return (
     <>
       <Row>
         <RowText
-          title="Who sees new trips"
-          description={
-            visibility === 'friends'
-              ? "New trips show in your friends' feeds. You can still change it on each trip."
-              : 'New trips stay in your journal. You can still share one as you save it.'
-          }
-        />
-        <Segmented options={VISIBILITIES} value={visibility} onChange={setVisibility} />
-      </Row>
-      <Row>
-        <RowText
           title="What friends see"
-          description="Your name, @username and profile photo, the trips you share with friends, and the passport those trips earn you."
+          description="Your name, @username and profile photo, the trips you log, and the passport those trips earn you."
         />
       </Row>
       <Row>
@@ -937,25 +880,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: space[4],
     marginBottom: space[3],
   },
-  titleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    alignSelf: 'flex-start',
-    paddingLeft: space[3],
-    paddingRight: space[4],
-    marginBottom: space[3],
-  },
   body: {
     flex: 1,
     flexDirection: 'row',
   },
   nav: {
     gap: space[1],
-  },
-  navOpen: {
-    flex: 1,
-    paddingHorizontal: space[4],
   },
   navFolded: {
     width: NAV_FOLDED,
@@ -965,14 +895,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     borderRadius: 12,
-  },
-  navItemOpen: {
-    gap: space[3],
-    paddingVertical: space[3],
-    paddingHorizontal: space[3],
-    borderWidth: 1,
-    borderColor: colors.neutral[300],
-    backgroundColor: '#fffdfa',
   },
   navItemFolded: {
     width: 44,
@@ -989,15 +911,6 @@ const styles = StyleSheet.create({
   navIcon: {
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  navIconOpen: {
-    width: 38,
-    height: 38,
-    borderRadius: 10,
-    backgroundColor: colors.accentRamp[100],
-  },
-  navWords: {
-    flex: 1,
   },
   panel: {
     flex: 1,

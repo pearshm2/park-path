@@ -42,7 +42,6 @@ import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   Extrapolation,
   interpolate,
-  LinearTransition,
   useAnimatedStyle,
   useSharedValue,
   withTiming,
@@ -52,7 +51,7 @@ import Svg, { Path } from 'react-native-svg';
 import { scheduleOnRN } from 'react-native-worklets';
 
 import { listSites } from '../../api/parks';
-import { recommendations, type Recommendation } from '../../api/recommendations';
+import { useRecommendations, type Recommendation } from '../../api/recommendations';
 import {
   activeFilterCount,
   BodyText,
@@ -87,12 +86,13 @@ import {
   type Region,
   type RegionId,
 } from '../../data/regions';
-import { useQuiz } from '../../quiz/QuizContext';
 import { useCelebrations } from '../../celebrations/CelebrationsContext';
 import { useSnoozed } from '../../wishlist/useSnoozed';
 import { useWishlist } from '../../wishlist/useWishlist';
 import { CapTextScale, colors, radius, shadow, space, useTextScale } from '../../theme';
 
+/** Where the "something different" pick goes among them (0-based: #4). */
+const DIFFERENT_AT = 3;
 /** How many recommendations get a numbered pin and a card. */
 const TOP_N = 10;
 
@@ -212,7 +212,6 @@ export default function ExploreScreen() {
   const insets = useSafeAreaInsets();
   const { width: windowWidth } = useWindowDimensions();
   const textScale = useTextScale();
-  const { answers } = useQuiz();
 
   const [scope, setScope] = useState<MapScope>('parks');
   /**
@@ -230,6 +229,10 @@ export default function ExploreScreen() {
   const [deckTopId, setDeckTopId] = useState<string | null>(null);
   /** Lets the user reopen the key while the sheet is open. */
   const [keyOpen, setKeyOpen] = useState(false);
+  /** Bumped when the sheet is minimised, to undo any pinch on the map. */
+  const [recenter, setRecenter] = useState(0);
+  /** The key folded away with the sheet down, for more room (stays as set). */
+  const [keyFolded, setKeyFolded] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [fullMapOpen, setFullMapOpen] = useState(false);
   // The screen starts turning on the press itself, before Explore re-renders.
@@ -253,17 +256,16 @@ export default function ExploreScreen() {
 
   // Scored across every site so wishlist cards and search results have
   // a match too; the picks themselves are drawn from the parks only.
-  const { data: sharedMatches = [] } = useQuery({
-    queryKey: ['recommendations', answers, 'all'],
-    queryFn: () => recommendations(answers, 'all'),
-  });
+  // Signed in, the engine also uses your trips (visited parks move down),
+  // so the list is refetched when a trip is logged.
+  const { visitedIds, visitSummary, entries: tripEntries } = useTrips();
+  const { data: sharedMatches = [] } = useRecommendations();
 
   // The site list is shared and carries no per-person status, so your
   // wishlist is applied here, once, and everything below (map pins, cards,
   // the wishlist view) reads it from site.status. Visited outranks it.
   const { ids: wishlistIds, toggle: toggleWishlist } = useWishlist();
   // Visited comes from your trip journal: a park with an entry is visited.
-  const { visitedIds, visitSummary } = useTrips();
   const withStatus = useCallback(
     (site: Site): Site => {
       const status: SiteStatus = visitedIds.has(site.id)
@@ -317,8 +319,19 @@ export default function ExploreScreen() {
     [matches],
   );
 
-  // The engine's top 10, untouched by the filters.
-  const picks = useMemo(() => parkMatches.slice(0, TOP_N), [parkMatches]);
+  // The engine's top 10, untouched by the filters. Its "something
+  // different" pick (a terrain new to you; only with trips logged) takes
+  // #4 unless it already ranks higher.
+  const picks = useMemo(() => {
+    const top = parkMatches.slice(0, TOP_N);
+    const different = parkMatches.find((match) => match.different);
+    if (!different) return top;
+    const at = top.indexOf(different);
+    if (at > -1 && at < DIFFERENT_AT) return top;
+    const rest = top.filter((match) => match !== different);
+    rest.splice(DIFFERENT_AT, 0, different);
+    return rest.slice(0, TOP_N);
+  }, [parkMatches]);
   const rankById = useMemo(
     () => new Map(picks.map(({ site }, index) => [site.id, index + 1])),
     [picks],
@@ -444,10 +457,12 @@ export default function ExploreScreen() {
   function openSheet(open: boolean) {
     setSheetOpen(open);
     setKeyOpen(false);
-    // Closing tucks the cards away and returns to the whole map.
+    // Closing tucks the cards away and recenters the map (undoing any
+    // pinch), staying on the region in focus: "Full map" (or tapping the
+    // park's pin again) zooms back out.
     if (!open) {
-      clearFocus();
       setMoreOpen(false);
+      setRecenter((n) => n + 1);
     }
   }
 
@@ -632,7 +647,12 @@ export default function ExploreScreen() {
                   ? `Where you've been: ${visited.length} so far`
                   : matchIds.size > 0
                   ? `Where to next? ${matchIds.size} more fit your filters`
-                  : 'Where to next?'}
+                  : // The engine uses your trips (signed in, as Explore always is).
+                    tripEntries.length === 0
+                    ? 'Matched to your quiz'
+                    : tripEntries.length === 1
+                      ? 'Tuned by your trip'
+                      : `Tuned by your ${tripEntries.length} trips`}
             </BodyText>
           </View>
         </View>
@@ -672,12 +692,9 @@ export default function ExploreScreen() {
           setStageFrame((f) => (Math.abs(f.height - height) > 1 ? { ...f, height } : f));
         }}
       >
-        <Animated.View
-          // The layout transition keeps a stale height when the key's
-          // content grows on its own (the filter swatch adds a line, or the
-          // spare room is measured), so remount it whenever either changes.
-          key={`${matchIds.size > 0 ? 'key-with-matches' : 'key'}-${keyRoom}`}
-          layout={LinearTransition.duration(SHEET_MS)}
+        {/* No layout transition: an interrupted one left the key cut off at
+            its folded height after the sheet closed. */}
+        <View
           // Collapsed, the key moves up a little to give the map the room.
           style={[styles.keyWrap, sheetOpen && styles.keyWrapOpen]}
         >
@@ -685,13 +702,15 @@ export default function ExploreScreen() {
               doesn't crowd out the map it explains. */}
           <CapTextScale max={1.1}>
             <MapKey
-              collapsed={sheetOpen && !keyOpen}
+              collapsed={sheetOpen ? !keyOpen : keyFolded}
               room={keyRoom}
               showMatches={matchIds.size > 0}
-              onToggle={sheetOpen ? () => setKeyOpen((open) => !open) : undefined}
+              onToggle={() =>
+                sheetOpen ? setKeyOpen((open) => !open) : setKeyFolded((folded) => !folded)
+              }
             />
           </CapTextScale>
-        </Animated.View>
+        </View>
 
         {/* Deliberately not a layout-animated view: the map has to be told
             its new size when the sheet opens, or it overflows under it. */}
@@ -715,9 +734,9 @@ export default function ExploreScreen() {
               onLayout={(event) => measureSpare('above', event.nativeEvent.layout.height)}
             />
           ) : null}
-          {/* The title and the map slide (rather than jump) to where the
-              sheet leaves them, in step with the sheet and the key. */}
-          <Animated.View layout={LinearTransition.duration(SHEET_MS)} style={styles.titleSlot}>
+          {/* The title and the map jump to where the sheet leaves them (see
+              the note on the map below). */}
+          <Animated.View style={styles.titleSlot}>
           {focusRegion ? (
             <RegionTitle
               region={focusRegion}
@@ -740,8 +759,10 @@ export default function ExploreScreen() {
             </View>
           )}
           </Animated.View>
+          {/* No layout transition here or on the title: tapping a park while
+              the previous slide was still running left the map box drawn in
+              the wrong place (blank map, dead "Full map" button; Bug 1). */}
           <Animated.View
-            layout={LinearTransition.duration(SHEET_MS)}
             style={[
               styles.map,
               // Open, the map's empty top margin tucks under its title.
@@ -776,8 +797,10 @@ export default function ExploreScreen() {
                 // Tapping the top card's pin again zooms back out.
                 setAnchor(null);
               } else if (regionDeck?.some((item) => item.site.id === site.id)) {
-                // Another park in the same region: bring its card to the top.
+                // Another park in the same region: bring its card to the top
+                // (opening the sheet, if it was minimised over the region).
                 setDeckTopId(site.id);
+                if (!sheetOpen) openSheet(true);
               } else {
                 focusPark(site);
               }
@@ -789,6 +812,7 @@ export default function ExploreScreen() {
             tuckCompleted={scope !== 'visited'}
             canvas={mapCanvas}
             obscuredBottom={mapCovered}
+            recenterKey={recenter}
             style={styles.mapFill}
           />
           </Animated.View>
@@ -846,6 +870,7 @@ export default function ExploreScreen() {
                 <ParkCard
                   site={item.site}
                   reason={item.reason}
+                  match={item.score}
                   rank={item.rank}
                   // The full decks mix saved parks in with everything else.
                   markWishlist={scope === 'parks' || scope === 'all'}
