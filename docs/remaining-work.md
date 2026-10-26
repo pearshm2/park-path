@@ -1,10 +1,10 @@
 # ParkPath: What's Left
 
-Status as of **Monday, Oct 26, 2026**. This checks `main` (after PR `halie/next-changes` merges, with main through PR #35) against our 8-week plan. Demo day is **Wednesday, Oct 28**.
+Status as of **Monday, Oct 26, 2026**. This checks `main` (after PR #37, `halie/next-changes`, merges, with main through PR #36) against our 8-week plan. Demo day is **Wednesday, Oct 28**.
 
 **Decided Oct 24:** no thumbs up/down. To pass on a park, you snooze it with "Not for now", so the engine doesn't get "I don't like this park at all" feedback. (See `docs/backlog.md` → Cut.)
 
-**Where we stand:** weeks 1–6 are essentially done. Mobile typecheck and lint pass, and all 219 API tests pass. Trip photos and videos now upload to S3 (PR #35); only the passport-stamp photo stays on the phone.
+**Where we stand:** weeks 1–6 are essentially done. Mobile typecheck and lint pass, and all 251 API tests pass. Trip photos and videos now upload to S3 (PR #35); only the passport-stamp photo stays on the phone.
 
 Sizes: **S** = an hour or two · **M** = about a day · **L** = several days
 
@@ -54,7 +54,8 @@ Engine code: `api/app/recommender.py`. (`parkpath-recommendation-engine/` is the
 
 ## Release and infra
 
-- [ ] **Build and document the release-candidate APK** with `eas build -p android --profile preview`, then write the missing APK section in `docs/deploy.md`. **S–M** *(Halie / Dylan)*
+- [x] **Document the APK build:** `docs/apk.md` (PR #36).
+- [ ] **Build the release-candidate APK** after PR #37 merges, following `docs/apk.md`, so it has the new icon, splash and quiz sync. **S** *(Halie / Dylan)*
 - [x] **Write a demo seed script** for users, friendships, trips and comments: `api/seed_demo.py`.
 - [ ] *Optional:* add an EAS build or a mobile test job to CI. **M** *(Dylan)*
 
@@ -63,7 +64,7 @@ Engine code: `api/app/recommender.py`. (`parkpath-recommendation-engine/` is the
 - [ ] **Bug bash**, with findings written down in `docs/`. **M**
 - [ ] **Install test** of the APK on a phone outside the team. **S**
 - [ ] **Backup demo recording.** **S**
-- [ ] **Mobile automated tests.** None exist; the API has about 200 pytest tests. **M–L**
+- [ ] **Mobile automated tests.** None exist; the API has 251 pytest tests. **M–L**
 
 ---
 
