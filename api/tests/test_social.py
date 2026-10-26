@@ -247,3 +247,45 @@ def test_change_password(people):
     assert old.status_code == 401
     new = client.post("/auth/login", json={"email": ann.email, "password": "a-new-password"})
     assert new.status_code == 200
+
+
+# --- deleting the account ----------------------------------------------------
+
+
+def _delete(person: Person, **body):
+    return client.request("DELETE", "/auth/me", json=body, headers=person.headers)
+
+
+def test_delete_account_needs_confirmation_and_password(people):
+    ann = people()
+    assert _delete(ann, confirm="nope", password=ann.password).status_code == 400
+    assert _delete(ann, confirm="DELETE").status_code == 400
+    assert _delete(ann, confirm="DELETE", password="wrong").status_code == 400
+    assert client.get("/auth/me", headers=ann.headers).status_code == 200
+
+
+def test_delete_account_removes_everything(people, code):
+    ann, bob = people(), people()
+    ann.befriend(bob)
+    trip = ann.log(code)
+    bob.comment(trip, "Nice one")
+    their_trip = bob.log(code)
+    ann.comment(their_trip, "Mine too")
+
+    assert _delete(ann, confirm="delete", password=ann.password).status_code == 204
+    # Signed out everywhere, and can't sign back in.
+    assert client.get("/auth/me", headers=ann.headers).status_code == 401
+    login = client.post("/auth/login", json={"email": ann.email, "password": ann.password})
+    assert login.status_code == 401
+    # Gone from Bob's friends, feed and comments.
+    assert client.get("/friends", headers=bob.headers).json() == []
+    assert client.get("/trips/feed", headers=bob.headers).json() == []
+    assert client.get(f"/trips/{their_trip}/comments", headers=bob.headers).json() == []
+    # The email can be used again.
+    again = client.post(
+        "/auth/signup", json={"email": ann.email, "password": "another-pass", **new_names()}
+    )
+    assert again.status_code == 201
+    with SessionLocal() as db:
+        db.execute(delete(User).where(User.email == ann.email))
+        db.commit()

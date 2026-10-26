@@ -18,8 +18,10 @@ from app.routers import (
     auth,
     friends,
     passport,
+    quiz,
     recommendations,
     sites,
+    snoozes,
     trips,
     users,
     wishlist,
@@ -70,6 +72,8 @@ app.include_router(sites.router, prefix="/sites", tags=["sites"])
 app.include_router(friends.router, prefix="/friends", tags=["friends"])
 app.include_router(recommendations.router, prefix="/recommendations", tags=["recommendations"])
 app.include_router(wishlist.router, prefix="/wishlist", tags=["wishlist"])
+app.include_router(snoozes.router, prefix="/snoozes", tags=["snoozes"])
+app.include_router(quiz.router, prefix="/quiz", tags=["quiz"])
 app.include_router(trips.router, prefix="/trips", tags=["trips"])
 app.include_router(passport.router, prefix="/passport", tags=["passport"])
 app.include_router(users.router, prefix="/users", tags=["users"])

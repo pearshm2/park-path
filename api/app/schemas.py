@@ -68,6 +68,13 @@ class GoogleToken(BaseModel):
     created: bool
 
 
+class AccountDelete(BaseModel):
+    """DELETE /auth/me: "DELETE" typed out, and the password (not for Google accounts)."""
+
+    confirm: str
+    password: str | None = None
+
+
 class PasswordChange(BaseModel):
     current_password: str
     new_password: str = Field(min_length=8, max_length=200)
@@ -103,6 +110,8 @@ class UserOut(BaseModel):
     last_name: str
     # GET this (with your token) for their profile picture; null without one.
     avatar_url: str | None = None
+    # Signs in with Google: deleting the account then asks for no password.
+    signs_in_with_google: bool = False
 
 
 class Token(BaseModel):
@@ -199,6 +208,31 @@ class QuizAnswers(BaseModel):
         if len(value) != len(set(value)):
             raise ValueError("each answer can only be picked once")
         return value
+
+
+class SavedQuiz(QuizAnswers):
+    """The quiz as GET/PUT /quiz keep it: the answers plus the zip code they gave."""
+
+    # Null if they skipped it. The app turns it into a Location itself.
+    zip: str | None = Field(default=None, pattern=r"^\d{5}$")
+
+
+# --- Snoozes (GET/PUT/DELETE /snoozes) ---------------------------------------
+
+
+class SnoozeIn(BaseModel):
+    """
+    Optional body for PUT /snoozes/{park_code}. Without `until` the park is
+    set aside for the usual 30 days; with it (a snooze carried over from
+    the phone), until then, but never more than 30 days out.
+    """
+
+    until: datetime | None = None
+
+
+class SnoozeOut(BaseModel):
+    park_code: str
+    until: datetime
 
 
 class Location(BaseModel):

@@ -24,12 +24,15 @@ import {
   signup as signupRequest,
   updateProfile as updateProfileRequest,
   changePassword as changePasswordRequest,
+  deleteAccount as deleteAccountRequest,
   removeAvatar,
   setAvatar,
 } from '../api/auth';
 import { clearToken, loadToken, saveToken } from '../api/tokenStorage';
 import { signInWithGoogle } from './googleSignIn';
+import { removeText } from '../lib/fileStore';
 import { readTokenSubject } from '../lib/jwt';
+import { removeItem } from '../lib/storage';
 import type { Credentials, ProfileChanges, SignUpDetails, User } from '../types/auth';
 
 /**
@@ -66,6 +69,8 @@ type AuthContextValue = {
   /** Set your profile picture (a small JPEG, base64), or remove it with null. */
   changeAvatar: (base64: string | null) => Promise<void>;
   changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
+  /** Delete the account for good, clear what this phone kept for it, and sign out. */
+  deleteAccount: (confirm: string, password?: string) => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -186,6 +191,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [token],
   );
 
+  const deleteAccount = useCallback(
+    async (confirm: string, password?: string) => {
+      if (!token) return;
+      await deleteAccountRequest(token, confirm, password);
+      // What this phone kept for the account (see TripsContext, QuizContext,
+      // FriendWatcher, useFriendsBadge), so nothing of it lingers.
+      const id = readTokenSubject(token) ?? (user ? String(user.id) : null);
+      if (id) {
+        for (const key of ['trips', 'tripDeletes', 'tripDraft', 'friendsSeen', 'friendsViewed']) {
+          removeText(`parkpath.${key}.${id}`);
+        }
+        await removeItem(`parkpath.quizAnswers.${id}`);
+        await removeItem(`parkpath.quizPending.${id}`);
+        await removeItem(`parkpath.snoozed.${id}`);
+      }
+      await clearToken();
+      setToken(null);
+      setUser(null);
+      setWelcomeGoogleAccount(false);
+      setStatus('signedOut');
+    },
+    [token, user],
+  );
+
   // Prefer the token's own claim; fall back to the profile if a future
   // token shape ever stops carrying one.
   const userId = useMemo(
@@ -208,6 +237,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       updateProfile,
       changeAvatar,
       changePassword,
+      deleteAccount,
     }),
     [
       status,
@@ -223,6 +253,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       updateProfile,
       changeAvatar,
       changePassword,
+      deleteAccount,
     ],
   );
 

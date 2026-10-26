@@ -3,8 +3,9 @@
  * apps play back memories.
  *
  * Each trip opens on a title card over the park's own photo, blurred (the
- * park, the date, and its stamp pressing down; tapping the stamp opens
- * that park in Passport), then the photo of its passport-book stamp if
+ * park, the date, and, for a national park, its stamp pressing down;
+ * tapping the stamp opens that park in Passport), then the photo of its
+ * passport-book stamp if
  * you added one, pasted onto a passport page, then its photos and videos
  * full screen, each
  * with its own caption, and the trip's notes and trails over the first.
@@ -507,6 +508,9 @@ function TitleSlide({
   const textScale = useTextScale();
   const { entry, site } = slide;
   const name = site?.name ?? entry.siteId;
+  // Only the 63 national parks have a stamp in Passport, so only they get
+  // a seal here; a battlefield or monument trip shows none.
+  const hasStamp = site?.isNamedPark ?? false;
   const fallback = terrainTone(site?.group ?? null).band;
   const [, month, dayOfMonth] = entry.date.split('-');
   const [year] = entry.date.split('-');
@@ -522,6 +526,7 @@ function TitleSlide({
   const press = useSharedValue(0);
   const spread = useSharedValue(0);
   useEffect(() => {
+    if (!hasStamp) return;
     const delay = dive ? DIVE_MS + 120 : 450;
     press.value = withDelay(delay, withTiming(1, { duration: PRESS_MS, easing: Easing.linear }));
     spread.value = withDelay(
@@ -533,9 +538,9 @@ function TitleSlide({
       tap('medium');
     }, delay + PRESS_MS * HIT);
     return () => clearTimeout(hit);
-    // Once, as the slide opens.
+    // Once, as the slide opens (or as soon as its park is known).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [hasStamp]);
   const stampStyle = useAnimatedStyle(() => {
     const p = press.value;
     return {
@@ -598,6 +603,7 @@ function TitleSlide({
 
       <View style={[styles.titleBody, { paddingBottom: insets.bottom + space[8] + (still ? HINT_ROOM : 0) }]}>
         {/* The park's stamp: it opens the park in Passport. */}
+        {hasStamp ? (
         <Animated.View style={lateIn}>
         <Pressable
           onPress={() => {
@@ -634,6 +640,7 @@ function TitleSlide({
           </View>
         </Pressable>
         </Animated.View>
+        ) : null}
 
         <Animated.View style={lateIn}>
           <BodyText size={12} weight="semibold" color={ON_INK_SOFT} style={styles.kicker}>
