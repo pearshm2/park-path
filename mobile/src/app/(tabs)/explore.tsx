@@ -231,7 +231,12 @@ export default function ExploreScreen() {
   /** Which park is on top of the deck, by id, so it survives list changes. */
   const [deckTopId, setDeckTopId] = useState<string | null>(null);
   /** Lets the user reopen the key while the sheet is open. */
-  const [keyOpen, setKeyOpen] = useState(false);
+  /**
+   * Bumped to restart the card deck on the top card: a pin tapped in the
+   * region in focus brings its card up, and the deck only reads which card
+   * to show when it starts.
+   */
+  const [deckJump, setDeckJump] = useState(0);
   /** Bumped when the sheet is minimised, to undo any pinch on the map. */
   const [recenter, setRecenter] = useState(0);
   /** The key folded away with the sheet down, for more room (stays as set). */
@@ -471,7 +476,6 @@ export default function ExploreScreen() {
 
   function openSheet(open: boolean) {
     setSheetOpen(open);
-    setKeyOpen(false);
     // Closing tucks the cards away and recenters the map (undoing any
     // pinch), staying on the region in focus: "Full map" (or tapping the
     // park's pin again) zooms back out.
@@ -736,12 +740,19 @@ export default function ExploreScreen() {
               doesn't crowd out the map it explains. */}
           <CapTextScale max={1.1}>
             <MapKey
-              collapsed={sheetOpen ? !keyOpen : keyFolded}
+              // The key and the open sheet never share the screen: the sheet
+              // folds the key, and opening the key minimises the sheet.
+              collapsed={sheetOpen || keyFolded}
               room={keyRoom}
               showMatches={matchIds.size > 0}
-              onToggle={() =>
-                sheetOpen ? setKeyOpen((open) => !open) : setKeyFolded((folded) => !folded)
-              }
+              onToggle={() => {
+                if (sheetOpen) {
+                  setKeyFolded(false);
+                  openSheet(false);
+                } else {
+                  setKeyFolded((folded) => !folded);
+                }
+              }}
             />
           </CapTextScale>
         </View>
@@ -834,6 +845,7 @@ export default function ExploreScreen() {
                 // Another park in the same region: bring its card to the top
                 // (opening the sheet, if it was minimised over the region).
                 setDeckTopId(site.id);
+                setDeckJump((n) => n + 1);
                 if (!sheetOpen) openSheet(true);
               } else {
                 focusPark(site);
@@ -892,7 +904,7 @@ export default function ExploreScreen() {
             <SectionDeck
               // New sections (another view, other filters, zooming onto a
               // region and back) start a fresh deck on the same card.
-              key={`${scope}:${deckSections.map((section) => `${section.key}${section.items.length}`).join()}`}
+              key={`${scope}:${deckJump}:${deckSections.map((section) => `${section.key}${section.items.length}`).join()}`}
               sections={deckSections}
               activeId={deck[deckIndex]?.site.id}
               keyOf={(item) => item.site.id}

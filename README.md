@@ -2,7 +2,7 @@
 
 [Team Notes](https://github.com/pearshm2/park-path/wiki/ParkPath-Team-Reflective-Notes)
 
-ParkPath — a recommendation engine that suggests your next national park using three signals: your preferences (terrain, activities, crowd tolerance), proximity, and collaborative filtering from similar travelers. Paired with a memory-logging feature (trip photos/journals feed back into future recommendations).
+ParkPath — a recommendation engine that suggests your next national park from a short quiz: the scenery you like, when you travel, how busy you like it, and how far it is from you. It learns from your trip journal: parks you've visited move down, terrains you rated highly get a boost, and it suggests something different to try. A "friends' picks" signal is planned. Paired with a trip journal (photos, videos and notes, shared with friends) and a passport of the parks you've been to.
 
 ## Structure
 - `mobile/` – React Native + Expo app (TypeScript)

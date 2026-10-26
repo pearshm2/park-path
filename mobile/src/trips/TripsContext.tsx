@@ -76,7 +76,8 @@ export type TripEntry = {
   rating: number | null;
   /** Trails or spots they loved, shown on the entry and in friends' feeds. */
   trails: string[];
-  /** Who can see it: only you, or your friends too. */
+  /** Who can see it. New trips from the app are always shared with friends;
+   *  older ones may still be private. */
   visibility: Visibility;
   /**
    * A photo of the park's official stamp in a Passport To Your National
