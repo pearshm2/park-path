@@ -95,6 +95,9 @@ import { CapTextScale, colors, radius, shadow, space, useTextScale } from '../..
 const DIFFERENT_AT = 3;
 /** How many recommendations get a numbered pin and a card. */
 const TOP_N = 10;
+/** Stand-ins while a query has no data, kept stable so memos don't rerun. */
+const NO_SITES: Site[] = [];
+const NO_MATCHES: Recommendation[] = [];
 
 /** Albers USA is roughly 1.6 wide to 1 tall; a touch taller leaves room for Alaska. */
 const MAP_ASPECT = 1.5;
@@ -244,22 +247,34 @@ export default function ExploreScreen() {
   const [filterOpen, setFilterOpen] = useState(false);
   const router = useRouter();
 
-  const { data: sharedParks = [] } = useQuery({
+  const parksQuery = useQuery({
     queryKey: ['sites', 'parks'],
     queryFn: () => listSites('parks'),
   });
+  const sharedParks = parksQuery.data ?? NO_SITES;
 
-  const { data: sharedSites = [] } = useQuery({
+  const sitesQuery = useQuery({
     queryKey: ['sites', 'all'],
     queryFn: () => listSites('all'),
   });
+  const sharedSites = sitesQuery.data ?? NO_SITES;
 
   // Scored across every site so wishlist cards and search results have
   // a match too; the picks themselves are drawn from the parks only.
   // Signed in, the engine also uses your trips (visited parks move down),
   // so the list is refetched when a trip is logged.
   const { visitedIds, visitSummary, entries: tripEntries } = useTrips();
-  const { data: sharedMatches = [] } = useRecommendations();
+  const matchesQuery = useRecommendations();
+  const sharedMatches = matchesQuery.data ?? NO_MATCHES;
+  // Without the API the map and cards would just sit empty, so say so and
+  // offer to try again. Only failed queries are refetched.
+  const failedQueries = [parksQuery, sitesQuery, matchesQuery].filter((query) => query.isError);
+  const [retrying, setRetrying] = useState(false);
+  async function retry() {
+    setRetrying(true);
+    await Promise.all(failedQueries.map((query) => query.refetch()));
+    setRetrying(false);
+  }
 
   // The site list is shared and carries no per-person status, so your
   // wishlist is applied here, once, and everything below (map pins, cards,
@@ -681,6 +696,25 @@ export default function ExploreScreen() {
           </View>
         </View>
       </View>
+
+      {failedQueries.length > 0 ? (
+        <View style={styles.offlineBar} accessibilityRole="alert">
+          <BodyText size={13} color={colors.neutral[100]} style={styles.undoText}>
+            {"Couldn't reach ParkPath. Check your connection."}
+          </BodyText>
+          <Pressable
+            onPress={retry}
+            disabled={retrying}
+            hitSlop={10}
+            accessibilityRole="button"
+            accessibilityLabel="Try loading the parks again"
+          >
+            <BodyText size={13} weight="bold" color={colors.accentRamp[300]}>
+              {retrying ? 'Trying…' : 'Try again'}
+            </BodyText>
+          </Pressable>
+        </View>
+      ) : null}
 
       {/* The stage: key and map, with the card sheet over its bottom edge.
           The map draws behind the key and the sheet (its bleed), so zoomed
@@ -1797,6 +1831,18 @@ const styles = StyleSheet.create({
   },
   undoText: {
     flex: 1,
+  },
+  // The undo bar's look, in the flow under the header instead of floating.
+  offlineBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space[3],
+    marginHorizontal: space[4],
+    marginTop: space[2],
+    paddingVertical: space[3],
+    paddingHorizontal: space[4],
+    borderRadius: radius.md,
+    backgroundColor: colors.neutral[900],
   },
   empty: {
     marginHorizontal: space[4],

@@ -196,11 +196,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!token) return;
       await deleteAccountRequest(token, confirm, password);
       // What this phone kept for the account (see TripsContext, QuizContext,
-      // FriendWatcher), so nothing of it lingers.
+      // FriendWatcher, useFriendsBadge), so nothing of it lingers.
       const id = readTokenSubject(token) ?? (user ? String(user.id) : null);
       if (id) {
-        for (const key of ['trips', 'tripDeletes', 'tripDraft', 'friendsSeen']) removeText(`parkpath.${key}.${id}`);
+        for (const key of ['trips', 'tripDeletes', 'tripDraft', 'friendsSeen', 'friendsViewed']) {
+          removeText(`parkpath.${key}.${id}`);
+        }
         await removeItem(`parkpath.quizAnswers.${id}`);
+        await removeItem(`parkpath.quizPending.${id}`);
+        await removeItem(`parkpath.snoozed.${id}`);
       }
       await clearToken();
       setToken(null);

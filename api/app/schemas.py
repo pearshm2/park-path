@@ -210,6 +210,31 @@ class QuizAnswers(BaseModel):
         return value
 
 
+class SavedQuiz(QuizAnswers):
+    """The quiz as GET/PUT /quiz keep it: the answers plus the zip code they gave."""
+
+    # Null if they skipped it. The app turns it into a Location itself.
+    zip: str | None = Field(default=None, pattern=r"^\d{5}$")
+
+
+# --- Snoozes (GET/PUT/DELETE /snoozes) ---------------------------------------
+
+
+class SnoozeIn(BaseModel):
+    """
+    Optional body for PUT /snoozes/{park_code}. Without `until` the park is
+    set aside for the usual 30 days; with it (a snooze carried over from
+    the phone), until then, but never more than 30 days out.
+    """
+
+    until: datetime | None = None
+
+
+class SnoozeOut(BaseModel):
+    park_code: str
+    until: datetime
+
+
 class Location(BaseModel):
     """Where the person starts, already converted from their zip code by the app."""
 

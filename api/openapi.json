@@ -1135,6 +1135,233 @@
         }
       }
     },
+    "/snoozes": {
+      "get": {
+        "tags": [
+          "snoozes"
+        ],
+        "summary": "List Snoozes",
+        "operationId": "list_snoozes_snoozes_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/SnoozeOut"
+                  },
+                  "type": "array",
+                  "title": "Response List Snoozes Snoozes Get"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      }
+    },
+    "/snoozes/{park_code}": {
+      "put": {
+        "tags": [
+          "snoozes"
+        ],
+        "summary": "Snooze",
+        "operationId": "snooze_snoozes__park_code__put",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "park_code",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Park Code"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/SnoozeIn"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SnoozeOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "snoozes"
+        ],
+        "summary": "Unsnooze",
+        "operationId": "unsnooze_snoozes__park_code__delete",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "park_code",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Park Code"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/quiz": {
+      "get": {
+        "tags": [
+          "quiz"
+        ],
+        "summary": "Read Quiz",
+        "operationId": "read_quiz_quiz_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/SavedQuiz"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Response Read Quiz Quiz Get"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "quiz"
+        ],
+        "summary": "Save Quiz",
+        "operationId": "save_quiz_quiz_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SavedQuiz"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SavedQuiz"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "quiz"
+        ],
+        "summary": "Forget Quiz",
+        "operationId": "forget_quiz_quiz_delete",
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      }
+    },
     "/trips": {
       "post": {
         "tags": [
@@ -2679,6 +2906,69 @@
         ],
         "title": "RoadOut"
       },
+      "SavedQuiz": {
+        "properties": {
+          "terrains": {
+            "items": {
+              "type": "string",
+              "enum": [
+                "mountain",
+                "canyon",
+                "desert",
+                "forest",
+                "coast",
+                "water"
+              ]
+            },
+            "type": "array",
+            "minItems": 1,
+            "title": "Terrains"
+          },
+          "seasons": {
+            "items": {
+              "type": "string",
+              "enum": [
+                "winter",
+                "spring",
+                "summer",
+                "fall"
+              ]
+            },
+            "type": "array",
+            "maxItems": 4,
+            "title": "Seasons"
+          },
+          "crowds": {
+            "type": "string",
+            "enum": [
+              "icons",
+              "either",
+              "quiet"
+            ],
+            "title": "Crowds"
+          },
+          "zip": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^\\d{5}$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Zip"
+          }
+        },
+        "type": "object",
+        "required": [
+          "terrains",
+          "seasons",
+          "crowds"
+        ],
+        "title": "SavedQuiz",
+        "description": "The quiz as GET/PUT /quiz keep it: the answers plus the zip code they gave."
+      },
       "SignalScores": {
         "properties": {
           "distance": {
@@ -2930,6 +3220,44 @@
         ],
         "title": "SiteOut",
         "description": "One NPS site. Curated fields are null for sites nobody has filled in\nyet (most of the non-park units), so clients must handle missing values."
+      },
+      "SnoozeIn": {
+        "properties": {
+          "until": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Until"
+          }
+        },
+        "type": "object",
+        "title": "SnoozeIn",
+        "description": "Optional body for PUT /snoozes/{park_code}. Without `until` the park is\nset aside for the usual 30 days; with it (a snooze carried over from\nthe phone), until then, but never more than 30 days out."
+      },
+      "SnoozeOut": {
+        "properties": {
+          "park_code": {
+            "type": "string",
+            "title": "Park Code"
+          },
+          "until": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Until"
+          }
+        },
+        "type": "object",
+        "required": [
+          "park_code",
+          "until"
+        ],
+        "title": "SnoozeOut"
       },
       "Token": {
         "properties": {

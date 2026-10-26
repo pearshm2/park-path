@@ -17,6 +17,7 @@ import Svg, { Circle, Path } from 'react-native-svg';
 
 import { useAuth } from '../../auth/AuthContext';
 import { BAR_HEIGHT, RAISE, tabBarBottom } from '../../components/tabBar';
+import { useFriendsBadge } from '../../friends/useFriendsBadge';
 import { useQuiz } from '../../quiz/QuizContext';
 import { colors, fonts, radius, scaleType, shadow, space, useTextScale } from '../../theme';
 
@@ -161,6 +162,8 @@ type TabBarProps = Parameters<NonNullable<ComponentProps<typeof Tabs>['tabBar']>
 
 /** The tab drawn as the raised circle. */
 const CENTER_ROUTE = 'explore';
+/** The tab that carries a number for new requests and friends. */
+const FRIENDS_ROUTE = 'friends';
 
 const CIRCLE = 54;
 /** A ring in the page colour around the circle, which reads as a notch in the bar. */
@@ -183,6 +186,8 @@ function FloatingTabBar({ state, descriptors, navigation, insets }: TabBarProps)
 
   const centerIndex = state.routes.findIndex((route) => route.name === CENTER_ROUTE);
   const centerFocused = state.index === centerIndex;
+  const friendsFocused = state.routes[state.index]?.name === FRIENDS_ROUTE;
+  const friendsBadge = useFriendsBadge(friendsFocused);
 
   const scale = useTextScale();
   return (
@@ -198,6 +203,9 @@ function FloatingTabBar({ state, descriptors, navigation, insets }: TabBarProps)
           const focused = state.index === index;
           const center = index === centerIndex;
           const color = focused ? colors.accent : colors.neutral[500];
+          // Not on the tab you're already looking at.
+          const badge = route.name === FRIENDS_ROUTE && !focused ? friendsBadge : 0;
+          const title = options.title ?? route.name;
 
           return (
             <Pressable
@@ -206,7 +214,7 @@ function FloatingTabBar({ state, descriptors, navigation, insets }: TabBarProps)
               onLongPress={() => navigation.emit({ type: 'tabLongPress', target: route.key })}
               accessibilityRole="tab"
               accessibilityState={{ selected: focused }}
-              accessibilityLabel={options.title ?? route.name}
+              accessibilityLabel={badge > 0 ? `${title}, ${badge} new` : title}
               style={styles.tab}
             >
               {/* The centre slot only holds the dot, level with the others';
@@ -215,9 +223,16 @@ function FloatingTabBar({ state, descriptors, navigation, insets }: TabBarProps)
                 <View style={styles.centerSpacer} />
               ) : (
                 <>
-                  {options.tabBarIcon?.({ focused, color, size: 23 })}
+                  <View>
+                    {options.tabBarIcon?.({ focused, color, size: 23 })}
+                    {badge > 0 ? (
+                      <View style={styles.badge}>
+                        <Text style={styles.badgeText}>{badge > 9 ? '9+' : badge}</Text>
+                      </View>
+                    ) : null}
+                  </View>
                   <Text style={[styles.label, scaleType(styles.label, scale), { color }]} numberOfLines={1}>
-                    {options.title ?? route.name}
+                    {title}
                   </Text>
                 </>
               )}
@@ -299,6 +314,27 @@ const styles = StyleSheet.create({
   },
   dotActive: {
     opacity: 1,
+  },
+  badge: {
+    position: 'absolute',
+    top: -5,
+    right: -10,
+    minWidth: 17,
+    height: 17,
+    paddingHorizontal: 4,
+    borderRadius: radius.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.accent,
+    // A ring in the bar's colour, so it reads as sitting on the icon.
+    borderWidth: 1.5,
+    borderColor: colors.neutral[100],
+  },
+  badgeText: {
+    fontFamily: fonts.bodySemibold,
+    fontSize: 10,
+    lineHeight: 12,
+    color: colors.neutral[100],
   },
   centerRing: {
     position: 'absolute',

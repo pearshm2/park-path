@@ -5,8 +5,8 @@
  * The server keeps a trip's park, date, title, notes, rating, trails, who
  * was there and who can see it (always friends, from the app), and its
  * photos and videos with their captions. Those go to S3 by a signed upload
- * (POST /trips/photos/upload-url), which the app doesn't call yet, so for
- * now they stay on the phone; see trips/TripsContext.tsx.
+ * (POST /trips/photos/upload-url) before the trip is sent; see
+ * trips/TripsContext.tsx.
  */
 
 import { ApiError, request } from './client';
