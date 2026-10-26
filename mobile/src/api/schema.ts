@@ -901,6 +901,11 @@ export interface components {
             signals: components["schemas"]["SignalScores"];
             /** Visited */
             visited: boolean;
+            /**
+             * Different
+             * @default false
+             */
+            different: boolean;
         };
         /** RecommendationRequest */
         RecommendationRequest: {

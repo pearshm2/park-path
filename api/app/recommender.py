@@ -114,6 +114,9 @@ class SiteData:
     terrain_group: str | None
     seasons: list[str] | None
     annual_visits_millions: float | None
+    # A national park (not a monument, seashore, ...); only these can be
+    # "something different", since the app's top picks are parks.
+    is_named_park: bool = False
 
     @property
     def is_curated(self) -> bool:
@@ -338,15 +341,49 @@ def rank(
                 "reason": reason,
                 "signals": {k: None if v is None else round(v, 3) for k, v in signals.items()},
                 "visited": visited,
-                # Used for sorting only; not part of the response.
+                "different": False,
+                # Used for picking and sorting only; not part of the response.
+                "_site": site,
                 "_visits": site.annual_visits_millions or 0,
                 "_name": site.name,
             }
         )
 
+    if history:
+        flag_something_different(results, history, answers.terrains)
+
     # Scored sites first (best score, then the better-known site), then the
     # unscored ones alphabetically.
     results.sort(key=lambda r: (r["score"] is None, -(r["score"] or 0), -r["_visits"], r["_name"]))
     for r in results:
-        del r["_visits"], r["_name"]
+        del r["_visits"], r["_name"], r["_site"]
     return results
+
+
+def flag_something_different(results: list[dict], history: dict[str, Visit], wanted: list[str]):
+    """
+    Mark the best-scoring national park whose terrain is new to them: no
+    trip there yet, and not one of their quiz answers. Its reason says so.
+    Nothing is marked if every terrain is covered.
+    """
+    tried = {
+        TERRAIN_ALIASES.get(v.terrain_group, v.terrain_group)
+        for v in history.values()
+        if v.terrain_group is not None
+    }
+    candidates = [
+        r
+        for r in results
+        if r["score"] is not None
+        and r["_site"].is_named_park
+        and not r["visited"]
+        and r["_site"].quiz_terrain not in tried
+        and r["_site"].quiz_terrain not in wanted
+    ]
+    if not candidates:
+        return
+    best = max(candidates, key=lambda r: (r["score"], r["_visits"]))
+    site = best["_site"]
+    label = TERRAIN_LABELS.get(site.terrain_group, site.terrain_group.title()).lower()
+    best["different"] = True
+    best["reason"] = f"Something different: no {label} parks in your trips yet"

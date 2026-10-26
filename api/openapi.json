@@ -2499,6 +2499,11 @@
           "visited": {
             "type": "boolean",
             "title": "Visited"
+          },
+          "different": {
+            "type": "boolean",
+            "title": "Different",
+            "default": false
           }
         },
         "type": "object",

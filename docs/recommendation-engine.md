@@ -38,6 +38,14 @@ The score is built in three steps:
    next?". Unvisited parks sharing a terrain with a trip they rated 4–5 stars
    get `+0.05`, and their reason says so ("Like Zion, which you loved").
 
+4. **Something different** (signed-in users with at least one trip): the
+   best-scoring national park whose terrain they have neither visited nor
+   picked in the quiz gets `"different": true` and the reason "Something
+   different: no desert parks in your trips yet". Its score isn't changed;
+   the app moves it to #4 of the top 10 so people are nudged to try new kinds
+   of parks. At most one site is flagged, and none when every terrain is
+   covered.
+
 ### Signals that aren't in use
 
 A signal is left out, and its weight spread over the rest, when:
@@ -95,7 +103,8 @@ With no strong match it says "A partial match on your answers".
     "score": 0.885,
     "reason": "Mountain terrain, about 150 miles away",
     "signals": { "distance": 0.978, "terrain": 1.0, "season": 1.0, "crowds": 0.008 },
-    "visited": false
+    "visited": false,
+    "different": false
   }
 ]
 ```
@@ -112,7 +121,7 @@ bad or expired token just gives the anonymous results, never an error.
 
 ## Not yet (planned)
 
-- Thumbs-down / feedback, using the `site_feedback` and `user_tag_weights` tables
+- Star ratings and tags on trips nudging the signals (designed; after the demo)
 - A quieter alternative suggestion per site
 - Per-person signal order from a Settings screen (the weights are already one config)
 - Accessibility, once there's real per-park data

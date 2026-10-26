@@ -1,12 +1,12 @@
 /**
  * A site's page, opened from its card's expand button: the photo, the NPS
- * description, the quick actions (Directions, Park map, Save) and every
- * fact we have, with what's still to come said plainly.
+ * description, the quick actions (Directions, Park map, Save), how well it
+ * matches you (overall and on each of the engine's four signals), and every
+ * fact we have.
  *
- * Still to come (week 5 and after): the four match signals, current
- * conditions and alerts, camping and lodging, fees and timed entry, which
- * mostly need the NPS Data API, and accessibility once there's real
- * per-park data.
+ * Still to come: current conditions and alerts, camping and lodging, fees
+ * and timed entry, which mostly need the NPS Data API, and accessibility
+ * once there's real per-park data.
  */
 
 import { useQuery } from '@tanstack/react-query';
@@ -15,8 +15,9 @@ import { Image, Linking, Pressable, ScrollView, StyleSheet, View } from 'react-n
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { listSites } from '../../api/parks';
+import { useRecommendations, type Recommendation, type SignalScores } from '../../api/recommendations';
 import { BodyText, Button, Heading, Kicker } from '../../components';
-import { BookmarkIcon } from '../../components/ParkCard';
+import { BookmarkIcon, matchPercent } from '../../components/ParkCard';
 import { DirectionsIcon, MapIcon, QuickAction } from '../../components/QuickAction';
 import { Tag } from '../../components/Tag';
 import { crowdLabel, factRows } from '../../data/siteFacts';
@@ -39,6 +40,9 @@ export default function SiteScreen() {
   // Great Smoky Mountains, the busiest park, is the crowding yardstick.
   const referenceVisits = sites?.find((candidate) => candidate.id === 'grsm')?.vis ?? undefined;
   const saved = site ? wishlistIds.has(site.id) : false;
+  // Same query as Explore, so this is usually already cached.
+  const { data: matches, isPending: matchesPending } = useRecommendations();
+  const match = matches?.find((candidate) => candidate.site.id === id);
 
   return (
     <ScrollView
@@ -120,22 +124,21 @@ export default function SiteScreen() {
                 <BodyText size={13} weight="medium" color={colors.neutral[700]} style={styles.rowLabel}>
                   {row.label}
                 </BodyText>
-                <BodyText size={13} weight="semibold" color={row.color} style={styles.rowValue}>
-                  {row.value}
-                </BodyText>
+                <View style={styles.rowValue}>
+                  <BodyText size={13} weight="semibold" color={row.color} style={styles.rowValueText}>
+                    {row.value}
+                  </BodyText>
+                  {row.note ? (
+                    <BodyText size={11.5} color={colors.neutral[600]} style={styles.rowValueText}>
+                      {row.note}
+                    </BodyText>
+                  ) : null}
+                </View>
               </View>
             ))}
           </View>
 
-          <View style={styles.card}>
-            <BodyText size={13.5} weight="semibold">
-              Coming next
-            </BodyText>
-            <BodyText size={13} lineHeightRatio={1.5} color={colors.neutral[700]}>
-              Current conditions and alerts, camping and lodging, fees and timed entry, and how
-              well it matches you on every signal. Accessibility details coming soon.
-            </BodyText>
-          </View>
+          <MatchCard match={match} pending={matchesPending} />
 
           {site.npsUrl ? (
             <Button
@@ -152,6 +155,76 @@ export default function SiteScreen() {
         </BodyText>
       )}
     </ScrollView>
+  );
+}
+
+/** The engine's four signals, in the order they weigh, with what each measures. */
+const SIGNALS: { key: keyof SignalScores; label: string; about: string }[] = [
+  { key: 'terrain', label: 'Terrain', about: 'The scenery you picked' },
+  { key: 'distance', label: 'Distance', about: 'How far it is from you' },
+  { key: 'season', label: 'Season', about: 'When you like to travel' },
+  { key: 'crowds', label: 'Crowds', about: 'How busy you like it' },
+];
+
+/** How well the site matches you: the overall score, why, and each signal as a bar. */
+function MatchCard({ match, pending }: { match: Recommendation | undefined; pending: boolean }) {
+  if (!match) {
+    return (
+      <View style={styles.card}>
+        <BodyText size={10} weight="semibold" color={colors.neutral[600]} style={styles.cardTitle}>
+          YOUR MATCH
+        </BodyText>
+        <BodyText size={13} lineHeightRatio={1.5} color={colors.neutral[700]}>
+          {pending
+            ? 'Working out how well it fits you…'
+            : "We don't have match details for this site yet."}
+        </BodyText>
+      </View>
+    );
+  }
+  return (
+    <View style={styles.card}>
+      <BodyText size={10} weight="semibold" color={colors.neutral[600]} style={styles.cardTitle}>
+        YOUR MATCH
+      </BodyText>
+      <View style={styles.matchHead}>
+        <Heading size={30} color={colors.accentRamp[700]}>
+          {`${matchPercent(match.score)}%`}
+        </Heading>
+        <BodyText size={13} weight="medium" lineHeightRatio={1.4} color={colors.accentRamp[800]} style={styles.matchReason}>
+          {match.reason}
+        </BodyText>
+      </View>
+      {SIGNALS.map(({ key, label, about }) => {
+        const value = match.signals[key];
+        return (
+          <View key={key} style={styles.signal}>
+            <View style={styles.signalText}>
+              <BodyText size={13} weight="semibold" color={colors.neutral[800]}>
+                {label}
+              </BodyText>
+              <BodyText size={11.5} color={colors.neutral[600]}>
+                {about}
+              </BodyText>
+            </View>
+            {value === null ? (
+              <BodyText size={12} color={colors.neutral[500]} style={styles.signalValue}>
+                No data
+              </BodyText>
+            ) : (
+              <>
+                <View style={styles.bar}>
+                  <View style={[styles.barFill, { width: `${Math.round(value * 100)}%` }]} />
+                </View>
+                <BodyText size={12} weight="semibold" color={colors.neutral[800]} style={styles.signalValue}>
+                  {`${Math.round(value * 100)}%`}
+                </BodyText>
+              </>
+            )}
+          </View>
+        );
+      })}
+    </View>
   );
 }
 
@@ -214,21 +287,60 @@ const styles = StyleSheet.create({
   },
   row: {
     flexDirection: 'row',
-    alignItems: 'baseline',
+    alignItems: 'flex-start',
     gap: space[3],
     paddingBottom: 7,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.divider,
   },
+  // The label keeps its width; a long value wraps instead of squeezing it.
   rowLabel: {
-    flex: 1,
+    flexShrink: 0,
   },
   rowValue: {
+    flex: 1,
+    alignItems: 'flex-end',
+  },
+  rowValueText: {
     textAlign: 'right',
-    flexShrink: 1,
   },
   nps: {
     alignSelf: 'flex-start',
     marginTop: space[3],
+  },
+  matchHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space[3],
+  },
+  matchReason: {
+    flex: 1,
+  },
+  signal: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space[3],
+    paddingTop: 6,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.divider,
+  },
+  signalText: {
+    width: 128,
+  },
+  bar: {
+    flex: 1,
+    height: 8,
+    borderRadius: radius.pill,
+    backgroundColor: colors.neutral[200],
+    overflow: 'hidden',
+  },
+  barFill: {
+    height: '100%',
+    borderRadius: radius.pill,
+    backgroundColor: colors.accentRamp[600],
+  },
+  signalValue: {
+    width: 44,
+    textAlign: 'right',
   },
 });

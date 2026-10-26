@@ -4,7 +4,8 @@ Recommendation route: POST /recommendations.
 Works for everyone: the quiz answers arrive with each request, so no
 account is needed. When the request carries a valid sign-in token, the
 engine also uses that person's logged trips (visited parks move down;
-terrains they loved get a small boost). All the scoring lives in
+terrains they loved get a small boost; one park with a terrain new to them
+is flagged as "something different"). All the scoring lives in
 app/recommender.py; this file only loads the data and hands it over.
 """
 
@@ -51,6 +52,7 @@ def recommend(
             terrain_group=s.terrain_group,
             seasons=s.seasons,
             annual_visits_millions=s.annual_visits_millions,
+            is_named_park=s.is_named_park,
         )
         for s in db.scalars(select(Site)).all()
     ]
