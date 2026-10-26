@@ -22,13 +22,26 @@
 
 import { createContext, useCallback, useContext, useMemo, useRef, useState, type ReactNode } from 'react';
 
-import { achievements, regionAchievementTitle, siteAchievements } from '../data/achievements';
+import {
+  achievements,
+  regionAchievementTitle,
+  siteAchievements,
+  togetherAchievements,
+} from '../data/achievements';
 import type { Site } from '../data/parks';
 import { completedRegions, REGIONS, type RegionId } from '../data/regions';
 
 export type Notice =
   | { id: string; kind: 'achievement'; title: string; body: string; need: number }
-  | { id: string; kind: 'region'; title: string; body: string; region: RegionId };
+  | { id: string; kind: 'region'; title: string; body: string; region: RegionId }
+  /** About a friend: a request, or one accepted. Opens Friends. */
+  | { id: string; kind: 'friend'; title: string; body: string };
+
+/** A notice to show, before it's given an id. */
+export type NewNotice =
+  | { kind: 'achievement'; title: string; body: string; need: number }
+  | { kind: 'region'; title: string; body: string; region: RegionId }
+  | { kind: 'friend'; title: string; body: string };
 
 type Held = {
   /** A stamp earned and not yet seen pressed. */
@@ -53,10 +66,15 @@ type CelebrationsValue = {
     parks: Site[];
     /** Every NPS site, for the all-sites achievements. */
     allSites: Site[];
+    /** Trips with a friend tagged before this one, and whether this one has one. */
+    togetherBefore: number;
+    withFriend: boolean;
   }) => string | null;
   release: (what: { stamp?: string; region?: RegionId; achievements?: true }) => void;
   /** Close the notification showing; the next (if any) follows. */
   dismissNotice: () => void;
+  /** Show notifications that aren't about a trip (friends, say). */
+  notify: (notices: NewNotice[]) => void;
 };
 
 const NO_HOLDS: Held = { stamp: null, regions: [], achievementsFrom: null };
@@ -73,9 +91,27 @@ export function CelebrationsProvider({ children }: { children: ReactNode }) {
   const [paused, setPaused] = useState(false);
   const nextId = useRef(0);
 
-  const celebrate = useCallback<CelebrationsValue['celebrate']>(({ siteId, visitedBefore, parks, allSites }) => {
-    // Only a first visit earns anything.
-    if (visitedBefore.has(siteId)) return null;
+  const celebrate = useCallback<CelebrationsValue['celebrate']>(
+    ({ siteId, visitedBefore, parks, allSites, togetherBefore, withFriend }) => {
+    // A trip with a friend along can earn one of the together tiers, on a
+    // park's first visit or any later one.
+    const togetherNotices: Notice[] = withFriend
+      ? togetherAchievements()
+          .filter((tier) => tier.need === togetherBefore + 1)
+          .map((tier) => ({
+            id: `n${nextId.current++}`,
+            kind: 'achievement' as const,
+            title: `Achievement earned: ${tier.title}`,
+            body: `${tier.body} Tap to see it in your Passport.`,
+            need: tier.need,
+          }))
+      : [];
+
+    // Otherwise only a first visit earns anything.
+    if (visitedBefore.has(siteId)) {
+      if (togetherNotices.length > 0) setQueue((q) => [...q, ...togetherNotices]);
+      return null;
+    }
 
     // Any NPS site counts towards the all-sites tiers.
     const siteIds = new Set(allSites.map((s) => s.id));
@@ -93,9 +129,10 @@ export function CelebrationsProvider({ children }: { children: ReactNode }) {
       : [];
 
     const park = parks.find((p) => p.id === siteId);
-    // Not a national park: no stamp, just any site milestone.
+    // Not a national park: no stamp, just any site or together milestone.
     if (!park) {
-      if (siteNotices.length > 0) setQueue((q) => [...q, ...siteNotices]);
+      const earned = [...siteNotices, ...togetherNotices];
+      if (earned.length > 0) setQueue((q) => [...q, ...earned]);
       return null;
     }
 
@@ -116,7 +153,7 @@ export function CelebrationsProvider({ children }: { children: ReactNode }) {
         });
       }
     }
-    notices.push(...siteNotices);
+    notices.push(...siteNotices, ...togetherNotices);
     const doneBefore = completedRegions(before);
     const newRegions = [...completedRegions(after)].filter((r) => !doneBefore.has(r));
     for (const regionId of newRegions) {
@@ -140,7 +177,9 @@ export function CelebrationsProvider({ children }: { children: ReactNode }) {
     setQueue((q) => [...q, ...notices]);
     setPaused(true);
     return siteId;
-  }, []);
+    },
+    [],
+  );
 
   const release = useCallback<CelebrationsValue['release']>((what) => {
     setHeld((h) => ({
@@ -153,9 +192,13 @@ export function CelebrationsProvider({ children }: { children: ReactNode }) {
 
   const dismissNotice = useCallback(() => setQueue((q) => q.slice(1)), []);
 
+  const notify = useCallback<CelebrationsValue['notify']>((notices) => {
+    setQueue((q) => [...q, ...notices.map((n) => ({ ...n, id: `n${nextId.current++}` }) as Notice)]);
+  }, []);
+
   const value = useMemo<CelebrationsValue>(
-    () => ({ held, notice: paused ? null : (queue[0] ?? null), celebrate, release, dismissNotice }),
-    [held, paused, queue, celebrate, release, dismissNotice],
+    () => ({ held, notice: paused ? null : (queue[0] ?? null), celebrate, release, dismissNotice, notify }),
+    [held, paused, queue, celebrate, release, dismissNotice, notify],
   );
 
   return <CelebrationsContext.Provider value={value}>{children}</CelebrationsContext.Provider>;

@@ -32,7 +32,7 @@ export default function SiteScreen() {
   const { ids: wishlistIds, toggle: toggleWishlist } = useWishlist();
 
   // Same query key as Explore, so this is already cached.
-  const { data: sites, isPending } = useQuery({
+  const { data: sites, isPending, isError, isRefetching, refetch } = useQuery({
     queryKey: ['sites', 'all'],
     queryFn: () => listSites('all'),
   });
@@ -148,6 +148,20 @@ export default function SiteScreen() {
               style={styles.nps}
             />
           ) : null}
+        </>
+      ) : isError ? (
+        // Not "not found": the list never arrived, so offer to try again.
+        <>
+          <BodyText size={14} color={colors.neutral[700]} style={styles.description}>
+            {"Couldn't load this site. Check your connection."}
+          </BodyText>
+          <Button
+            label={isRefetching ? 'Trying…' : 'Try again'}
+            variant="ghost"
+            onPress={() => refetch()}
+            disabled={isRefetching}
+            style={styles.nps}
+          />
         </>
       ) : (
         <BodyText size={14} color={colors.neutral[700]} style={styles.description}>

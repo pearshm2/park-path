@@ -64,9 +64,17 @@ class User(Base):
     # Google's id for their account, once they've signed in with Google.
     google_sub: Mapped[str | None] = mapped_column(String(255), unique=True, index=True)
     hashed_password: Mapped[str] = mapped_column(String(255), nullable=False)
+    # Their onboarding quiz answers as GET/PUT /quiz serve them
+    # (schemas.SavedQuiz), so a new phone doesn't ask again. Null until taken.
+    quiz_answers: Mapped[dict | None] = mapped_column(JSONB)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(UTC)
     )
+
+    @property
+    def signs_in_with_google(self) -> bool:
+        """Linked to a Google account (and so may have no password they know)."""
+        return self.google_sub is not None
 
     @property
     def avatar_url(self) -> str | None:
@@ -259,6 +267,31 @@ class WishlistItem(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(UTC), server_default=func.now()
     )
+
+    site: Mapped[Site] = relationship()
+
+
+class Snooze(Base):
+    """
+    A park set aside with "Not for now": left out of the user's
+    recommendations in the app until `until`, then back. Not a dislike, so
+    the engine never sees it.
+
+    One row per (user, site); snoozing again moves `until` out. Rows past
+    `until` are simply ignored, and replaced on the next snooze.
+    """
+
+    __tablename__ = "snoozes"
+    __table_args__ = (UniqueConstraint("user_id", "site_id", name="uq_snoozes_user_site"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    site_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("sites.id", ondelete="CASCADE"), nullable=False
+    )
+    until: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
     site: Mapped[Site] = relationship()
 

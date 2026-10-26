@@ -136,7 +136,13 @@ export interface paths {
         get: operations["read_current_user_auth_me_get"];
         put?: never;
         post?: never;
-        delete?: never;
+        /**
+         * Delete Account
+         * @description Deletes the account for good: its trips (and their photos), comments,
+         *     friendships, wishlist and profile picture all go with it (the database
+         *     removes everything that belongs to a user along with them).
+         */
+        delete: operations["delete_account_auth_me_delete"];
         options?: never;
         head?: never;
         /** Update Current User */
@@ -446,6 +452,60 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/snoozes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Snoozes */
+        get: operations["list_snoozes_snoozes_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/snoozes/{park_code}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Snooze */
+        put: operations["snooze_snoozes__park_code__put"];
+        post?: never;
+        /** Unsnooze */
+        delete: operations["unsnooze_snoozes__park_code__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/quiz": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read Quiz */
+        get: operations["read_quiz_quiz_get"];
+        /** Save Quiz */
+        put: operations["save_quiz_quiz_put"];
+        post?: never;
+        /** Forget Quiz */
+        delete: operations["forget_quiz_quiz_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/trips": {
         parameters: {
             query?: never;
@@ -610,6 +670,16 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /**
+         * AccountDelete
+         * @description DELETE /auth/me: "DELETE" typed out, and the password (not for Google accounts).
+         */
+        AccountDelete: {
+            /** Confirm */
+            confirm: string;
+            /** Password */
+            password?: string | null;
+        };
         /** AchievementOut */
         AchievementOut: {
             /** Id */
@@ -938,6 +1008,23 @@ export interface components {
             paths: number[][][];
         };
         /**
+         * SavedQuiz
+         * @description The quiz as GET/PUT /quiz keep it: the answers plus the zip code they gave.
+         */
+        SavedQuiz: {
+            /** Terrains */
+            terrains: ("mountain" | "canyon" | "desert" | "forest" | "coast" | "water")[];
+            /** Seasons */
+            seasons: ("winter" | "spring" | "summer" | "fall")[];
+            /**
+             * Crowds
+             * @enum {string}
+             */
+            crowds: "icons" | "either" | "quiet";
+            /** Zip */
+            zip?: string | null;
+        };
+        /**
          * SignalScores
          * @description Each signal's match from 0 to 1, or null when it isn't in use.
          */
@@ -991,6 +1078,26 @@ export interface components {
             permit_required: boolean | null;
             /** Annual Visits Millions */
             annual_visits_millions: number | null;
+        };
+        /**
+         * SnoozeIn
+         * @description Optional body for PUT /snoozes/{park_code}. Without `until` the park is
+         *     set aside for the usual 30 days; with it (a snooze carried over from
+         *     the phone), until then, but never more than 30 days out.
+         */
+        SnoozeIn: {
+            /** Until */
+            until?: string | null;
+        };
+        /** SnoozeOut */
+        SnoozeOut: {
+            /** Park Code */
+            park_code: string;
+            /**
+             * Until
+             * Format: date-time
+             */
+            until: string;
         };
         /** Token */
         Token: {
@@ -1218,6 +1325,11 @@ export interface components {
             last_name: string;
             /** Avatar Url */
             avatar_url?: string | null;
+            /**
+             * Signs In With Google
+             * @default false
+             */
+            signs_in_with_google: boolean;
         };
         /**
          * UserUpdate
@@ -1459,6 +1571,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["UserOut"];
+                };
+            };
+        };
+    };
+    delete_account_auth_me_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AccountDelete"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -2072,6 +2215,161 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
+            };
+        };
+    };
+    list_snoozes_snoozes_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SnoozeOut"][];
+                };
+            };
+        };
+    };
+    snooze_snoozes__park_code__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                park_code: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["SnoozeIn"] | null;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SnoozeOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    unsnooze_snoozes__park_code__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                park_code: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_quiz_quiz_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SavedQuiz"] | null;
+                };
+            };
+        };
+    };
+    save_quiz_quiz_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SavedQuiz"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SavedQuiz"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    forget_quiz_quiz_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

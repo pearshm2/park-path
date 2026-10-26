@@ -3,17 +3,10 @@
 Work that's been deliberately deferred or cut, so it isn't forgotten. Move an
 item back into the active list when the team agrees to pick it up.
 
-Last updated: Oct 20.
+Last updated: Oct 24.
 
 ## Deferred: recommendation engine
 
-- **Feedback (thumbs up/down with reasons).** Thumbs up or down on a park,
-  then an optional follow-up asking what about it ("Too far", "Not my
-  scenery", "Wrong time of year", "Too crowded" / "Too obscure", and the
-  positive versions). Each answer nudges one signal or one value, by a small
-  capped step, so feedback never overrides the quiz. Stored per user in the
-  existing `site_feedback` and `user_tag_weights` tables (migration 0006).
-  Plan: build the backend framework first; the UI chips come later.
 - **Friends' picks signal.** "Your friends liked or visited this park,"
   from friends' wishlists and, later, trips, respecting `visibility.py`.
   Built as a fifth signal that returns "no data" until switched on, so it
@@ -38,6 +31,17 @@ than they help *choose* one, so they wait until the core is done.
   worth doing once the park page has a place to show them.
 - **Campgrounds and visitor centers** from the NPS API.
 
-## Proposed to cut or hide (not yet agreed by the team)
+## Cut (agreed by the team)
 
-- Password reset and Google sign-in: hide the buttons until there's a backend.
+- **Feedback (thumbs up/down with reasons).** Cut Oct 24. "Not for now"
+  (snooze a park for 30 days) is the only way to pass on a park, so the
+  engine never learns "I don't like this park at all" from one tap. The
+  `site_feedback` and `user_tag_weights` tables (migration 0006) stay
+  unused.
+
+## After the demo (agreed, not cut)
+
+- **Password reset.** Decided Oct 26: built after the Oct 28 demo, not cut.
+  Needs an email provider and `POST /auth/password-reset`; the app's screen
+  is ready, and its link comes back by setting `PASSWORD_RESET_ENABLED` in
+  `mobile/src/auth/AuthForm.tsx`.

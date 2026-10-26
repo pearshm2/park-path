@@ -25,6 +25,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { AuthProvider, useAuth } from '../auth/AuthContext';
 import { UsernamePrompt } from '../auth/UsernamePrompt';
+import { FriendWatcher } from '../friends/FriendWatcher';
 import { QuizProvider, useQuiz } from '../quiz/QuizContext';
 import { ArrivalBanner } from '../arrivals/ArrivalBanner';
 import { ArrivalsProvider } from '../arrivals/ArrivalsContext';
@@ -80,6 +81,8 @@ export default function RootLayout() {
                           and notifications of what a trip earned. */}
                       <ArrivalBanner />
                       <CelebrationBanner />
+                      {/* Friend requests and acceptances, as notifications. */}
+                      <FriendWatcher />
                       {/* Once, after Google sign-in makes a new account. */}
                       <UsernamePrompt />
                     </TextSizeProvider>

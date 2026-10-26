@@ -76,7 +76,10 @@ export function CommentsSheet({ trip, onClose }: { trip: TripOut; onClose: () =>
 
   return (
     <Modal visible transparent animationType="slide" onRequestClose={onClose} statusBarTranslucent>
-      <KeyboardAvoidingView style={styles.overlay} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+      {/* Android resizes the modal's window for the keyboard itself, so
+          'height' here moved the sheet a second time and it bounced up and
+          down while typing. Same as the app's other sheets. */}
+      <KeyboardAvoidingView style={styles.overlay} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel="Close comments" />
         <View style={[styles.sheet, { paddingBottom: insets.bottom + space[3] }]}>
           <View style={styles.handle} />

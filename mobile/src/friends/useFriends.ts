@@ -15,7 +15,7 @@ import {
   sendRequest, type FriendTarget } from '../api/friends';
 import { useAuth } from '../auth/AuthContext';
 
-export function useFriends() {
+export function useFriends({ pollMs }: { pollMs?: number } = {}) {
   const { token, userId } = useAuth();
   const queryClient = useQueryClient();
   const enabled = token !== null;
@@ -24,16 +24,22 @@ export function useFriends() {
     queryKey: ['friends', userId],
     queryFn: () => fetchFriends(token!),
     enabled,
+    // Kept fresh while the app is open, when asked (FriendWatcher).
+    refetchInterval: enabled && pollMs ? pollMs : false,
   });
   const incoming = useQuery({
     queryKey: ['friendRequests', 'incoming', userId],
     queryFn: () => fetchRequests(token!, 'incoming'),
     enabled,
+    // Kept fresh while the app is open, when asked (FriendWatcher).
+    refetchInterval: enabled && pollMs ? pollMs : false,
   });
   const outgoing = useQuery({
     queryKey: ['friendRequests', 'outgoing', userId],
     queryFn: () => fetchRequests(token!, 'outgoing'),
     enabled,
+    // Kept fresh while the app is open, when asked (FriendWatcher).
+    refetchInterval: enabled && pollMs ? pollMs : false,
   });
 
   // A new or removed friend changes the feed too.
@@ -67,6 +73,9 @@ export function useFriends() {
     outgoing: outgoing.data ?? [],
     loading: friends.isPending,
     error: friends.error ?? incoming.error ?? outgoing.error,
+    /** All three lists have loaded at least once. */
+    loaded: friends.isSuccess && incoming.isSuccess && outgoing.isSuccess,
+    refetch: () => Promise.all([friends.refetch(), incoming.refetch(), outgoing.refetch()]),
     send,
     refresh,
     accept,

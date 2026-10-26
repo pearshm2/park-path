@@ -12,8 +12,8 @@
  * the header and leave at the top of the screen.
  *
  * Every entry logs a visit, which is what marks a park visited across the
- * app. Entries sync with the server (trips/TripsContext.tsx); their photos
- * and videos stay on the phone until uploads to S3 are wired up.
+ * app. Entries sync with the server, photos and videos included
+ * (trips/TripsContext.tsx).
  *
  * Opened from a visited park's card: `entry` scrolls to that entry, and
  * `add` starts a new one for that park.
@@ -465,6 +465,10 @@ export default function TripsScreen() {
               visitedBefore: visitedIds,
               parks: sites.filter((s) => s.isNamedPark),
               allSites: sites,
+              // The journal before this save (an edit doesn't count again).
+              togetherBefore: entries.filter((e) => e.id !== entry.id && e.with.length > 0).length,
+              withFriend:
+                entry.with.length > 0 && !entries.some((e) => e.id === entry.id && e.with.length > 0),
             });
             if (stamp) {
               router.navigate({ pathname: '/passport', params: { show: 'stamp', park: stamp } });

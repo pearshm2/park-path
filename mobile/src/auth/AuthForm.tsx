@@ -49,6 +49,12 @@ const EMAIL_SHAPE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
  */
 const MIN_PASSWORD_LENGTH = 8;
 
+/**
+ * The API has no /auth/password-reset route yet, so the "Forgot password?"
+ * link is hidden. Turn this on when the route ships.
+ */
+const PASSWORD_RESET_ENABLED = false;
+
 type FieldErrors = {
   firstName?: string;
   lastName?: string;
@@ -312,7 +318,7 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
 
           {/* Sign-in only: there is nothing to recover while creating an
               account, and offering it there invites a wrong turn. */}
-          {!isSignUp ? (
+          {!isSignUp && PASSWORD_RESET_ENABLED ? (
             <View style={styles.forgotRow}>
               <Button
                 label="Forgot password?"

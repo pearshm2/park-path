@@ -8,7 +8,7 @@
 import { useRouter } from 'expo-router';
 import { useEffect } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
-import Animated, { SlideInUp, SlideOutUp } from 'react-native-reanimated';
+import Animated, { Easing, withTiming } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
 
@@ -17,6 +17,36 @@ import { BodyText } from '../components';
 import { playSound, tap } from '../lib/sounds';
 import { colors, radius, shadow, space } from '../theme';
 import { useCelebrations } from './CelebrationsContext';
+
+/**
+ * In: a gentle slide down from just above its place, fading in, easing to
+ * a stop with no overshoot. Out: back up the same way, a little quicker.
+ */
+const SLIDE = 90;
+const IN_MS = 420;
+const OUT_MS = 260;
+
+function slideIn() {
+  'worklet';
+  return {
+    initialValues: { opacity: 0, transform: [{ translateY: -SLIDE }] },
+    animations: {
+      opacity: withTiming(1, { duration: IN_MS * 0.7, easing: Easing.out(Easing.quad) }),
+      transform: [{ translateY: withTiming(0, { duration: IN_MS, easing: Easing.out(Easing.cubic) }) }],
+    },
+  };
+}
+
+function slideOut() {
+  'worklet';
+  return {
+    initialValues: { opacity: 1, transform: [{ translateY: 0 }] },
+    animations: {
+      opacity: withTiming(0, { duration: OUT_MS, easing: Easing.in(Easing.quad) }),
+      transform: [{ translateY: withTiming(-SLIDE, { duration: OUT_MS, easing: Easing.in(Easing.cubic) }) }],
+    },
+  };
+}
 
 /** How long a notification stays up untouched. */
 const SHOW_MS = 6000;
@@ -43,6 +73,8 @@ export function CelebrationBanner() {
     dismissNotice();
     if (notice.kind === 'achievement') {
       router.navigate({ pathname: '/passport', params: { show: 'achievements' } });
+    } else if (notice.kind === 'friend') {
+      router.navigate('/friends');
     } else {
       router.navigate({ pathname: '/passport', params: { show: 'region', region: notice.region } });
     }
@@ -51,19 +83,19 @@ export function CelebrationBanner() {
   return (
     <Animated.View
       key={notice.id}
-      entering={SlideInUp.springify().damping(18)}
-      exiting={SlideOutUp.duration(220)}
+      entering={slideIn}
+      exiting={slideOut}
       style={[styles.wrap, { top: insets.top + space[2] }]}
       pointerEvents="box-none"
     >
       <Pressable
         onPress={open}
         accessibilityRole="button"
-        accessibilityHint="Opens it in your Passport"
+        accessibilityHint={notice.kind === 'friend' ? 'Opens Friends' : 'Opens it in your Passport'}
         style={({ pressed }) => [styles.banner, pressed && styles.pressed]}
       >
         <View style={styles.badge}>
-          {notice.kind === 'achievement' ? <MedalIcon /> : <RegionIcon />}
+          {notice.kind === 'achievement' ? <MedalIcon /> : notice.kind === 'friend' ? <FriendIcon /> : <RegionIcon />}
         </View>
         <View style={styles.text}>
           <BodyText size={13.5} weight="bold" color={colors.neutral[100]} numberOfLines={1}>
@@ -89,6 +121,16 @@ function MedalIcon() {
       <Path d="M8 2.5l2.5 6M16 2.5l-2.5 6" stroke="#5c1316" strokeWidth={2.2} strokeLinecap="round" />
       <Path d="M12 9a6 6 0 100 12 6 6 0 000-12z" fill="#5c1316" />
       <Path d="M12 12.2l1 2 2.2.3-1.6 1.5.4 2.2-2-1.1-2 1.1.4-2.2-1.6-1.5 2.2-.3z" fill="#f3d27a" />
+    </Svg>
+  );
+}
+
+function FriendIcon() {
+  return (
+    <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
+      <Path d="M9 11a3.5 3.5 0 100-7 3.5 3.5 0 000 7z" fill="#5c1316" />
+      <Path d="M2.5 20c.8-3.6 3.3-5.5 6.5-5.5s5.7 1.9 6.5 5.5z" fill="#5c1316" />
+      <Path d="M18 8v6M15 11h6" stroke="#f3d27a" strokeWidth={2.2} strokeLinecap="round" />
     </Svg>
   );
 }

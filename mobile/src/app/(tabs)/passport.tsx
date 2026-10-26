@@ -42,12 +42,15 @@ import { Stamp } from '../../components/passport/Stamp';
 import {
   achievements,
   earnedDates,
+  friendAchievements,
   regionAchievements,
   siteAchievements,
+  togetherAchievements,
 } from '../../data/achievements';
 import type { Site } from '../../data/parks';
 import { completedRegions, regionForState, REGIONS, type RegionId } from '../../data/regions';
 import { CapTextScale, colors, radius, shadow, space } from '../../theme';
+import { useFriends } from '../../friends/useFriends';
 import { monthLabel, useTrips } from '../../trips/TripsContext';
 
 type Tab = 'stamps' | 'achievements';
@@ -202,6 +205,25 @@ export default function PassportScreen() {
   }, [allSites, firstVisit]);
   const siteEarned = useMemo(() => earnedDates(siteTiers, sitesVisited), [siteTiers, sitesVisited]);
 
+  // Friends: how many, and trips with one tagged. Dated by when each
+  // friendship began, and by each such trip.
+  const { friends } = useFriends();
+  const friendTiers = useMemo(() => friendAchievements(), []);
+  const friendDates = useMemo(
+    () => friends.map((f) => (f.since ?? new Date().toISOString()).slice(0, 10)),
+    [friends],
+  );
+  const friendEarned = useMemo(() => earnedDates(friendTiers, friendDates), [friendTiers, friendDates]);
+  const togetherTiers = useMemo(() => togetherAchievements(), []);
+  const togetherDates = useMemo(
+    () => entries.filter((e) => e.with.length > 0).map((e) => e.date),
+    [entries],
+  );
+  const togetherEarned = useMemo(
+    () => earnedDates(togetherTiers, togetherDates),
+    [togetherTiers, togetherDates],
+  );
+
   // Sent here for something: a park's region (from Relive), a new stamp to
   // see go down, or a notification's achievement or region. Adjusted as
   // it renders rather than in an effect; the request is then cleared so
@@ -285,8 +307,13 @@ export default function PassportScreen() {
   }, [countedFrom]);
   const shownEarned = tiers.filter((t) => earned.has(t.id) && (countedFrom == null || t.need <= countedFrom)).length;
   const earnedTotal =
-    shownEarned + regionRows.filter((r) => r.earned).length + siteTiers.filter((t) => siteEarned.has(t.id)).length;
-  const achievementTotal = tiers.length + regionRows.length + siteTiers.length;
+    shownEarned +
+    regionRows.filter((r) => r.earned).length +
+    siteTiers.filter((t) => siteEarned.has(t.id)).length +
+    friendTiers.filter((t) => friendEarned.has(t.id)).length +
+    togetherTiers.filter((t) => togetherEarned.has(t.id)).length;
+  const achievementTotal =
+    tiers.length + regionRows.length + siteTiers.length + friendTiers.length + togetherTiers.length;
 
   const stampSize = Math.floor((width - space[4] * 2 - GAP * 2) / 3);
 
@@ -514,6 +541,29 @@ export default function PassportScreen() {
                   key={tier.id}
                   tier={tier}
                   count={sitesVisited.length}
+                  earned={date ? monthLabel(date) : null}
+                />
+              );
+            })}
+          </AchievementGroup>
+
+          <AchievementGroup
+            title="Friends"
+            meta={`${friends.length} ${friends.length === 1 ? 'friend' : 'friends'} · ${togetherDates.length} together`}
+          >
+            {friendTiers.map((tier) => {
+              const date = friendEarned.get(tier.id);
+              return (
+                <AchievementRow key={tier.id} tier={tier} count={friends.length} earned={date ? monthLabel(date) : null} />
+              );
+            })}
+            {togetherTiers.map((tier) => {
+              const date = togetherEarned.get(tier.id);
+              return (
+                <AchievementRow
+                  key={tier.id}
+                  tier={tier}
+                  count={togetherDates.length}
                   earned={date ? monthLabel(date) : null}
                 />
               );

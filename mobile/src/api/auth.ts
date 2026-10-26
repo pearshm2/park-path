@@ -105,3 +105,15 @@ export function removeAvatar(token: string): Promise<User> {
 export function googleSignIn(idToken: string): Promise<GoogleTokenResponse> {
   return request<GoogleTokenResponse>('/auth/google', { method: 'POST', body: { id_token: idToken } });
 }
+
+/**
+ * DELETE /auth/me — deletes the account for good. `confirm` is "DELETE";
+ * the password is needed unless the account signs in with Google.
+ */
+export async function deleteAccount(token: string, confirm: string, password?: string): Promise<void> {
+  await request<null>('/auth/me', {
+    method: 'DELETE',
+    token,
+    body: { confirm, ...(password ? { password } : {}) },
+  });
+}

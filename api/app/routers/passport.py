@@ -11,7 +11,7 @@ stamp on someone else's passport. Strangers get 404, as everywhere.
 """
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -19,7 +19,7 @@ from app.dependencies import get_current_user
 from app.models import Site, TripEntry, User
 from app.passport import build_achievements, build_regions, build_stamps
 from app.schemas import PassportOut, UserOut
-from app.visibility import Visibility, can_view
+from app.visibility import Visibility, can_view, friend_ids
 
 router = APIRouter()
 
@@ -42,7 +42,15 @@ def _passport(db: Session, owner: User, viewer: User) -> PassportOut:
         parks_total=len(stamps),
         stamps=stamps,
         regions=regions,
-        achievements=build_achievements(stamps, regions, entries),
+        achievements=build_achievements(
+            stamps,
+            regions,
+            # Any NPS site counts towards the all-sites tiers.
+            sites_visited=len({e.site_id for e in entries}),
+            sites_total=db.scalar(select(func.count(Site.id))) or 0,
+            friends=len(friend_ids(db, owner.id)),
+            trips_with_friends=sum(bool(e.companions) for e in entries),
+        ),
     )
 
 
