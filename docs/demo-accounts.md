@@ -8,7 +8,7 @@ anyone's local Docker database. Seeded Oct 26 with `api/seed_demo.py`.
 
 | Person | Sign in with | Password | What they have |
 | --- | --- | --- | --- |
-| Halie (`@pears.hm2`, shown as "Pears Hm") | pears.hm2@gmail.com | Ask Halie | 3 trips with real photos and videos |
+| Halie (`@pears.hm2`, shown as "Pears Hm") | pears.hm2@gmail.com | Ask Halie | 4 trips, the Northeast region complete |
 | Maya Torres (`@mayatorres`) | maya.torres.demo@example.com | `password123` | 12 trips: all 10 Southwest parks, Rocky Mountain, Grand Teton |
 | Jordan Lee (`@jordanlee`) | jordan.lee.demo@example.com | `password123` | 6 trips: all of Appalachia, Biscayne, Blue Ridge Parkway |
 | Sam Okafor (`@samokafor`) | sam.okafor.demo@example.com | `password123` | 3 trips: Acadia, Cuyahoga Valley, Indiana Dunes |
@@ -19,21 +19,22 @@ anyone, and their trips have no photos.
 - **Friends:** all four are friends with each other, so Halie's Friends feed
   shows the other three.
 - **Halie's trips:** Joshua Tree (Aug 2024, 5★), Congaree (Jan 2026, 3★) and
-  Guilford Courthouse (Oct 2026, 3★). Each has 8 photos or videos with
-  captions.
+  Guilford Courthouse (Oct 2026, 3★), each with 8 of her own photos or
+  videos. Plus Acadia (Sept 2025, 4★), a staged trip with three
+  public-domain NPS photos ("NPS Photo by Kent Miller"). The Northeast is
+  only Acadia, so this completes a region on her account for the demo.
 - **Companions:** Maya and Jordan are tagged together on some trips, and
   Jordan and Sam on one, so the "trips with friends" achievements unlock.
 - **Comments:** each of Halie's trips has a comment from a friend, and Jordan
   commented on Maya's Grand Teton trip.
-- **Region badges:** each friend has completed a region: Maya the Southwest,
-  Jordan Appalachia, Sam the Northeast (Acadia).
+- **Region badges:** everyone has completed a region: Halie and Sam the
+  Northeast (Acadia), Maya the Southwest, Jordan Appalachia.
 
 ## During the demo
 
-- A real friend signs up live, Halie adds them, then tags them on the
-  Guilford Courthouse trip (edit the trip, then "Who was with you").
-- The friend achievements ("First friend", "Trail crew") only show once the
-  `halie/next-changes` passport changes are deployed to Render.
+- Sebastian signs up live, Halie adds him by email, and he logs their
+  Guilford Courthouse trip with Halie tagged ("Who was with you"). The full
+  script is shared separately.
 - The Friends feed is ordered by when trips were logged, not by visit date,
   so Sam's trips (logged last) come first.
 
@@ -50,8 +51,9 @@ This creates whichever accounts are missing (Halie's with the password you
 pass), plus the friendships, the friends' trips and the comments. It leaves
 anything that already exists alone, so it's safe to run again.
 
-Halie's trips need her photos, which aren't in the repo. Ask her for the
-folder, then pass it as well:
+The Acadia trip is always added, with its photos downloaded from nps.gov.
+Halie's other three trips need her own photos, which aren't in the repo.
+Ask her for the folder, then pass it as well:
 
 ```bash
 python seed_demo.py HALIES-PASSWORD path/to/demo-media

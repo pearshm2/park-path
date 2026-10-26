@@ -1,6 +1,6 @@
 # ParkPath: What's Left
 
-Status as of **Monday, Oct 26, 2026**. This checks `main` (after PR #37, `halie/next-changes`, merges, with main through PR #36) against our 8-week plan. Demo day is **Wednesday, Oct 28**.
+Status as of **Monday, Oct 26, 2026**. This checks `main` (with main through PR #38) against our 8-week plan. Demo day is **Wednesday, Oct 28**.
 
 **Decided Oct 24:** no thumbs up/down. To pass on a park, you snooze it with "Not for now", so the engine doesn't get "I don't like this park at all" feedback. (See `docs/backlog.md` → Cut.)
 
@@ -55,7 +55,7 @@ Engine code: `api/app/recommender.py`. (`parkpath-recommendation-engine/` is the
 ## Release and infra
 
 - [x] **Document the APK build:** `docs/apk.md` (PR #36).
-- [ ] **Build the release-candidate APK** after PR #37 merges, following `docs/apk.md`, so it has the new icon, splash and quiz sync. **S** *(Halie / Dylan)*
+- [ ] **Build the release-candidate APK** from main (it needs PR #37 and #38's photo upload fix), following `docs/apk.md`. **S** *(Halie / Dylan)*
 - [x] **Write a demo seed script** for users, friendships, trips and comments: `api/seed_demo.py`.
 - [ ] *Optional:* add an EAS build or a mobile test job to CI. **M** *(Dylan)*
 

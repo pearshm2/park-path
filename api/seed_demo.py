@@ -8,8 +8,9 @@ virtual environment active:
 
 HALIE-PASSWORD is pears.hm2@gmail.com's password (ask Halie); her account
 is created with it if it doesn't exist yet. MEDIA-FOLDER holds the photos
-and videos for her trips, named as in HALIE_TRIPS below; without it her
-trips are skipped. Photos are re-saved without their location and camera
+and videos for her trips, named as in HALIE_TRIPS below; without it those
+trips are skipped. Her Acadia trip (HALIE_WEB_TRIP) is always added, with
+public-domain photos downloaded from nps.gov. Photos are re-saved without their location and camera
 data before upload; strip videos first (see docs/demo-accounts.md).
 
 Safe to run again: accounts, friendships, trips and comments that already
@@ -119,6 +120,25 @@ HALIE_TRIPS = [
         ],
     ),
 ]
+
+# A staged trip so Halie's passport shows a completed region (the Northeast
+# is only Acadia). Its photos are public-domain NPS photos ("NPS Photo by
+# Kent Miller"), downloaded from nps.gov, so it needs no MEDIA-FOLDER.
+NPS_PHOTOS = "https://www.nps.gov/common/uploads/structured_data/"
+HALIE_WEB_TRIP = dict(
+    park_code="acad",
+    visited_on="2025-09-20",
+    rating=4,
+    title="Sunrise on Cadillac Mountain",
+    notes="Up before dawn for sunrise on Cadillac, then the Park Loop Road and Ocean Path "
+    "out to Thunder Hole. Every park in the Northeast, done.",
+    trails=["Cadillac Summit Road", "Ocean Path"],
+    media=[
+        (NPS_PHOTOS + "D4EA2DD2-C4B9-9CB4-75DB3AB73C80F432.jpg", "Sunrise from Cadillac Mountain"),
+        (NPS_PHOTOS + "D59F0C37-F003-2F95-84B3FB71D9B3E376.jpg", "Thunder Hole"),
+        (NPS_PHOTOS + "D52D7489-CCF1-DC62-32BA0B2BDE814324.jpg", "Through the gate"),
+    ],
+)
 
 # The friends' trips (no photos): park, date, rating, title, notes, trails,
 # and which friends were along.
@@ -232,23 +252,28 @@ def initials_avatar(person: dict) -> str:
     return base64.b64encode(out.getvalue()).decode()
 
 
-def without_metadata(path: Path) -> bytes:
-    """A photo re-saved upright and without EXIF (location, camera); videos as they are."""
-    if path.suffix == ".mp4":
-        return path.read_bytes()
-    image = ImageOps.exif_transpose(Image.open(path))
+def without_metadata(suffix: str, raw: bytes) -> bytes:
+    """
+    A photo re-saved upright, at most phone-sized, and without EXIF (location,
+    camera); videos as they are.
+    """
+    if suffix == ".mp4":
+        return raw
+    image = ImageOps.exif_transpose(Image.open(io.BytesIO(raw)))
+    image.thumbnail((2048, 2048))
     out = io.BytesIO()
-    if path.suffix == ".png":
+    if suffix == ".png":
         image.save(out, "PNG")
     else:
         image.convert("RGB").save(out, "JPEG", quality=90)
     return out.getvalue()
 
 
-def upload(token: str, path: Path) -> str:
+def upload(token: str, name: str, raw: bytes) -> str:
     """Uploads one file the way the app does; returns its storage key."""
-    data = without_metadata(path)
-    content_type = CONTENT_TYPES[path.suffix]
+    suffix = Path(name).suffix
+    data = without_metadata(suffix, raw)
+    content_type = CONTENT_TYPES[suffix]
     form = call(
         "POST",
         "/trips/photos/upload-url",
@@ -311,23 +336,32 @@ def main() -> None:
             for t in call("GET", "/trips", tokens[who]).json()
         }
 
-    if media:
-        have = existing("halie")
-        for trip in HALIE_TRIPS:
-            if (trip["park_code"], trip["visited_on"]) in have:
-                continue
-            photos = [
-                {
-                    "key": upload(tokens["halie"], media / item[0]),
-                    "caption": item[1],
-                    "duration_ms": item[2] if len(item) > 2 else None,
-                }
-                for item in trip["media"]
-            ]
-            fields = {k: v for k, v in trip.items() if k != "media"}
-            body = {**fields, "photos": photos, "visibility": "friends"}
-            call("POST", "/trips", tokens["halie"], body).raise_for_status()
-            print("trip: halie", trip["park_code"])
+    # Halie's trips: her own photos when MEDIA-FOLDER is given, and always the
+    # Acadia trip, whose photos come from nps.gov.
+    def from_folder(name: str) -> bytes:
+        return (media / name).read_bytes()
+
+    def from_web(url: str) -> bytes:
+        return httpx.get(url, timeout=120, follow_redirects=True).raise_for_status().content
+
+    halie_trips = [(t, from_folder) for t in HALIE_TRIPS] if media else []
+    halie_trips.append((HALIE_WEB_TRIP, from_web))
+    have = existing("halie")
+    for trip, read in halie_trips:
+        if (trip["park_code"], trip["visited_on"]) in have:
+            continue
+        photos = [
+            {
+                "key": upload(tokens["halie"], item[0], read(item[0])),
+                "caption": item[1],
+                "duration_ms": item[2] if len(item) > 2 else None,
+            }
+            for item in trip["media"]
+        ]
+        fields = {k: v for k, v in trip.items() if k != "media"}
+        body = {**fields, "photos": photos, "visibility": "friends"}
+        call("POST", "/trips", tokens["halie"], body).raise_for_status()
+        print("trip: halie", trip["park_code"])
 
     for who, trips in FRIEND_TRIPS.items():
         have = existing(who)
