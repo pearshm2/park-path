@@ -8,8 +8,9 @@
  *    starting location, and your quiz answers.
  *  - Account: your email and password, the server, logging out, and
  *    deleting the account.
- *  - Privacy: what friends can see of you (every trip is shared with
- *    them), and location.
+ *  - Privacy & preferences: what friends can see of you (every trip is
+ *    shared with them), the parks you've set aside ("Not for now") with a
+ *    way to bring them back, and location.
  *  - Notifications: the chime and buzz, and arrival reminders.
  *  - Display: text size.
  *
@@ -21,6 +22,7 @@
 
 import * as ImageManipulator from 'expo-image-manipulator';
 import * as ImagePicker from 'expo-image-picker';
+import { useQuery } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import { useState, type ReactNode } from 'react';
 import { ActivityIndicator, Linking, Pressable, ScrollView, StyleSheet, Switch, View } from 'react-native';
@@ -30,6 +32,7 @@ import Svg, { Path } from 'react-native-svg';
 
 import { API_BASE_URL } from '../../api/client';
 import { displayName, handle } from '../../api/friends';
+import { listSites } from '../../api/parks';
 import { useArrivals } from '../../arrivals/ArrivalsContext';
 import { useAuth } from '../../auth/AuthContext';
 import { UsernameField } from '../../auth/UsernameField';
@@ -40,6 +43,7 @@ import { Dialog, type DialogAction } from '../../components/Dialog';
 import { isKnownZip, QUIZ_STEPS, type QuizAnswers } from '../../data/quizSpec';
 import { useSoundEffects } from '../../lib/sounds';
 import { useQuiz } from '../../quiz/QuizContext';
+import { useSnoozed } from '../../wishlist/useSnoozed';
 import { colors, radius, space, TEXT_SIZES, useTextSize } from '../../theme';
 
 type Section = 'profile' | 'account' | 'privacy' | 'notifications' | 'display';
@@ -48,7 +52,7 @@ type Section = 'profile' | 'account' | 'privacy' | 'notifications' | 'display';
 const SECTIONS: { key: Section; label: string; icon: string[] }[] = [
   { key: 'profile', label: 'Profile', icon: ['M12 12a4 4 0 100-8 4 4 0 000 8z', 'M4 20c1.5-4 4.5-6 8-6s6.5 2 8 6'] },
   { key: 'account', label: 'Account', icon: ['M8 11V8a4 4 0 118 0v3', 'M5 11h14v9H5z'] },
-  { key: 'privacy', label: 'Privacy', icon: ['M12 3l8 3v6c0 4.5-3.4 8-8 9-4.6-1-8-4.5-8-9V6z'] },
+  { key: 'privacy', label: 'Privacy & preferences', icon: ['M12 3l8 3v6c0 4.5-3.4 8-8 9-4.6-1-8-4.5-8-9V6z'] },
   { key: 'notifications', label: 'Notifications', icon: ['M6 16V11a6 6 0 1112 0v5l2 2H4z', 'M10 21h4'] },
   { key: 'display', label: 'Display', icon: ['M4 19L9 5l5 14', 'M5.8 14h6.4', 'M15 19l3-8 3 8', 'M16 16.5h4'] },
 ];
@@ -651,6 +655,7 @@ function PrivacySection() {
       <Row>
         <RowText title="Your email" description="Never shown to anyone, friends included." />
       </Row>
+      <SetAside />
       <Row last>
         <RowText
           title="Location"
@@ -669,6 +674,45 @@ function PrivacySection() {
         ) : null}
       </Row>
     </>
+  );
+}
+
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+/** The parks set aside with "Not for now", each with when it's back and a way to bring it back now. */
+function SetAside() {
+  const { snoozes, unsnooze } = useSnoozed();
+  // Same query key as Explore, so the names are usually already cached.
+  const { data: sites = [] } = useQuery({ queryKey: ['sites', 'all'], queryFn: () => listSites('all') });
+  const nameOf = new Map(sites.map((site) => [site.id, site.name]));
+  const parks = Object.entries(snoozes).sort(([, a], [, b]) => a - b);
+  return (
+    <Row>
+      <RowText
+        title="Set aside"
+        description={
+          parks.length > 0
+            ? 'Parks you passed on with “Not for now”. Each comes back to your picks by itself after 30 days, or bring one back now.'
+            : 'Nothing set aside. Parks you pass on with “Not for now” wait here for 30 days, then come back to your picks.'
+        }
+      />
+      {parks.map(([id, until]) => {
+        const back = new Date(until);
+        return (
+          <View key={id} style={styles.setAsideRow}>
+            <View style={styles.grow}>
+              <BodyText size={13.5} weight="semibold" numberOfLines={1}>
+                {nameOf.get(id) ?? id.toUpperCase()}
+              </BodyText>
+              <BodyText size={12} color={colors.neutral[600]}>
+                {`Back on ${MONTHS[back.getMonth()]} ${back.getDate()}`}
+              </BodyText>
+            </View>
+            <SmallButton label="Bring back" onPress={() => unsnooze(id)} />
+          </View>
+        );
+      })}
+    </Row>
   );
 }
 
@@ -950,6 +994,11 @@ const styles = StyleSheet.create({
   },
   grow: {
     flex: 1,
+  },
+  setAsideRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space[3],
   },
   photoRow: {
     flexDirection: 'row',

@@ -275,7 +275,9 @@ class Snooze(Base):
     """
     A park set aside with "Not for now": left out of the user's
     recommendations in the app until `until`, then back. Not a dislike, so
-    the engine never sees it.
+    it never lowers a park's score; the app sends its set-aside parks with a
+    recommendations request only so the "something different" pick is never
+    one of them.
 
     One row per (user, site); snoozing again moves `until` out. Rows past
     `until` are simply ignored, and replaced on the next snooze.

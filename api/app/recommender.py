@@ -292,6 +292,7 @@ def rank(
     location=None,
     weights=None,
     history: dict[str, Visit] | None = None,
+    snoozed: set[str] | None = None,
 ) -> list[dict]:
     """
     Score every site against the quiz answers and return them best first.
@@ -299,6 +300,7 @@ def rank(
     `answers` needs .terrains, .seasons (ranked; empty = any) and .crowds.
     `location` is None or has .lat and .lon.
     `history` is the signed-in person's visited parks by park_code, or None.
+    `snoozed` holds park codes they've set aside: never the wildcard.
     Sites with no curated data come last, with score None.
     """
     weights = weights or DEFAULT_WEIGHTS
@@ -356,7 +358,9 @@ def rank(
         )
 
     if history:
-        flag_something_different(results, history, answers.terrains, answers.crowds)
+        flag_something_different(
+            results, history, answers.terrains, answers.crowds, snoozed or set()
+        )
 
     # Scored sites first (best score, then the better-known site), then the
     # unscored ones alphabetically.
@@ -374,7 +378,11 @@ CROWD_FIT = 0.5
 
 
 def flag_something_different(
-    results: list[dict], history: dict[str, Visit], wanted: list[str], crowds: str
+    results: list[dict],
+    history: dict[str, Visit],
+    wanted: list[str],
+    crowds: str,
+    snoozed: set[str] = frozenset(),
 ):
     """
     Flag one national park as "something different", from outside their top
@@ -389,9 +397,14 @@ def flag_something_different(
          dealbreaker.
 
     Its reason says why it's different. Needs at least one trip (the
-    caller checks).
+    caller checks). Parks they've set aside are left out entirely (the app
+    hides them), so the top 10 and the wildcard match what the app shows.
     """
-    parks = [r for r in results if r["score"] and r["_site"].is_named_park]
+    parks = [
+        r
+        for r in results
+        if r["score"] and r["_site"].is_named_park and r["park_code"] not in snoozed
+    ]
     parks.sort(key=lambda r: (-r["score"], -r["_visits"], r["_name"]))
     candidates = [r for r in parks[TOP_PICKS:] if not r["visited"]]
     if not candidates:

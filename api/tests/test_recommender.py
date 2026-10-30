@@ -369,3 +369,32 @@ def test_rung_four_the_least_likely_park_that_keeps_their_crowd_answer():
     [pick] = flagged(results)
     assert pick["park_code"] == "unlikely"
     assert pick["reason"] == "The park you'd least expect, and still quiet"
+
+
+def test_a_snoozed_wildcard_is_replaced_by_the_next_one():
+    history = {"zion": visit("zion", "canyon")}
+    sites = top_ten() + [
+        make_site("desert", terrain_group="desert", is_named_park=True, annual_visits_millions=2.0),
+        make_site("forest", terrain_group="forest", is_named_park=True, annual_visits_millions=0.5),
+    ]
+    [first] = flagged(rank(sites, answers(), history=history))
+    [second] = flagged(rank(sites, answers(), history=history, snoozed={first["park_code"]}))
+    assert first["park_code"] != second["park_code"]
+    assert second["reason"].startswith("No ")
+
+
+def test_a_snoozed_park_frees_its_top_ten_place():
+    # With one of the top ten set aside, the best desert park moves up into
+    # the usual picks, so the wildcard is the next desert park.
+    history = {"zion": visit("zion", "canyon")}
+    sites = top_ten() + [
+        make_site(
+            "desert1", terrain_group="desert", is_named_park=True, annual_visits_millions=3.0
+        ),
+        make_site(
+            "desert2", terrain_group="desert", is_named_park=True, annual_visits_millions=0.5
+        ),
+    ]
+    [before] = flagged(rank(sites, answers(), history=history))
+    [after] = flagged(rank(sites, answers(), history=history, snoozed={"top0"}))
+    assert (before["park_code"], after["park_code"]) == ("desert1", "desert2")

@@ -159,3 +159,12 @@ def test_bad_token_still_gets_recommendations(sites):
     auth = {"Authorization": "Bearer not-a-real-token"}
     response = client.post("/recommendations", json={"answers": ANSWERS}, headers=auth)
     assert response.status_code == 200
+
+
+def test_snoozed_parks_are_accepted_and_change_no_scores(sites):
+    plain = _by_code(client.post("/recommendations", json={"answers": ANSWERS}))
+    body = {"answers": ANSWERS, "snoozed": [sites["match"].upper(), "nope"]}
+    response = client.post("/recommendations", json=body)
+    assert response.status_code == 200
+    # Setting a park aside never counts against it.
+    assert _by_code(response)[sites["match"]]["score"] == plain[sites["match"]]["score"]

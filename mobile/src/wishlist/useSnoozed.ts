@@ -110,5 +110,11 @@ export function useSnoozed() {
     [token, mutate],
   );
 
-  return { ids, snooze, unsnooze };
+  return {
+    ids,
+    /** Each set-aside park's id and when it comes back (ms since epoch). */
+    snoozes,
+    snooze,
+    unsnooze,
+  };
 }

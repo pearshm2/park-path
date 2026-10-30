@@ -2820,6 +2820,14 @@
                 "type": "null"
               }
             ]
+          },
+          "snoozed": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 500,
+            "title": "Snoozed"
           }
         },
         "type": "object",

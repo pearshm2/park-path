@@ -248,6 +248,10 @@ class RecommendationRequest(BaseModel):
     # one, so the app can integrate before its zip lookup exists. Without
     # it, distance just isn't scored.
     location: Location | None = None
+    # Parks the user has set aside with "Not for now" (park codes). Not held
+    # against them: only so the "something different" pick is never one,
+    # since the app hides set-aside parks.
+    snoozed: list[str] = Field(default_factory=list, max_length=500)
 
 
 class SignalScores(BaseModel):
