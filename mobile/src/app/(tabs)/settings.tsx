@@ -25,7 +25,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { useQuery } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import { useState, type ReactNode } from 'react';
-import { ActivityIndicator, Linking, Pressable, ScrollView, StyleSheet, Switch, View } from 'react-native';
+import { ActivityIndicator, Linking, Modal, Pressable, ScrollView, StyleSheet, Switch, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import Svg, { Path } from 'react-native-svg';
@@ -679,40 +679,88 @@ function PrivacySection() {
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
-/** The parks set aside with "Not for now", each with when it's back and a way to bring it back now. */
+/**
+ * The parks set aside with "Not for now": a count here, and the full list
+ * (each with when it's back and a way to bring it back now) in a sheet, so
+ * a long list doesn't crowd Settings.
+ */
 function SetAside() {
+  const { snoozes } = useSnoozed();
+  const [open, setOpen] = useState(false);
+  const count = Object.keys(snoozes).length;
+  return (
+    <Row>
+      <RowText
+        title="Set aside"
+        description={
+          count > 0
+            ? `${count} ${count === 1 ? 'park' : 'parks'} you passed on with “Not for now”. Each comes back to your picks by itself after 30 days, or bring one back now.`
+            : 'Nothing set aside. Parks you pass on with “Not for now” wait here for 30 days, then come back to your picks.'
+        }
+        control={count > 0 ? <SmallButton label="See all" onPress={() => setOpen(true)} /> : undefined}
+      />
+      {open ? <SetAsideSheet onClose={() => setOpen(false)} /> : null}
+    </Row>
+  );
+}
+
+/** The full Set aside list, soonest back first, in a sheet from the bottom. */
+function SetAsideSheet({ onClose }: { onClose: () => void }) {
+  const insets = useSafeAreaInsets();
   const { snoozes, unsnooze } = useSnoozed();
   // Same query key as Explore, so the names are usually already cached.
   const { data: sites = [] } = useQuery({ queryKey: ['sites', 'all'], queryFn: () => listSites('all') });
   const nameOf = new Map(sites.map((site) => [site.id, site.name]));
   const parks = Object.entries(snoozes).sort(([, a], [, b]) => a - b);
   return (
-    <Row>
-      <RowText
-        title="Set aside"
-        description={
-          parks.length > 0
-            ? 'Parks you passed on with “Not for now”. Each comes back to your picks by itself after 30 days, or bring one back now.'
-            : 'Nothing set aside. Parks you pass on with “Not for now” wait here for 30 days, then come back to your picks.'
-        }
-      />
-      {parks.map(([id, until]) => {
-        const back = new Date(until);
-        return (
-          <View key={id} style={styles.setAsideRow}>
-            <View style={styles.grow}>
-              <BodyText size={13.5} weight="semibold" numberOfLines={1}>
-                {nameOf.get(id) ?? id.toUpperCase()}
-              </BodyText>
-              <BodyText size={12} color={colors.neutral[600]}>
-                {`Back on ${MONTHS[back.getMonth()]} ${back.getDate()}`}
-              </BodyText>
-            </View>
-            <SmallButton label="Bring back" onPress={() => unsnooze(id)} />
+    <Modal visible transparent animationType="slide" onRequestClose={onClose} statusBarTranslucent>
+      <View style={styles.sheetOverlay}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel="Close set aside parks" />
+        <View style={[styles.sheet, { paddingBottom: insets.bottom + space[3] }]}>
+          <View style={styles.sheetHandle} />
+          <View style={styles.sheetHead}>
+            <Heading size={19} style={styles.grow}>
+              Set aside
+            </Heading>
+            <Pressable
+              onPress={onClose}
+              hitSlop={12}
+              accessibilityRole="button"
+              accessibilityLabel="Close"
+              style={styles.sheetClose}
+            >
+              <Svg width={16} height={16} viewBox="0 0 24 24">
+                <Path d="M6 6l12 12M18 6L6 18" stroke={colors.neutral[800]} strokeWidth={2.6} strokeLinecap="round" />
+              </Svg>
+            </Pressable>
           </View>
-        );
-      })}
-    </Row>
+          <ScrollView style={styles.sheetList} contentContainerStyle={styles.sheetListContent}>
+            {parks.length === 0 ? (
+              <BodyText size={13} color={colors.neutral[600]} style={styles.sheetEmpty}>
+                All back in your picks.
+              </BodyText>
+            ) : (
+              parks.map(([id, until]) => {
+                const back = new Date(until);
+                return (
+                  <View key={id} style={styles.setAsideRow}>
+                    <View style={styles.grow}>
+                      <BodyText size={13.5} weight="semibold" numberOfLines={1}>
+                        {nameOf.get(id) ?? id.toUpperCase()}
+                      </BodyText>
+                      <BodyText size={12} color={colors.neutral[600]}>
+                        {`Back on ${MONTHS[back.getMonth()]} ${back.getDate()}`}
+                      </BodyText>
+                    </View>
+                    <SmallButton label="Bring back" onPress={() => unsnooze(id)} />
+                  </View>
+                );
+              })
+            )}
+          </ScrollView>
+        </View>
+      </View>
+    </Modal>
   );
 }
 
@@ -999,6 +1047,52 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: space[3],
+  },
+  sheetOverlay: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(32, 30, 29, 0.32)',
+  },
+  sheet: {
+    maxHeight: '78%',
+    paddingHorizontal: space[4],
+    paddingTop: space[2],
+    borderTopLeftRadius: radius.lg,
+    borderTopRightRadius: radius.lg,
+    backgroundColor: colors.neutral[100],
+  },
+  sheetHandle: {
+    alignSelf: 'center',
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: colors.neutral[300],
+    marginBottom: space[2],
+  },
+  sheetHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space[2],
+    paddingBottom: space[2],
+  },
+  sheetClose: {
+    width: 32,
+    height: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: radius.pill,
+    backgroundColor: colors.neutral[200],
+  },
+  sheetList: {
+    flexGrow: 0,
+  },
+  sheetListContent: {
+    gap: space[4],
+    paddingVertical: space[2],
+  },
+  sheetEmpty: {
+    textAlign: 'center',
+    marginVertical: space[6],
   },
   photoRow: {
     flexDirection: 'row',
