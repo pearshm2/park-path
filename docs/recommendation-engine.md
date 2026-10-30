@@ -53,6 +53,10 @@ The score is built in three steps:
 
    Its score isn't changed; its reason says why it's different. The app
    moves it to #4 of the top 10 and labels it "Something different".
+   The app sends the parks the user has set aside ("Not for now") as
+   `snoozed`; they're left out of the top 10 and never picked as the
+   wildcard, so setting the wildcard aside brings up the next one. Setting
+   a park aside never changes its score.
 
 ### Signals that aren't in use
 

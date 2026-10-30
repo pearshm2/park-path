@@ -60,4 +60,10 @@ def recommend(
         for s in db.scalars(select(Site)).all()
     ]
     history = load_history(db, user) if user is not None else None
-    return rank(sites, payload.answers, payload.location, history=history)
+    return rank(
+        sites,
+        payload.answers,
+        payload.location,
+        history=history,
+        snoozed={code.lower() for code in payload.snoozed},
+    )

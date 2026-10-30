@@ -11,7 +11,8 @@
  * list, and terrains they rated highly get a small boost.
  */
 
-import { useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
+import { useMemo } from 'react';
 
 import { request } from './client';
 import type { components } from './schema';
@@ -21,6 +22,7 @@ import { engineRequest, isComplete, type QuizAnswers } from '../data/quizSpec';
 import { useAuth } from '../auth/AuthContext';
 import { useQuiz } from '../quiz/QuizContext';
 import { useTrips } from '../trips/TripsContext';
+import { useSnoozed } from '../wishlist/useSnoozed';
 
 /** One site in the engine's response. Generated from the API; see src/api/schema.ts. */
 type RecommendationOut = components['schemas']['RecommendationOut'];
@@ -48,6 +50,8 @@ export async function recommendations(
   answers: QuizAnswers,
   scope: SiteScope = 'parks',
   token?: string | null,
+  /** Parks set aside with "Not for now": never picked as the wildcard. */
+  snoozed: string[] = [],
 ): Promise<Recommendation[]> {
   // The engine rejects an unfinished quiz (422), and Explore is only
   // reached after finishing it, so there is nothing to ask for here.
@@ -56,7 +60,7 @@ export async function recommendations(
   const [ranked, sites] = await Promise.all([
     request<RecommendationOut[]>('/recommendations', {
       method: 'POST',
-      body: engineRequest(answers),
+      body: { ...engineRequest(answers), snoozed },
       token,
     }),
     listSites(scope),
@@ -82,8 +86,14 @@ export function useRecommendations() {
   const { answers } = useQuiz();
   const { token } = useAuth();
   const { visitedIds } = useTrips();
+  // Setting a park aside asks again, so a set-aside "something different"
+  // pick is replaced by the next one.
+  const { ids: snoozedIds } = useSnoozed();
+  const snoozed = useMemo(() => [...snoozedIds].sort(), [snoozedIds]);
   return useQuery({
-    queryKey: ['recommendations', answers, 'all', token, visitedIds.size],
-    queryFn: () => recommendations(answers, 'all', token),
+    queryKey: ['recommendations', answers, 'all', token, visitedIds.size, snoozed],
+    queryFn: () => recommendations(answers, 'all', token, snoozed),
+    // Keep showing the last picks while asking again, rather than an empty map.
+    placeholderData: keepPreviousData,
   });
 }

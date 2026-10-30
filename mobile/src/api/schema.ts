@@ -981,6 +981,8 @@ export interface components {
         RecommendationRequest: {
             answers: components["schemas"]["QuizAnswers"];
             location?: components["schemas"]["Location"] | null;
+            /** Snoozed */
+            snoozed?: string[];
         };
         /** RegionProgressOut */
         RegionProgressOut: {
