@@ -85,6 +85,7 @@ def _out(entry: TripEntry, storage: Storage | None) -> TripOut:
         notes=entry.notes,
         rating=entry.rating,
         trails=list(entry.trails),
+        feedback=list(entry.feedback or []),
         stamp=entry.trails[0] if entry.trails else None,
         visibility=Visibility(entry.visibility),
         photos=[
@@ -256,6 +257,7 @@ def create_trip(
         notes=payload.notes,
         rating=payload.rating,
         trails=trails,
+        feedback=list(payload.feedback),
         visibility=payload.visibility.value,
         stamp_photo_key=payload.stamp_photo_key or None,
         photos=[
@@ -366,6 +368,10 @@ def update_trip(
         entry.trails = _with_stamp(list(entry.trails), payload.stamp)
     if "visibility" in sent:
         entry.visibility = payload.visibility.value
+    if "feedback" in sent:
+        if payload.feedback is None:
+            raise _bad_request("feedback can't be null")
+        entry.feedback = list(payload.feedback)
 
     removed: list[str] = []
     if "companion_ids" in sent:

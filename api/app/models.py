@@ -390,6 +390,11 @@ class TripEntry(Base):
     visibility: Mapped[str] = mapped_column(
         String(10), nullable=False, default="friends", server_default="friends"
     )
+    # How it went, as feedback tags (app.recommender.FEEDBACK_TAGS), which
+    # tune their recommendations and show on the trip.
+    feedback: Mapped[list[str]] = mapped_column(
+        ARRAY(String(30)), nullable=False, default=list, server_default="{}"
+    )
     # A photo of the park's stamp in their Passport To Your National Parks
     # book: a storage key like a TripPhoto's (always a photo), or None.
     stamp_photo_key: Mapped[str | None] = mapped_column(String(300))

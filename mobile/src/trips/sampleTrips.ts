@@ -89,6 +89,7 @@ export function sampleEntries(sites: Site[]): TripEntry[] {
       with: [],
       visibility: 'private' as const,
       passportStamp: null,
+      feedback: [],
       createdAt: `${sample.date}T20:00:00.000Z`,
       // Sent to the server like any new trip.
       unsent: true,

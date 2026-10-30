@@ -1187,6 +1187,8 @@ export interface components {
             photo_keys?: string[];
             /** Stamp Photo Key */
             stamp_photo_key?: string | null;
+            /** Feedback */
+            feedback?: ("loved_scenery" | "not_my_scenery" | "peaceful" | "too_crowded" | "worth_the_drive" | "too_far" | "perfect_timing" | "wrong_season")[];
             /** Companion Ids */
             companion_ids?: number[];
         };
@@ -1212,6 +1214,11 @@ export interface components {
             rating: number | null;
             /** Trails */
             trails: string[];
+            /**
+             * Feedback
+             * @default []
+             */
+            feedback: ("loved_scenery" | "not_my_scenery" | "peaceful" | "too_crowded" | "worth_the_drive" | "too_far" | "perfect_timing" | "wrong_season")[];
             /** Stamp */
             stamp: string | null;
             visibility: components["schemas"]["Visibility"];
@@ -1276,7 +1283,7 @@ export interface components {
          *     when `trails` is sent. Likewise `photos` replaces the photos and their
          *     captions, and `photo_keys` (keys only) is ignored when it's sent.
          *     `stamp_photo_key` replaces the passport-stamp photo, or removes it when
-         *     null.
+         *     null. `feedback` replaces the feedback tags (send [] to clear them).
          */
         TripUpdate: {
             /** Visited On */
@@ -1298,6 +1305,8 @@ export interface components {
             photo_keys?: string[] | null;
             /** Stamp Photo Key */
             stamp_photo_key?: string | null;
+            /** Feedback */
+            feedback?: ("loved_scenery" | "not_my_scenery" | "peaceful" | "too_crowded" | "worth_the_drive" | "too_far" | "perfect_timing" | "wrong_season")[] | null;
             /** Companion Ids */
             companion_ids?: number[] | null;
         };

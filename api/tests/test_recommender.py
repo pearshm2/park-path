@@ -3,19 +3,25 @@ Tests for the scoring logic in app/recommender.py. Plain Python, no
 database: each test builds a few made-up sites and checks the scores.
 """
 
+import math
+
 import pytest
 
 from app.recommender import (
     DEFAULT_WEIGHTS,
     TERRAIN_MISS_FACTOR,
+    TERRAIN_TASTE,
     VISITED_FACTOR,
+    Review,
     SiteData,
+    Taste,
     Visit,
     combine,
     crowds_score,
     distance_score,
     miles_between,
     rank,
+    season_of,
     season_score,
     terrain_score,
     visits_percentile,
@@ -263,11 +269,137 @@ def test_loved_terrain_gives_a_boost_and_a_reason():
     assert loved["reason"].startswith("Like Zion, which you loved")
 
 
-def test_low_rated_trips_give_no_boost():
+def test_low_rated_trips_push_the_terrain_down():
     meh = Visit(park_code="zion", name="Zion", terrain_group="canyon", rating=2)
     with_history = rank([make_site()], answers(seasons=("summer",)), history={"zion": meh})[0]
     without = rank([make_site()], answers(seasons=("summer",)))[0]
+    assert with_history["score"] < without["score"]
+    assert "loved" not in with_history["reason"]
+
+
+def test_three_stars_change_nothing():
+    okay = Visit(park_code="zion", name="Zion", terrain_group="canyon", rating=3)
+    with_history = rank([make_site()], answers(seasons=("summer",)), history={"zion": okay})[0]
+    without = rank([make_site()], answers(seasons=("summer",)))[0]
     assert with_history["score"] == without["score"]
+
+
+# --- reviews: stars and feedback tags ------------------------------------------
+
+
+def review(feedback=(), rating=None, terrain="canyon", month=6, code="trip") -> Review:
+    return Review(code, code.title(), terrain, rating, list(feedback), month)
+
+
+def score_of(sites, reviews, quiz=None, code=None, location=None) -> float:
+    results = rank(sites, quiz or answers(), location, reviews=reviews)
+    return next(r["score"] for r in results if r["park_code"] == (code or sites[0].park_code))
+
+
+def test_more_trips_count_for_less_each():
+    site = [make_site(seasons=["summer"])]
+    plain = score_of(site, [])
+    gains = [score_of(site, [review(rating=5, code=f"t{i}") for i in range(n)]) - plain
+             for n in (1, 2, 3, 4)]  # fmt: skip
+    steps = [gains[0]] + [b - a for a, b in zip(gains, gains[1:], strict=False)]
+    assert all(step > 0 for step in steps)
+    assert steps == sorted(steps, reverse=True)
+    # However many, never more than the cap.
+    many = score_of(site, [review(rating=5, code=f"t{i}") for i in range(30)])
+    assert many - plain <= TERRAIN_TASTE + 1e-9
+
+
+def test_scenery_tags_move_that_terrain():
+    canyon = make_site("canyon", seasons=["summer"])
+    plain = score_of([canyon], [])
+    assert score_of([canyon], [review(["loved_scenery"])]) > plain
+    assert score_of([canyon], [review(["not_my_scenery"])]) < plain
+    # A 5-star trip whose scenery wasn't for them cancels out.
+    assert score_of([canyon], [review(["not_my_scenery"], rating=5)]) == plain
+    # Only that terrain.
+    coast = make_site("coast", terrain_group="coast", seasons=["summer"])
+    assert score_of([coast], [review(["not_my_scenery"])]) == score_of([coast], [])
+
+
+def test_loved_scenery_gives_the_loved_reason():
+    results = rank([make_site("next")], answers(), reviews=[review(["loved_scenery"], code="zion")])
+    assert results[0]["reason"].startswith("Like Zion, which you loved")
+
+
+def test_too_crowded_favours_quiet_parks_even_when_fine_either_way():
+    busy = make_site("busy", annual_visits_millions=10.0)
+    quiet = make_site("quiet", annual_visits_millions=0.1)
+    sites = [busy, quiet]
+    assert score_of(sites, [], code="busy") == score_of(sites, [], code="quiet")
+    crowded = [review(["too_crowded"])]
+    assert score_of(sites, crowded, code="quiet") > score_of(sites, crowded, code="busy")
+
+
+def test_too_crowded_makes_quiet_count_for_more():
+    busy = make_site("busy", annual_visits_millions=10.0)
+    quiet = make_site("quiet", annual_visits_millions=0.1)
+    sites = [busy, quiet]
+    quiz = answers(crowds="quiet")
+    gap_before = score_of(sites, [], quiz, "quiet") - score_of(sites, [], quiz, "busy")
+    crowded = [review(["too_crowded"])]
+    gap_after = score_of(sites, crowded, quiz, "quiet") - score_of(sites, crowded, quiz, "busy")
+    assert gap_after > gap_before
+
+
+def test_distance_tags_change_how_much_distance_counts():
+    home = Location(lat=37.3, lon=-113.0)
+    near = make_site("near")
+    far = make_site("far", latitude=44.0, longitude=-73.0)
+    sites = [near, far]
+
+    def gap(reviews):
+        return score_of(sites, reviews, code="near", location=home) - score_of(
+            sites, reviews, code="far", location=home
+        )
+
+    assert gap([review(["too_far"])]) > gap([]) > gap([review(["worth_the_drive"])])
+
+
+def test_perfect_timing_favours_parks_good_in_that_season():
+    summer = make_site("summer", seasons=["summer"])
+    winter = make_site("winter", seasons=["winter"])
+    sites = [summer, winter]
+    july = [review(["perfect_timing"], month=7)]
+    assert score_of(sites, [], code="summer") == score_of(sites, [], code="winter")
+    assert score_of(sites, july, code="summer") > score_of(sites, july, code="winter")
+
+
+def test_wrong_time_of_year_makes_seasons_count_for_more():
+    good = make_site("good", seasons=["spring"])
+    off = make_site("off", seasons=["winter"])
+    sites = [good, off]
+    wrong = [review(["wrong_season"])]
+    before = score_of(sites, [], code="good") - score_of(sites, [], code="off")
+    after = score_of(sites, wrong, code="good") - score_of(sites, wrong, code="off")
+    assert after > before
+
+
+def test_taste_reads_every_part():
+    taste = Taste.from_reviews(
+        [
+            review(["loved_scenery", "too_crowded", "too_far", "perfect_timing"], 5, month=10),
+            review(["not_my_scenery", "wrong_season"], 2, terrain="coast"),
+        ]
+    )
+    assert taste.terrain["canyon"] > 0 > taste.terrain["coast"]
+    assert set(taste.loved) == {"canyon"}
+    assert taste.quiet > 0 and taste.distance > 0 and taste.timing > 0
+    assert taste.seasons == {"fall": pytest.approx(math.tanh(0.5))}
+
+
+def test_season_of():
+    assert [season_of(m) for m in (1, 4, 7, 10, 12)] == [
+        "winter",
+        "spring",
+        "summer",
+        "fall",
+        "winter",
+    ]
 
 
 # --- something different ----------------------------------------------------

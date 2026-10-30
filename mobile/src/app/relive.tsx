@@ -10,7 +10,9 @@
  * full screen, each
  * with its own caption, and the trip's notes and trails over the first.
  * Photos slowly pan and zoom; videos play through once. Trips without any
- * use the park's photo. It ends on a summary of the journey so far.
+ * use the park's photo. A trip with stars or feedback tags closes on a
+ * "How it was" page: the stars, then each tag stamped down like a rubber
+ * stamp. It ends on a summary of the journey so far.
  *
  * Tap the right side for the next slide, the left for the previous; hold
  * to pause. The bars along the top are the current trip's slides.
@@ -61,6 +63,7 @@ import { PinIcon, StarIcon } from '../components/trips/NewEntrySheet';
 import type { Site } from '../data/parks';
 import { regionForState } from '../data/regions';
 import { colors, radius, space, useTextScale } from '../theme';
+import { cleanFeedback, feedbackLabel, isGood } from '../trips/feedback';
 import {
   dateLabel,
   leadPhoto,
@@ -90,6 +93,8 @@ type Slide =
   | (TripSlide & { kind: 'title' })
   /** The trip's passport-book stamp photo; `image` is the photo. */
   | (TripSlide & { kind: 'souvenir'; backdrop: string | null })
+  /** How it was: the stars and feedback tags, over the park's photo (`image`). */
+  | (TripSlide & { kind: 'review' })
   | (TripSlide & {
       kind: 'media';
       /** The photo or video; null when the park's photo stands in. */
@@ -281,6 +286,8 @@ export default function ReliveScreen() {
           />
         ) : slide.kind === 'souvenir' ? (
           <SouvenirSlide key={index} slide={slide} still={!!only} />
+        ) : slide.kind === 'review' ? (
+          <ReviewSlide key={index} slide={slide} still={!!only} />
         ) : slide.kind === 'media' ? (
           <MediaSlide
             key={index}
@@ -382,6 +389,10 @@ function buildSlides(trips: TripEntry[], sites: Site[], summary: boolean): Slide
         drift: (slides.length % 2 === 0 ? 1 : -1) as 1 | -1,
       });
     });
+    // How it was, when they said.
+    if (entry.rating != null || cleanFeedback(entry.feedback).length > 0) {
+      slides.push({ kind: 'review', trip, entry, site, image: site?.imageUrl ?? leadPhoto(entry) });
+    }
   });
   if (summary && slides.length > 0) slides.push({ kind: 'end' });
   return slides;
@@ -851,6 +862,117 @@ function SouvenirSlide({ slide, still }: { slide: TripSlide & { backdrop: string
   );
 }
 
+// Okay is the middle of the five (as on the entry sheet).
+const RATING_WORDS = ['Awful', 'Poor', 'Okay', 'Good', 'Great'];
+/** When the first tag is stamped, and the gap between tags, in ms. */
+const FIRST_STAMP_MS = 900;
+const STAMP_GAP_MS = 550;
+/** Each stamp's tilt, so they look pressed by hand. */
+const STAMP_TILTS = [-6, 4, -3, 5];
+/** Ink: cream for the good side of a pair, orange for a complaint. */
+const GOOD_INK = '#F4EADB';
+const BAD_INK = colors.accentRamp[400];
+
+/**
+ * How it was: the trip's stars and rating word fade up over the park's
+ * blurred photo, then each feedback tag is stamped onto the page, one
+ * after another (a drop, a thud and a tap), tilted like a hand stamp.
+ */
+function ReviewSlide({ slide, still }: { slide: TripSlide; still: boolean }) {
+  const insets = useSafeAreaInsets();
+  const { entry, site } = slide;
+  const fallback = terrainTone(site?.group ?? null).band;
+  const tags = cleanFeedback(entry.feedback);
+  const appear = useSharedValue(0);
+  useEffect(() => {
+    appear.value = withDelay(150, withTiming(1, { duration: 600, easing: Easing.out(Easing.cubic) }));
+  }, [appear]);
+  const headStyle = useAnimatedStyle(() => ({
+    opacity: appear.value,
+    transform: [{ translateY: interpolate(appear.value, [0, 1], [16, 0]) }],
+  }));
+
+  return (
+    <View style={[StyleSheet.absoluteFill, { backgroundColor: fallback }]}>
+      {slide.image ? (
+        <Image source={{ uri: slide.image }} style={StyleSheet.absoluteFill} contentFit="cover" blurRadius={24} />
+      ) : null}
+      <Shade strength={0.8} />
+      <View
+        style={[
+          styles.review,
+          { paddingTop: insets.top + space[8], paddingBottom: insets.bottom + space[8] + (still ? HINT_ROOM : 0) },
+        ]}
+      >
+        <Animated.View style={[styles.reviewHead, headStyle]}>
+          <BodyText size={12} weight="bold" color={ON_INK_SOFT} style={styles.kicker}>
+            How it was
+          </BodyText>
+          <Heading size={26} color={ON_INK} style={styles.reviewPark} numberOfLines={2}>
+            {site?.name ?? entry.title}
+          </Heading>
+          {entry.rating != null ? (
+            <View style={styles.reviewStars} accessibilityLabel={`${entry.rating} of 5 stars`}>
+              {[1, 2, 3, 4, 5].map((n) => (
+                <StarIcon key={n} filled={n <= entry.rating!} size={30} />
+              ))}
+              <BodyText size={15} weight="semibold" color={ON_INK} style={styles.reviewWord}>
+                {RATING_WORDS[entry.rating - 1]}
+              </BodyText>
+            </View>
+          ) : null}
+        </Animated.View>
+        {tags.length > 0 ? (
+          <View style={styles.reviewStamps}>
+            {tags.map((tag, i) => (
+              <FeedbackStamp
+                key={tag}
+                label={feedbackLabel(tag)}
+                ink={isGood(tag) ? GOOD_INK : BAD_INK}
+                tilt={STAMP_TILTS[i % STAMP_TILTS.length]}
+                delay={FIRST_STAMP_MS + i * STAMP_GAP_MS}
+              />
+            ))}
+          </View>
+        ) : null}
+      </View>
+    </View>
+  );
+}
+
+/** One tag as a rubber stamp: it drops onto the page, squashes and settles. */
+function FeedbackStamp({ label, ink, tilt, delay }: { label: string; ink: string; tilt: number; delay: number }) {
+  const press = useSharedValue(0);
+  useEffect(() => {
+    press.value = withDelay(delay, withTiming(1, { duration: 420, easing: Easing.linear }));
+    const hit = setTimeout(() => {
+      playSound('stamp');
+      tap('light');
+    }, delay + 420 * HIT);
+    return () => clearTimeout(hit);
+  }, [press, delay]);
+  const style = useAnimatedStyle(() => {
+    const p = press.value;
+    return {
+      opacity: interpolate(p, [0, 0.25], [0, 1], 'clamp'),
+      transform: [
+        // Big and above the page, down fast, a squash on impact, settle.
+        { scale: interpolate(p, [0, HIT, HIT + 0.15, 1], [1.9, 1, 0.94, 1], 'clamp') },
+        { rotate: `${interpolate(p, [0, HIT], [tilt * 2.5, tilt], 'clamp')}deg` },
+      ],
+    };
+  });
+  return (
+    <Animated.View style={[styles.tagStamp, { borderColor: ink }, style]}>
+      <View style={[styles.tagStampInner, { borderColor: ink }]}>
+        <BodyText size={14} weight="bold" color={ink} style={styles.tagStampText}>
+          {label.toUpperCase()}
+        </BodyText>
+      </View>
+    </Animated.View>
+  );
+}
+
 /** A video filling the screen, played once through; holds while paused. */
 function VideoBackground({
   uri,
@@ -1107,6 +1229,49 @@ const styles = StyleSheet.create({
   notes: {
     textShadowColor: 'rgba(0, 0, 0, 0.35)',
     textShadowRadius: 6,
+  },
+  review: {
+    flex: 1,
+    justifyContent: 'center',
+    gap: space[8],
+    paddingHorizontal: space[6],
+  },
+  reviewHead: {
+    alignItems: 'center',
+  },
+  reviewPark: {
+    marginTop: space[2],
+    textAlign: 'center',
+  },
+  reviewStars: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: space[4],
+  },
+  reviewWord: {
+    marginLeft: space[2],
+  },
+  reviewStamps: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    gap: space[4],
+  },
+  tagStamp: {
+    padding: 3,
+    borderWidth: 2.5,
+    borderRadius: 8,
+    opacity: 0.92,
+  },
+  tagStampInner: {
+    paddingVertical: 7,
+    paddingHorizontal: 12,
+    borderWidth: 1,
+    borderRadius: 5,
+  },
+  tagStampText: {
+    letterSpacing: 1.6,
   },
   end: {
     justifyContent: 'flex-end',

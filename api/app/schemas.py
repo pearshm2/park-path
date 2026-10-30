@@ -11,6 +11,7 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
 
+from app.recommender import FEEDBACK_PAIRS
 from app.storage import MAX_VIDEO_BYTES, max_bytes_for
 from app.visibility import Visibility
 
@@ -413,6 +414,31 @@ class StampPhotoOut(BaseModel):
     url: str | None
 
 
+# How a trip went: tags that tune recommendations (app/recommender.py).
+FeedbackTag = Literal[
+    "loved_scenery",
+    "not_my_scenery",
+    "peaceful",
+    "too_crowded",
+    "worth_the_drive",
+    "too_far",
+    "perfect_timing",
+    "wrong_season",
+]
+
+
+def _check_feedback(tags: list[str] | None) -> list[str] | None:
+    """Each tag once, and only one of each pair (it can't be both)."""
+    if tags is None:
+        return None
+    if len(set(tags)) != len(tags):
+        raise ValueError("each feedback tag can only be given once")
+    for pair in FEEDBACK_PAIRS:
+        if set(pair) <= set(tags):
+            raise ValueError(f"{pair[0]} and {pair[1]} can't both be given")
+    return tags
+
+
 # Each trail or spot: up to 200 characters.
 Trail = Annotated[str, Field(max_length=200)]
 
@@ -435,8 +461,15 @@ class TripCreate(BaseModel):
     photo_keys: list[str] = Field(default_factory=list, max_length=MAX_TRIP_PHOTOS)
     # A photo of the park's passport stamp, uploaded like the photos.
     stamp_photo_key: str | None = None
+    # How it went: at most one tag of each pair, in any order.
+    feedback: list[FeedbackTag] = Field(default_factory=list, max_length=4)
     # User ids of friends who were there.
     companion_ids: list[int] = Field(default_factory=list, max_length=MAX_TRIP_COMPANIONS)
+
+    @field_validator("feedback")
+    @classmethod
+    def one_of_each_pair(cls, value: list[str] | None) -> list[str] | None:
+        return _check_feedback(value)
 
     @field_validator("visited_on")
     @classmethod
@@ -456,7 +489,7 @@ class TripUpdate(BaseModel):
     when `trails` is sent. Likewise `photos` replaces the photos and their
     captions, and `photo_keys` (keys only) is ignored when it's sent.
     `stamp_photo_key` replaces the passport-stamp photo, or removes it when
-    null.
+    null. `feedback` replaces the feedback tags (send [] to clear them).
     """
 
     visited_on: date | None = None
@@ -469,7 +502,13 @@ class TripUpdate(BaseModel):
     photos: list[TripPhotoIn] | None = Field(None, max_length=MAX_TRIP_PHOTOS)
     photo_keys: list[str] | None = Field(None, max_length=MAX_TRIP_PHOTOS)
     stamp_photo_key: str | None = None
+    feedback: list[FeedbackTag] | None = Field(None, max_length=4)
     companion_ids: list[int] | None = Field(None, max_length=MAX_TRIP_COMPANIONS)
+
+    @field_validator("feedback")
+    @classmethod
+    def one_of_each_pair(cls, value: list[str] | None) -> list[str] | None:
+        return _check_feedback(value)
 
     @field_validator("visited_on")
     @classmethod
@@ -489,6 +528,8 @@ class TripOut(BaseModel):
     notes: str
     rating: int | None
     trails: list[str]
+    # How it went (FeedbackTag values); friends see these on the trip.
+    feedback: list[FeedbackTag] = []
     # The first trail, for older clients; null without any.
     stamp: str | None
     visibility: Visibility

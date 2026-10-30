@@ -1,7 +1,8 @@
 /**
  * The prototype's "New journal entry" sheet: the park visited (searched
  * from every site, national parks first), the exact date, a title, notes, a
- * star rating, trails and spots you loved (any number: the park's own
+ * star rating and "How was it?" feedback tags (four pairs: they tune your
+ * picks and show on the trip), trails and spots you loved (any number: the park's own
  * trails as chips to toggle, plus any typed in), who was with you (your
  * friends), photos and videos, each with its own caption for Relive, and a
  * photo of the park's official stamp in your passport book (a souvenir of
@@ -61,6 +62,7 @@ import {
   type TripEntry,
   type TripMedia,
 } from '../../trips/TripsContext';
+import { FEEDBACK_PAIRS, feedbackLabel, toggleFeedback, type FeedbackTag } from '../../trips/feedback';
 import type { Visibility } from '../../api/trips';
 import { Avatar } from '../Avatar';
 import { Calendar, toDay } from '../Calendar';
@@ -118,6 +120,7 @@ export function NewEntrySheet({
   const [title, setTitle] = useState(start.title);
   const [notes, setNotes] = useState(start.notes);
   const [rating, setRating] = useState<number | null>(start.rating);
+  const [feedback, setFeedback] = useState<FeedbackTag[]>(start.feedback);
   const [trails, setTrails] = useState<string[]>(start.trails);
   /** A trail or spot being typed, not yet added. */
   const [trailText, setTrailText] = useState('');
@@ -135,7 +138,19 @@ export function NewEntrySheet({
   // Keep the draft as it's typed: a moment after each change, and at once
   // if the sheet closes first. Nothing is written until something changes,
   // so opening and closing the sheet leaves an earlier draft alone.
-  const fields = { siteId, date: day, title, notes, rating, trails, withIds, media, visibility, passportStamp };
+  const fields = {
+    siteId,
+    date: day,
+    title,
+    notes,
+    rating,
+    feedback,
+    trails,
+    withIds,
+    media,
+    visibility,
+    passportStamp,
+  };
   const fieldsJson = JSON.stringify(fields);
   const [openedWith] = useState(fieldsJson);
   const pending = useRef<EntryDraft | null | undefined>(undefined);
@@ -175,6 +190,7 @@ export function NewEntrySheet({
     setTitle('');
     setNotes('');
     setRating(null);
+    setFeedback([]);
     setTrails([]);
     setTrailText('');
     setWithIds([]);
@@ -301,6 +317,7 @@ export function NewEntrySheet({
           ),
         ],
         rating,
+        feedback,
         visibility,
         passportStamp,
         // Something typed but not added yet still counts.
@@ -496,6 +513,42 @@ export function NewEntrySheet({
                 <BodyText size={12} color={colors.neutral[600]} style={styles.ratingText}>
                   {rating === null ? 'Optional' : RATING_WORDS[rating - 1]}
                 </BodyText>
+              </View>
+              {/* Four quick questions: one side of each pair, or neither.
+                  They tune the picks and show on the trip. */}
+              <View style={styles.feedback}>
+                {FEEDBACK_PAIRS.map((pair) => (
+                  <View key={pair[0]} style={styles.feedbackRow}>
+                    {pair.map((tag) => {
+                      const on = feedback.includes(tag);
+                      const other = !on && pair.some((t) => t !== tag && feedback.includes(t));
+                      return (
+                        <Pressable
+                          key={tag}
+                          onPress={() => setFeedback((list) => toggleFeedback(list, tag))}
+                          accessibilityRole="button"
+                          accessibilityLabel={feedbackLabel(tag)}
+                          accessibilityState={{ selected: on }}
+                          style={({ pressed }) => [
+                            styles.feedbackTag,
+                            on && styles.feedbackOn,
+                            other && styles.feedbackOther,
+                            pressed && styles.feedbackPressed,
+                          ]}
+                        >
+                          <BodyText
+                            size={12.5}
+                            weight="semibold"
+                            color={on ? colors.neutral[100] : colors.neutral[800]}
+                            numberOfLines={1}
+                          >
+                            {feedbackLabel(tag)}
+                          </BodyText>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                ))}
               </View>
 
               <Label>Trails &amp; spots</Label>
@@ -779,6 +832,7 @@ function fromEntry(entry: TripEntry): Omit<EntryDraft, 'savedAt'> {
     title: entry.title,
     notes: entry.notes,
     rating: entry.rating,
+    feedback: entry.feedback,
     trails: entry.trails,
     withIds: entry.with.map((p) => p.id),
     media: entry.media,
@@ -796,6 +850,7 @@ function blankDraft(initialSiteId: string | undefined): Omit<EntryDraft, 'savedA
     title: '',
     notes: '',
     rating: null,
+    feedback: [],
     trails: [],
     withIds: [],
     media: [],
@@ -811,6 +866,7 @@ function hasContent(draft: Omit<EntryDraft, 'savedAt'>, blank: Omit<EntryDraft, 
     !!draft.notes.trim() ||
     draft.trails.length > 0 ||
     draft.rating !== null ||
+    draft.feedback.length > 0 ||
     draft.withIds.length > 0 ||
     draft.media.length > 0 ||
     draft.visibility !== blank.visibility ||
@@ -1012,6 +1068,33 @@ const styles = StyleSheet.create({
   },
   ratingText: {
     marginLeft: space[2],
+  },
+  feedback: {
+    gap: space[2],
+    marginTop: space[3],
+  },
+  feedbackRow: {
+    flexDirection: 'row',
+    gap: space[2],
+  },
+  feedbackTag: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: space[2],
+    borderRadius: radius.pill,
+    borderWidth: 1.5,
+    borderColor: colors.neutral[400],
+  },
+  feedbackOn: {
+    backgroundColor: colors.accent,
+    borderColor: colors.accent,
+  },
+  feedbackOther: {
+    opacity: 0.45,
+  },
+  feedbackPressed: {
+    opacity: 0.7,
   },
   hint: {
     marginBottom: space[2],
