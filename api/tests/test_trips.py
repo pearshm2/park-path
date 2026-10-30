@@ -477,6 +477,72 @@ def test_photo_urls_work_for_friends_reading_a_shared_trip(people, codes, storag
     assert bob.get(trip_id).json()["photos"][0]["url"].endswith("?signed=1")
 
 
+# --- passport-stamp photo ----------------------------------------------------------
+
+
+def test_stamp_photo_is_uploaded_like_a_photo_and_friends_see_it(people, codes, storage):
+    ann, bob = people(), people()
+    ann.befriend(bob)
+    key = ann.upload(storage)
+    resp = ann.log(codes[0], stamp_photo_key=key)
+    assert resp.status_code == 201, resp.text
+    assert resp.json()["stamp_photo"]["key"] == key
+    assert resp.json()["photos"] == []
+    trip_id = resp.json()["id"]
+    assert bob.get(trip_id).json()["stamp_photo"]["url"].endswith("?signed=1")
+    assert ann.log(codes[1]).json()["stamp_photo"] is None
+
+
+def test_stamp_photo_is_checked_like_a_photo(people, codes, storage):
+    ann, bob = people(), people()
+    bobs = bob.upload(storage)
+    assert ann.log(codes[0], stamp_photo_key=bobs).status_code == 400
+    never_uploaded = f"{user_prefix(ann.id)}nope.jpg"
+    assert ann.log(codes[0], stamp_photo_key=never_uploaded).status_code == 400
+    video = ann.upload(storage, content_type="video/mp4")
+    assert ann.log(codes[0], stamp_photo_key=video).status_code == 400
+    photo = ann.upload(storage)
+    both = ann.log(codes[0], photo_keys=[photo], stamp_photo_key=photo)
+    assert both.status_code == 400
+    # One trip's stamp can't be another's stamp or photo.
+    assert ann.log(codes[0], stamp_photo_key=photo).status_code == 201
+    assert ann.log(codes[1], stamp_photo_key=photo).status_code == 400
+    assert ann.log(codes[1], photo_keys=[photo]).status_code == 400
+
+
+def test_stamp_photo_needs_storage(people, codes, no_storage):
+    ann = people()
+    key = f"{user_prefix(ann.id)}x.jpg"
+    assert ann.log(codes[0], stamp_photo_key=key).status_code == 503
+
+
+def test_patch_replaces_and_removes_the_stamp_photo(people, codes, storage):
+    ann = people()
+    first, second = ann.upload(storage), ann.upload(storage)
+    trip_id = ann.log(codes[0], stamp_photo_key=first).json()["id"]
+
+    def patch(body):
+        return client.patch(f"/trips/{trip_id}", json=body, headers=ann.headers)
+
+    # Not sent: left alone. Sent again unchanged: nothing deleted.
+    assert patch({"title": "Hi"}).json()["stamp_photo"]["key"] == first
+    assert patch({"stamp_photo_key": first}).json()["stamp_photo"]["key"] == first
+    assert storage.deleted == []
+    resp = patch({"stamp_photo_key": second})
+    assert resp.json()["stamp_photo"]["key"] == second
+    assert storage.deleted == [first]
+    assert patch({"stamp_photo_key": None}).json()["stamp_photo"] is None
+    assert storage.deleted == [first, second]
+
+
+def test_deleting_a_trip_deletes_its_stamp_photo(people, codes, storage):
+    ann = people()
+    photo, stamp = ann.upload(storage), ann.upload(storage)
+    trip_id = ann.log(codes[0], photo_keys=[photo], stamp_photo_key=stamp).json()["id"]
+    assert client.delete(f"/trips/{trip_id}", headers=ann.headers).status_code == 204
+    assert sorted(storage.deleted) == sorted([photo, stamp])
+
+
 # --- trails, captions and videos ------------------------------------------------
 
 

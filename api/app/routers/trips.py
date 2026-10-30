@@ -25,6 +25,10 @@ Photos and videos are uploaded straight to S3 with a signed form
 back with short-lived signed URLs. The photo endpoints answer 503 until S3
 is configured.
 
+A trip can also have one photo of the park's stamp in the owner's
+Passport To Your National Parks book (`stamp_photo_key`), uploaded the same
+way and shown to the same people as the photos.
+
 Trails and photos each have an older form kept for older clients: `stamp`
 (one trail) and `photo_keys` (keys, no captions). The newer `trails` and
 `photos` win when both are sent.
@@ -42,6 +46,7 @@ from app.models import Site, TripComment, TripCompanion, TripEntry, TripPhoto, U
 from app.schemas import (
     PhotoUploadOut,
     PhotoUploadRequest,
+    StampPhotoOut,
     TripCommentCreate,
     TripCommentOut,
     TripCreate,
@@ -92,6 +97,14 @@ def _out(entry: TripEntry, storage: Storage | None) -> TripOut:
             )
             for p in entry.photos
         ],
+        stamp_photo=(
+            StampPhotoOut(
+                key=entry.stamp_photo_key,
+                url=storage.signed_url(entry.stamp_photo_key) if storage else None,
+            )
+            if entry.stamp_photo_key
+            else None
+        ),
         companions=[UserOut.model_validate(c.user) for c in entry.companions],
         comment_count=entry.comment_count or 0,
         created_at=entry.created_at,
@@ -155,8 +168,22 @@ def _check_photo_keys(
         if not storage.exists(key):
             raise _bad_request("A photo hasn't finished uploading")
     taken = db.scalars(select(TripPhoto.storage_key).where(TripPhoto.storage_key.in_(new))).all()
-    if taken:
+    stamps = db.scalars(
+        select(TripEntry.stamp_photo_key).where(TripEntry.stamp_photo_key.in_(new))
+    ).all()
+    if taken or stamps:
         raise _bad_request("A photo is already on another trip")
+
+
+def _check_stamp_key(
+    db: Session, me: User, storage: Storage | None, key: str, photos: list[str]
+) -> None:
+    """A new stamp photo: checked like a trip photo, and it must be a photo."""
+    if key in photos:
+        raise _bad_request("The stamp photo can't also be one of the trip's photos")
+    if media_kind(key) != "photo":
+        raise _bad_request("The stamp has to be a photo")
+    _check_photo_keys(db, me, storage, [key], keep=set())
 
 
 def _clean_trails(trails: list[str]) -> list[str]:
@@ -214,6 +241,8 @@ def create_trip(
     companions = _check_companions(db, me, payload.companion_ids)
     photos = _photos_in(payload.photos, payload.photo_keys) or []
     _check_photo_keys(db, me, storage, [p.key for p in photos], keep=set())
+    if payload.stamp_photo_key:
+        _check_stamp_key(db, me, storage, payload.stamp_photo_key, [p.key for p in photos])
     trails = (
         _clean_trails(payload.trails)
         if payload.trails is not None
@@ -228,6 +257,7 @@ def create_trip(
         rating=payload.rating,
         trails=trails,
         visibility=payload.visibility.value,
+        stamp_photo_key=payload.stamp_photo_key or None,
         photos=[
             TripPhoto(storage_key=p.key, position=i, caption=p.caption, duration_ms=p.duration_ms)
             for i, p in enumerate(photos)
@@ -364,6 +394,15 @@ def update_trip(
                 row.duration_ms = p.duration_ms
             rows.append(row)
         entry.photos = rows
+    if "stamp_photo_key" in sent:
+        old, new = entry.stamp_photo_key, payload.stamp_photo_key or None
+        if new != old:
+            if new:
+                photos = [p.storage_key for p in entry.photos]
+                _check_stamp_key(db, me, storage, new, photos)
+            if old:
+                removed.append(old)
+            entry.stamp_photo_key = new
     db.commit()
     db.refresh(entry)
     _delete_objects(storage, removed)
@@ -379,6 +418,8 @@ def delete_trip(
 ):
     entry = _owned(db, trip_id, me)
     keys = [p.storage_key for p in entry.photos]
+    if entry.stamp_photo_key:
+        keys.append(entry.stamp_photo_key)
     db.delete(entry)
     db.commit()
     _delete_objects(storage, keys)

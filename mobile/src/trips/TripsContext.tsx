@@ -81,10 +81,15 @@ export type TripEntry = {
   visibility: Visibility;
   /**
    * A photo of the park's official stamp in a Passport To Your National
-   * Parks book: the souvenir of being there in person. Kept on the phone
-   * only, like photos for now. Null if none.
+   * Parks book: the souvenir of being there in person. A file on the
+   * phone, or a link to the server's copy (from another phone). Null if
+   * none. Uploaded during sync like the photos, so friends see it too.
    */
   passportStamp: string | null;
+  /** The stamp photo's storage key on the server, once uploaded. */
+  stampKey?: string;
+  /** The stamp photo couldn't be uploaded: kept on this phone only. */
+  stampLocalOnly?: true;
   createdAt: string;
   /** Its id on the server, once it's been sent. */
   serverId?: number;
@@ -114,6 +119,11 @@ export type TripMedia = {
 /** A photo or video still to be uploaded: a file on this phone with no key yet. */
 function needsUpload(media: TripMedia): boolean {
   return !media.key && !media.localOnly && !isWeb(media.uri);
+}
+
+/** A passport-stamp photo still to be uploaded. */
+function stampNeedsUpload(entry: TripEntry): boolean {
+  return !!entry.passportStamp && !entry.stampKey && !entry.stampLocalOnly && !isWeb(entry.passportStamp);
 }
 
 /** The photo to show for an entry: its first photo, skipping videos. */
@@ -339,10 +349,20 @@ function photosFor(entry: TripEntry): TripFields['photos'] {
   );
 }
 
+/**
+ * The stamp photo as the server takes it: its key, or null for none.
+ * Undefined while it's only on this phone, so the server's is left alone.
+ */
+function stampFor(entry: TripEntry): string | null | undefined {
+  if (!entry.passportStamp) return null;
+  return entry.stampKey;
+}
+
 /** A trip as the server takes it. */
 function toFields(entry: TripEntry): TripFields {
   return {
     photos: photosFor(entry),
+    stamp_photo_key: stampFor(entry),
     park_code: entry.siteId,
     visited_on: entry.date,
     title: entry.title.slice(0, 200),
@@ -388,8 +408,7 @@ function fromServer(trip: TripOut, local?: TripEntry): TripEntry {
     trails: trip.trails ?? (trip.stamp ? [trip.stamp] : []),
     visibility: trip.visibility,
     with: trip.companions,
-    // On the phone only, for now.
-    passportStamp: local?.passportStamp ?? null,
+    ...stampFromServer(trip, local),
     // Photos stay as the phone has them; a trip new to this phone shows the
     // server's (links that expire; fetched fresh on each sync).
     media: local
@@ -406,6 +425,31 @@ function fromServer(trip: TripOut, local?: TripEntry): TripEntry {
     serverId: trip.id,
     serverPark: trip.park_code,
   };
+}
+
+/**
+ * The stamp photo: this phone's file while it's the one the server has (or
+ * isn't sent yet), else the server's (a link that expires, fresh each sync).
+ */
+function stampFromServer(
+  trip: TripOut,
+  local?: TripEntry,
+): Pick<TripEntry, 'passportStamp' | 'stampKey' | 'stampLocalOnly'> {
+  const own = local?.passportStamp ?? null;
+  const ownStamp = { passportStamp: own, stampKey: local?.stampKey, stampLocalOnly: local?.stampLocalOnly };
+  // An older server without stamp photos, or a stamp this phone hasn't sent.
+  if (trip.stamp_photo === undefined || (own && !local?.stampKey)) return ownStamp;
+  const server = trip.stamp_photo;
+  if (!server) {
+    // Taken off on another phone.
+    if (own) deleteFile(own);
+    return { passportStamp: null };
+  }
+  if (own && local?.stampKey === server.key && !isWeb(own)) return ownStamp;
+  if (!server.url) return ownStamp;
+  // New from another phone (or a fresh link for one already shown from the server).
+  if (own && local?.stampKey !== server.key) deleteFile(own);
+  return { passportStamp: server.url, stampKey: server.key };
 }
 
 /** A request that failed for want of a connection, not because it was refused. */
@@ -528,6 +572,55 @@ export function TripsProvider({ children }: { children: ReactNode }) {
   );
 
   /**
+   * Change an entry's stamp-photo upload state where it's kept, if the
+   * stamp is still the same file; returns the entry as it now is.
+   */
+  const setStamp = useCallback(
+    async (entry: TripEntry, change: Pick<TripEntry, 'stampKey' | 'stampLocalOnly'>): Promise<TripEntry> => {
+      await commit((c) => ({
+        ...c,
+        entries: c.entries.map((e) =>
+          e.id === entry.id && e.passportStamp === entry.passportStamp ? { ...e, ...change } : e,
+        ),
+      }));
+      return latest.current?.entries.find((e) => e.id === entry.id) ?? entry;
+    },
+    [commit],
+  );
+
+  /** Upload an entry's passport-stamp photo, as uploadMedia does a photo. */
+  const uploadStamp = useCallback(
+    async (token: string, entry: TripEntry): Promise<{ entry: TripEntry; storageOff: boolean }> => {
+      const uri = entry.passportStamp!;
+      const contentType = contentTypeFor(uri);
+      let size: number | null = null;
+      try {
+        size = new File(uri).size;
+      } catch {
+        size = null;
+      }
+      if (!contentType || contentType.startsWith('video/') || !size) {
+        // Gone from the phone, or a type the server won't take.
+        return { entry: await setStamp(entry, { stampLocalOnly: true }), storageOff: false };
+      }
+      try {
+        const upload = await requestUpload(token, contentType, size);
+        await sendUpload(upload, uri, contentType);
+        return { entry: await setStamp(entry, { stampKey: upload.key }), storageOff: false };
+      } catch (error) {
+        if (error instanceof ApiError && error.status === 503) return { entry, storageOff: true };
+        if (error instanceof ApiError && error.status >= 400 && error.status < 500 && error.status !== 401) {
+          // Too big, or refused: keep it on the phone only.
+          return { entry: await setStamp(entry, { stampLocalOnly: true }), storageOff: false };
+        }
+        // No signal, or a hiccup: the next sync tries again.
+        return { entry, storageOff: false };
+      }
+    },
+    [setStamp],
+  );
+
+  /**
    * Send what's waiting, then take the server's trips. Stops quietly when
    * offline; whatever's left goes next time.
    */
@@ -549,7 +642,7 @@ export function TripsProvider({ children }: { children: ReactNode }) {
 
       // Trips changed on the phone, and ones with photos still to upload.
       const waiting = latest.current!.entries.filter(
-        (e) => !e.syncError && (e.unsent || e.media.some(needsUpload)),
+        (e) => !e.syncError && (e.unsent || e.media.some(needsUpload) || stampNeedsUpload(e)),
       );
       let storageOff = false;
       for (const waitingEntry of waiting) {
@@ -562,8 +655,16 @@ export function TripsProvider({ children }: { children: ReactNode }) {
           if (moving && entry.media.some((m) => m.key && !isWeb(m.uri))) {
             entry = await setMedia(entry, (m) => (isWeb(m.uri) ? m : { ...m, key: undefined }));
           }
+          if (moving && entry.stampKey && entry.passportStamp && !isWeb(entry.passportStamp)) {
+            entry = await setStamp(entry, { stampKey: undefined });
+          }
           if (!storageOff && entry.media.some(needsUpload)) {
             const uploaded = await uploadMedia(token, entry);
+            storageOff = uploaded.storageOff;
+            entry = uploaded.entry;
+          }
+          if (!storageOff && stampNeedsUpload(entry)) {
+            const uploaded = await uploadStamp(token, entry);
             storageOff = uploaded.storageOff;
             entry = uploaded.entry;
           }
@@ -644,7 +745,7 @@ export function TripsProvider({ children }: { children: ReactNode }) {
     } catch {
       // Offline, or the API asleep: try again next time.
     }
-  }, [userId, token, commit, setMedia, uploadMedia]);
+  }, [userId, token, commit, setMedia, uploadMedia, setStamp, uploadStamp]);
 
   const syncSoon = useCallback(() => {
     void enqueue(sync);
@@ -727,12 +828,23 @@ export function TripsProvider({ children }: { children: ReactNode }) {
         deleteMedia(old.media.filter((m) => !stillThere.has(m.uri)));
         // The passport stamp: kept, replaced, or taken off.
         let passportStamp = draft.passportStamp;
+        let stamp = { stampKey: old.stampKey, stampLocalOnly: old.stampLocalOnly };
         if (passportStamp !== old.passportStamp) {
           if (old.passportStamp) deleteFile(old.passportStamp);
           if (passportStamp) passportStamp = keepFile(passportStamp, 99);
+          // A new photo goes up on the next sync; the server then drops the old one.
+          stamp = { stampKey: undefined, stampLocalOnly: undefined };
         }
         // Edited: send it again, even if it was refused before.
-        const entry: TripEntry = { ...old, ...draft, media, passportStamp, unsent: true, syncError: undefined };
+        const entry: TripEntry = {
+          ...old,
+          ...draft,
+          media,
+          passportStamp,
+          ...stamp,
+          unsent: true,
+          syncError: undefined,
+        };
         await commit((c) => ({ ...c, entries: c.entries.map((e) => (e.id === id ? entry : e)) }));
         syncSoon();
         return entry;

@@ -3267,6 +3267,32 @@
         ],
         "title": "SnoozeOut"
       },
+      "StampPhotoOut": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Url"
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "url"
+        ],
+        "title": "StampPhotoOut",
+        "description": "The photo of the park's passport stamp on a trip."
+      },
       "Token": {
         "properties": {
           "access_token": {
@@ -3489,6 +3515,17 @@
             "maxItems": 8,
             "title": "Photo Keys"
           },
+          "stamp_photo_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stamp Photo Key"
+          },
           "companion_ids": {
             "items": {
               "type": "integer"
@@ -3573,6 +3610,16 @@
             },
             "type": "array",
             "title": "Photos"
+          },
+          "stamp_photo": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StampPhotoOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "companions": {
             "items": {
@@ -3820,6 +3867,17 @@
             ],
             "title": "Photo Keys"
           },
+          "stamp_photo_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stamp Photo Key"
+          },
           "companion_ids": {
             "anyOf": [
               {
@@ -3838,7 +3896,7 @@
         },
         "type": "object",
         "title": "TripUpdate",
-        "description": "Only the fields sent change. `rating` can be set to null to clear it.\n\n`trails` replaces the list. `stamp`, the older one-trail form, sets the\nfirst trail (keeping the rest), or removes it when null; it's ignored\nwhen `trails` is sent. Likewise `photos` replaces the photos and their\ncaptions, and `photo_keys` (keys only) is ignored when it's sent."
+        "description": "Only the fields sent change. `rating` can be set to null to clear it.\n\n`trails` replaces the list. `stamp`, the older one-trail form, sets the\nfirst trail (keeping the rest), or removes it when null; it's ignored\nwhen `trails` is sent. Likewise `photos` replaces the photos and their\ncaptions, and `photo_keys` (keys only) is ignored when it's sent.\n`stamp_photo_key` replaces the passport-stamp photo, or removes it when\nnull."
       },
       "UserCreate": {
         "properties": {

@@ -1101,6 +1101,16 @@ export interface components {
              */
             until: string;
         };
+        /**
+         * StampPhotoOut
+         * @description The photo of the park's passport stamp on a trip.
+         */
+        StampPhotoOut: {
+            /** Key */
+            key: string;
+            /** Url */
+            url: string | null;
+        };
         /** Token */
         Token: {
             /** Access Token */
@@ -1175,6 +1185,8 @@ export interface components {
             photos?: components["schemas"]["TripPhotoIn"][] | null;
             /** Photo Keys */
             photo_keys?: string[];
+            /** Stamp Photo Key */
+            stamp_photo_key?: string | null;
             /** Companion Ids */
             companion_ids?: number[];
         };
@@ -1205,6 +1217,7 @@ export interface components {
             visibility: components["schemas"]["Visibility"];
             /** Photos */
             photos: components["schemas"]["TripPhotoOut"][];
+            stamp_photo?: components["schemas"]["StampPhotoOut"] | null;
             /** Companions */
             companions: components["schemas"]["UserOut"][];
             /**
@@ -1262,6 +1275,8 @@ export interface components {
          *     first trail (keeping the rest), or removes it when null; it's ignored
          *     when `trails` is sent. Likewise `photos` replaces the photos and their
          *     captions, and `photo_keys` (keys only) is ignored when it's sent.
+         *     `stamp_photo_key` replaces the passport-stamp photo, or removes it when
+         *     null.
          */
         TripUpdate: {
             /** Visited On */
@@ -1281,6 +1296,8 @@ export interface components {
             photos?: components["schemas"]["TripPhotoIn"][] | null;
             /** Photo Keys */
             photo_keys?: string[] | null;
+            /** Stamp Photo Key */
+            stamp_photo_key?: string | null;
             /** Companion Ids */
             companion_ids?: number[] | null;
         };
