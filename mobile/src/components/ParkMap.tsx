@@ -154,7 +154,13 @@ const PINCH_MAX = 8;
 type View2D = { k: number; tx: number; ty: number };
 const IDENTITY: View2D = { k: 1, tx: 0, ty: 0 };
 /** The view as the UI thread holds it. */
-type LiveView = { k: SharedValue<number>; tx: SharedValue<number>; ty: SharedValue<number> };
+type LiveView = {
+  k: SharedValue<number>;
+  tx: SharedValue<number>;
+  ty: SharedValue<number>;
+  /** Bumped after each render, so every pin re-applies the live view (see `resync`). */
+  resync: SharedValue<number>;
+};
 
 type ParkMapProps = {
   sites: Site[];
@@ -322,7 +328,26 @@ export function ParkMap({
   const k = useSharedValue(1);
   const tx = useSharedValue(0);
   const ty = useSharedValue(0);
-  const live: LiveView = { k, tx, ty };
+  const resync = useSharedValue(0);
+  const live: LiveView = { k, tx, ty, resync };
+
+  // After every render, have every pin and the land set their position
+  // again from the live view. The pins are memoised, so a render (the one
+  // when a finger lifts, say, as badges come and go) commits the map
+  // without them; on Android that commit could land after the UI thread's
+  // last move and put back each pin's older position, leaving the pins
+  // where the map was a moment before ("detached") until the next move.
+  // Bumping this a frame later (and again shortly after, in case the commit
+  // was slow to reach the screen) makes the UI thread's position the last word.
+  useEffect(() => {
+    const bump = () => resync.set(resync.get() + 1);
+    const frame = requestAnimationFrame(bump);
+    const later = setTimeout(bump, 150);
+    return () => {
+      cancelAnimationFrame(frame);
+      clearTimeout(later);
+    };
+  });
 
   /** The target the user last pinched or dragged away from, if any. */
   const [movedFrom, setMovedFrom] = useState<View2D | null>(null);
@@ -676,6 +701,7 @@ export function ParkMap({
       k,
       tx,
       ty,
+      resync,
       lift,
       kind,
       selected: dot.site.id === selectedId,
@@ -895,6 +921,7 @@ const AnimatedG = Animated.createAnimatedComponent(
  */
 function Zoomed({ view, lift, children }: { view: LiveView; lift: number; children: ReactNode }) {
   const animatedProps = useAnimatedProps(() => {
+    view.resync.get();
     const scale = view.k.get();
     return { matrix: [scale, 0, 0, scale, view.tx.get(), view.ty.get() + lift] };
   });
@@ -917,6 +944,7 @@ const ParkPin = memo(function ParkPin({
   k,
   tx,
   ty,
+  resync,
   lift,
   kind,
   selected,
@@ -932,6 +960,7 @@ const ParkPin = memo(function ParkPin({
   k: SharedValue<number>;
   tx: SharedValue<number>;
   ty: SharedValue<number>;
+  resync: SharedValue<number>;
   lift: number;
   kind: PinKind;
   selected: boolean;
@@ -1035,7 +1064,7 @@ const ParkPin = memo(function ParkPin({
     );
   }
   return (
-    <Pinned at={{ x, y }} view={{ k, tx, ty }} lift={lift}>
+    <Pinned at={{ x, y }} view={{ k, tx, ty, resync }} lift={lift}>
       {body}
     </Pinned>
   );
@@ -1058,6 +1087,7 @@ function Pinned({
 }) {
   const { x, y } = at;
   const animatedProps = useAnimatedProps(() => {
+    view.resync.get();
     const scale = view.k.get();
     return { matrix: [1, 0, 0, 1, x * scale + view.tx.get(), y * scale + view.ty.get() + lift] };
   });
