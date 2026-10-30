@@ -390,6 +390,9 @@ class TripEntry(Base):
     visibility: Mapped[str] = mapped_column(
         String(10), nullable=False, default="friends", server_default="friends"
     )
+    # A photo of the park's stamp in their Passport To Your National Parks
+    # book: a storage key like a TripPhoto's (always a photo), or None.
+    stamp_photo_key: Mapped[str | None] = mapped_column(String(300))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(UTC), server_default=func.now()
     )

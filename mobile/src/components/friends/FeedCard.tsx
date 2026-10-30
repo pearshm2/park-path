@@ -5,7 +5,8 @@
  * trails, who they went with, and a button to read and add comments.
  *
  * Their own photos always come first; a trip without any shows the park's
- * own photo instead (and one without that either is a post of words).
+ * own photo instead (and one without that either is a post of words). A
+ * photo of their passport stamp, if they added one, is the last slide.
  */
 
 import { Image } from 'expo-image';
@@ -50,12 +51,17 @@ export function FeedCard({
   // Their own photos that have reached the server; without any, the
   // park's photo stands in.
   const own = trip.photos.filter((p) => p.kind === 'photo' && p.url);
-  const shots =
-    own.length > 0
+  const stamp = trip.stamp_photo?.url
+    ? [{ key: 'stamp', url: trip.stamp_photo.url, caption: '', stamp: true }]
+    : [];
+  const shots: { key: string; url: string | null; caption: string; stamp?: boolean }[] = [
+    ...(own.length > 0
       ? own
       : site?.imageUrl
         ? [{ key: 'park', url: site.imageUrl, caption: '' }]
-        : [];
+        : []),
+    ...stamp,
+  ];
   const [width, setWidth] = useState(0);
   const [at, setAt] = useState(0);
   const caption = shots[at]?.caption.trim() ?? '';
@@ -95,9 +101,12 @@ export function FeedCard({
                 key={shot.key}
                 source={{ uri: shot.url! }}
                 style={{ width, height: PHOTO_HEIGHT }}
-                contentFit="cover"
+                // The whole stamp, never cropped.
+                contentFit={shot.stamp ? 'contain' : 'cover'}
                 transition={250}
-                accessibilityLabel={shot.caption || `Photo from ${trip.park_name}`}
+                accessibilityLabel={
+                  shot.stamp ? `Passport stamp from ${trip.park_name}` : shot.caption || `Photo from ${trip.park_name}`
+                }
               />
             ))}
           </ScrollView>
@@ -118,6 +127,13 @@ export function FeedCard({
               {dateLabel(trip.visited_on)}
             </BodyText>
           </View>
+          {shots[at]?.stamp ? (
+            <View style={styles.stampTag} pointerEvents="none">
+              <BodyText size={11} weight="bold" color={colors.neutral[100]} style={styles.park}>
+                PASSPORT STAMP
+              </BodyText>
+            </View>
+          ) : null}
           {shots.length > 1 ? (
             <View style={styles.dots} pointerEvents="none">
               {shots.map((shot, i) => (
@@ -240,6 +256,15 @@ const styles = StyleSheet.create({
   },
   photo: {
     height: PHOTO_HEIGHT,
+  },
+  stampTag: {
+    position: 'absolute',
+    top: space[3],
+    left: space[3],
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+    borderRadius: radius.pill,
+    backgroundColor: 'rgba(20, 17, 15, 0.55)',
   },
   dots: {
     position: 'absolute',

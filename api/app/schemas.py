@@ -405,6 +405,14 @@ class TripPhotoOut(BaseModel):
     duration_ms: int | None
 
 
+class StampPhotoOut(BaseModel):
+    """The photo of the park's passport stamp on a trip."""
+
+    key: str
+    # Short-lived signed link, like a trip photo's.
+    url: str | None
+
+
 # Each trail or spot: up to 200 characters.
 Trail = Annotated[str, Field(max_length=200)]
 
@@ -425,6 +433,8 @@ class TripCreate(BaseModel):
     # The older form of `photos`: keys only, no captions. Ignored when
     # `photos` is sent.
     photo_keys: list[str] = Field(default_factory=list, max_length=MAX_TRIP_PHOTOS)
+    # A photo of the park's passport stamp, uploaded like the photos.
+    stamp_photo_key: str | None = None
     # User ids of friends who were there.
     companion_ids: list[int] = Field(default_factory=list, max_length=MAX_TRIP_COMPANIONS)
 
@@ -445,6 +455,8 @@ class TripUpdate(BaseModel):
     first trail (keeping the rest), or removes it when null; it's ignored
     when `trails` is sent. Likewise `photos` replaces the photos and their
     captions, and `photo_keys` (keys only) is ignored when it's sent.
+    `stamp_photo_key` replaces the passport-stamp photo, or removes it when
+    null.
     """
 
     visited_on: date | None = None
@@ -456,6 +468,7 @@ class TripUpdate(BaseModel):
     visibility: Visibility | None = None
     photos: list[TripPhotoIn] | None = Field(None, max_length=MAX_TRIP_PHOTOS)
     photo_keys: list[str] | None = Field(None, max_length=MAX_TRIP_PHOTOS)
+    stamp_photo_key: str | None = None
     companion_ids: list[int] | None = Field(None, max_length=MAX_TRIP_COMPANIONS)
 
     @field_validator("visited_on")
@@ -480,6 +493,8 @@ class TripOut(BaseModel):
     stamp: str | None
     visibility: Visibility
     photos: list[TripPhotoOut]
+    # The passport-stamp photo; null without one.
+    stamp_photo: StampPhotoOut | None = None
     companions: list[UserOut]
     comment_count: int = 0
     created_at: datetime

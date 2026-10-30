@@ -4,7 +4,8 @@
  *
  * The server keeps a trip's park, date, title, notes, rating, trails, who
  * was there and who can see it (always friends, from the app), and its
- * photos and videos with their captions. Those go to S3 by a signed upload
+ * photos and videos with their captions, and a photo of the park's
+ * passport stamp. Those go to S3 by a signed upload
  * (requestUpload, then sendUpload, below); trips/TripsContext.tsx uploads
  * them as part of each sync.
  */
@@ -42,6 +43,11 @@ export type TripFields = {
    * server's as they are (sent only when the phone knows the full list).
    */
   photos?: TripPhotoIn[];
+  /**
+   * The passport-stamp photo's storage key, or null for none. Undefined
+   * leaves the server's as it is (the phone's isn't uploaded yet).
+   */
+  stamp_photo_key?: string | null;
 };
 
 /** GET /trips — my trips, newest visit first. */
@@ -78,6 +84,7 @@ export function updateTrip(token: string, id: number, fields: TripFields): Promi
       visibility: fields.visibility,
       companion_ids: fields.companion_ids,
       ...(fields.photos ? { photos: fields.photos } : {}),
+      ...(fields.stamp_photo_key !== undefined ? { stamp_photo_key: fields.stamp_photo_key } : {}),
     },
   });
 }
