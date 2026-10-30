@@ -58,6 +58,7 @@ import {
 } from '../api/trips';
 import { useAuth } from '../auth/AuthContext';
 import { readText, removeText, writeText } from '../lib/fileStore';
+import { cleanFeedback, type FeedbackTag } from './feedback';
 
 export type TripEntry = {
   id: string;
@@ -76,6 +77,8 @@ export type TripEntry = {
   rating: number | null;
   /** Trails or spots they loved, shown on the entry and in friends' feeds. */
   trails: string[];
+  /** How it went (trips/feedback.ts): tunes their picks, and shows on the trip. */
+  feedback: FeedbackTag[];
   /** Who can see it. New trips from the app are always shared with friends;
    *  older ones may still be private. */
   visibility: Visibility;
@@ -142,6 +145,7 @@ export type TripDraft = Pick<
   | 'with'
   | 'rating'
   | 'trails'
+  | 'feedback'
   | 'visibility'
   | 'passportStamp'
 >;
@@ -158,6 +162,7 @@ export type EntryDraft = {
   notes: string;
   rating: number | null;
   trails: string[];
+  feedback: FeedbackTag[];
   withIds: number[];
   media: TripMedia[];
   visibility: Visibility;
@@ -240,6 +245,7 @@ function parseDraft(raw: string | null): EntryDraft | null {
       trails: draft.trails ?? (stamp?.trim() ? [stamp.trim()] : []),
       visibility: draft.visibility ?? 'friends',
       passportStamp: draft.passportStamp ?? null,
+      feedback: cleanFeedback(draft.feedback),
     };
   } catch {
     return null;
@@ -276,6 +282,8 @@ function parse(raw: string | null): TripEntry[] {
         visibility: e.visibility ?? 'friends',
         // Saved before passport stamps.
         passportStamp: e.passportStamp ?? null,
+        // Saved before feedback tags.
+        feedback: cleanFeedback(e.feedback),
         // Saved before the server: send it.
         unsent: e.unsent ?? e.serverId == null,
       }));
@@ -369,6 +377,7 @@ function toFields(entry: TripEntry): TripFields {
     notes: entry.notes,
     rating: entry.rating,
     trails: entry.trails.map((t) => t.slice(0, 200)).slice(0, 20),
+    feedback: cleanFeedback(entry.feedback),
     stamp: entry.trails[0]?.slice(0, 200) ?? null,
     visibility: entry.visibility,
     companion_ids: entry.with.map((p) => p.id),
@@ -406,6 +415,8 @@ function fromServer(trip: TripOut, local?: TripEntry): TripEntry {
     rating: trip.rating,
     // An older server has only `stamp`.
     trails: trip.trails ?? (trip.stamp ? [trip.stamp] : []),
+    // An older server has none: keep the phone's.
+    feedback: trip.feedback ? cleanFeedback(trip.feedback) : (local?.feedback ?? []),
     visibility: trip.visibility,
     with: trip.companions,
     ...stampFromServer(trip, local),

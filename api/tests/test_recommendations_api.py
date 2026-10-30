@@ -168,3 +168,25 @@ def test_snoozed_parks_are_accepted_and_change_no_scores(sites):
     assert response.status_code == 200
     # Setting a park aside never counts against it.
     assert _by_code(response)[sites["match"]]["score"] == plain[sites["match"]]["score"]
+
+
+def test_feedback_tags_on_trips_tune_recommendations(sites, signed_in):
+    token, user_id = signed_in
+    with SessionLocal() as db:
+        site_id = db.scalars(select(Site.id).where(Site.park_code == sites["miss"])).one()
+        db.add(
+            TripEntry(
+                user_id=user_id,
+                site_id=site_id,
+                visited_on=date(2026, 7, 1),
+                feedback=["too_crowded"],
+            )
+        )
+        db.commit()
+
+    auth = {"Authorization": f"Bearer {token}"}
+    rows = _by_code(client.post("/recommendations", json={"answers": ANSWERS}, headers=auth))
+    anonymous = _by_code(client.post("/recommendations", json={"answers": ANSWERS}))
+    # "Fine either way" on crowds, but they found a park too crowded: quiet now counts.
+    assert anonymous[sites["match"]]["signals"]["crowds"] is None
+    assert rows[sites["match"]]["signals"]["crowds"] is not None

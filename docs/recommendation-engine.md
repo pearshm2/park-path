@@ -35,8 +35,29 @@ The score is built in three steps:
 
 3. **Trip history** (signed-in users only): parks they've logged a trip to
    are multiplied by `VISITED_FACTOR` (0.6), since the question is "where to
-   next?". Unvisited parks sharing a terrain with a trip they rated 4–5 stars
-   get `+0.05`, and their reason says so ("Like Zion, which you loved").
+   next?". Before that, their reviews tune the score (next section).
+
+   **Reviews: stars and feedback tags.** Each trip can have 1–5 stars and up
+   to four feedback tags, one from each pair:
+
+   | Pair | What it changes |
+   | --- | --- |
+   | Loved the scenery / Not my scenery | That terrain's score, like 5★ / 1★ |
+   | Peaceful / Too crowded | Quieter parks count for more (Too crowded twice as much) |
+   | Worth the drive / Too far | Distance counts for less / more (0.4x to 1.6x) |
+   | Perfect timing / Wrong time of year | Parks good in that trip's season get up to +0.04 / the season signal counts up to 1.5x |
+
+   Stars nudge the trip's terrain: 5★ `+1`, 4★ `+0.5`, 3★ `0`, 2★ `-0.5`,
+   1★ `-1`; a scenery tag adds `±1` on top. Each terrain's total goes
+   through `tanh(total / 2)`, so it stays between -1 and 1 with
+   **diminishing returns** (one 5★ trip gives 46% of the full effect, two
+   76%, three 91%), and the score moves by up to `±0.08` times that. The
+   tags' totals go through the same curve. "Too crowded" with "Fine either
+   way" on the quiz turns the crowds signal on (as quiet) at that strength.
+   A terrain they like on balance, with a trip rated 4–5★ or "Loved the
+   scenery", gives the reason "Like Zion, which you loved".
+
+   All the numbers are settings at the top of `app/recommender.py`.
 
 4. **Something different** (signed-in users with at least one trip): one
    national park is flagged `"different": true`, always from **outside their
@@ -133,7 +154,6 @@ bad or expired token just gives the anonymous results, never an error.
 
 ## Not yet (planned)
 
-- Star ratings and tags on trips nudging the signals (designed; after the demo)
 - A quieter alternative suggestion per site
 - Per-person signal order from a Settings screen (the weights are already one config)
 - Accessibility, once there's real per-park data

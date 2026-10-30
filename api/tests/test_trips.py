@@ -477,6 +477,39 @@ def test_photo_urls_work_for_friends_reading_a_shared_trip(people, codes, storag
     assert bob.get(trip_id).json()["photos"][0]["url"].endswith("?signed=1")
 
 
+
+# --- feedback tags ----------------------------------------------------------------
+
+
+def test_feedback_tags_are_kept_and_friends_see_them(people, codes):
+    ann, bob = people(), people()
+    ann.befriend(bob)
+    resp = ann.log(codes[0], rating=4, feedback=["too_crowded", "worth_the_drive"])
+    assert resp.status_code == 201, resp.text
+    trip_id = resp.json()["id"]
+    assert bob.get(trip_id).json()["feedback"] == ["too_crowded", "worth_the_drive"]
+    assert ann.log(codes[1]).json()["feedback"] == []
+
+
+def test_feedback_tags_are_checked(people, codes):
+    ann = people()
+    assert ann.log(codes[0], feedback=["sunny"]).status_code == 422
+    assert ann.log(codes[0], feedback=["too_far", "too_far"]).status_code == 422
+    assert ann.log(codes[0], feedback=["peaceful", "too_crowded"]).status_code == 422
+
+
+def test_patch_feedback(people, codes):
+    ann = people()
+    trip_id = ann.log(codes[0], feedback=["too_far"]).json()["id"]
+
+    def patch(body):
+        return client.patch(f"/trips/{trip_id}", json=body, headers=ann.headers)
+
+    assert patch({"title": "Hi"}).json()["feedback"] == ["too_far"]
+    assert patch({"feedback": ["loved_scenery"]}).json()["feedback"] == ["loved_scenery"]
+    assert patch({"feedback": []}).json()["feedback"] == []
+    assert patch({"feedback": None}).status_code == 400
+
 # --- passport-stamp photo ----------------------------------------------------------
 
 

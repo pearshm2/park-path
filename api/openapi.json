@@ -3526,6 +3526,24 @@
             ],
             "title": "Stamp Photo Key"
           },
+          "feedback": {
+            "items": {
+              "type": "string",
+              "enum": [
+                "loved_scenery",
+                "not_my_scenery",
+                "peaceful",
+                "too_crowded",
+                "worth_the_drive",
+                "too_far",
+                "perfect_timing",
+                "wrong_season"
+              ]
+            },
+            "type": "array",
+            "maxItems": 4,
+            "title": "Feedback"
+          },
           "companion_ids": {
             "items": {
               "type": "integer"
@@ -3589,6 +3607,24 @@
             },
             "type": "array",
             "title": "Trails"
+          },
+          "feedback": {
+            "items": {
+              "type": "string",
+              "enum": [
+                "loved_scenery",
+                "not_my_scenery",
+                "peaceful",
+                "too_crowded",
+                "worth_the_drive",
+                "too_far",
+                "perfect_timing",
+                "wrong_season"
+              ]
+            },
+            "type": "array",
+            "title": "Feedback",
+            "default": []
           },
           "stamp": {
             "anyOf": [
@@ -3878,6 +3914,31 @@
             ],
             "title": "Stamp Photo Key"
           },
+          "feedback": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "loved_scenery",
+                    "not_my_scenery",
+                    "peaceful",
+                    "too_crowded",
+                    "worth_the_drive",
+                    "too_far",
+                    "perfect_timing",
+                    "wrong_season"
+                  ]
+                },
+                "type": "array",
+                "maxItems": 4
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Feedback"
+          },
           "companion_ids": {
             "anyOf": [
               {
@@ -3896,7 +3957,7 @@
         },
         "type": "object",
         "title": "TripUpdate",
-        "description": "Only the fields sent change. `rating` can be set to null to clear it.\n\n`trails` replaces the list. `stamp`, the older one-trail form, sets the\nfirst trail (keeping the rest), or removes it when null; it's ignored\nwhen `trails` is sent. Likewise `photos` replaces the photos and their\ncaptions, and `photo_keys` (keys only) is ignored when it's sent.\n`stamp_photo_key` replaces the passport-stamp photo, or removes it when\nnull."
+        "description": "Only the fields sent change. `rating` can be set to null to clear it.\n\n`trails` replaces the list. `stamp`, the older one-trail form, sets the\nfirst trail (keeping the rest), or removes it when null; it's ignored\nwhen `trails` is sent. Likewise `photos` replaces the photos and their\ncaptions, and `photo_keys` (keys only) is ignored when it's sent.\n`stamp_photo_key` replaces the passport-stamp photo, or removes it when\nnull. `feedback` replaces the feedback tags (send [] to clear them)."
       },
       "UserCreate": {
         "properties": {

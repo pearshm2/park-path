@@ -2,7 +2,8 @@
  * The trip journal, against api/app/routers/trips.py. Every call needs a
  * token.
  *
- * The server keeps a trip's park, date, title, notes, rating, trails, who
+ * The server keeps a trip's park, date, title, notes, rating, trails,
+ * feedback tags, who
  * was there and who can see it (always friends, from the app), and its
  * photos and videos with their captions, and a photo of the park's
  * passport stamp. Those go to S3 by a signed upload
@@ -36,6 +37,8 @@ export type TripFields = {
    * backend is deployed); a newer one ignores it when `trails` is sent.
    */
   stamp: string | null;
+  /** How it went: feedback tags, at most one of each pair (trips/feedback.ts). */
+  feedback: NonNullable<components['schemas']['TripCreate']['feedback']>;
   visibility: Visibility;
   companion_ids: number[];
   /**
@@ -81,6 +84,7 @@ export function updateTrip(token: string, id: number, fields: TripFields): Promi
       rating: fields.rating,
       trails: fields.trails,
       stamp: fields.stamp,
+      feedback: fields.feedback,
       visibility: fields.visibility,
       companion_ids: fields.companion_ids,
       ...(fields.photos ? { photos: fields.photos } : {}),

@@ -2,7 +2,8 @@
  * One post in the Friends feed: a trip a friend shared with friends. Who
  * went (tap them for their passport), the park and when, their own photos
  * (swipe through them; each with its caption), the title, stars, notes,
- * trails, who they went with, and a button to read and add comments.
+ * trails, how it went (feedback tags), who they went with, and a button
+ * to read and add comments.
  *
  * Their own photos always come first; a trip without any shows the park's
  * own photo instead (and one without that either is a post of words). A
@@ -19,6 +20,7 @@ import type { TripOut } from '../../api/trips';
 import type { Site } from '../../data/parks';
 import { colors, radius, shadow, space } from '../../theme';
 import { dateLabel } from '../../trips/TripsContext';
+import { cleanFeedback, feedbackLabel, isGood } from '../../trips/feedback';
 import { Avatar } from '../Avatar';
 import { terrainTone } from '../TerrainIcon';
 import { PinIcon, StarIcon } from '../trips/NewEntrySheet';
@@ -68,6 +70,7 @@ export function FeedCard({
   const tone = terrainTone(site?.group ?? null);
   const notes = trip.notes.trim();
   const company = trip.companions.map((p) => firstName(p));
+  const feedback = cleanFeedback(trip.feedback);
 
   return (
     <View style={styles.card}>
@@ -185,6 +188,21 @@ export function FeedCard({
                 <PinIcon />
                 <BodyText size={11.5} weight="semibold" color={colors.neutral[800]}>
                   {name}
+                </BodyText>
+              </View>
+            ))}
+          </View>
+        ) : null}
+        {feedback.length > 0 ? (
+          <View style={styles.trails} accessibilityLabel={`How it was: ${feedback.map(feedbackLabel).join(', ')}`}>
+            {feedback.map((tag) => (
+              <View key={tag} style={[styles.feedback, isGood(tag) ? styles.feedbackGood : styles.feedbackBad]}>
+                <BodyText
+                  size={11.5}
+                  weight="semibold"
+                  color={isGood(tag) ? colors.accentRamp[800] : colors.neutral[800]}
+                >
+                  {feedbackLabel(tag)}
                 </BodyText>
               </View>
             ))}
@@ -326,6 +344,20 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 6,
+  },
+  feedback: {
+    paddingVertical: 4,
+    paddingHorizontal: 9,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+  },
+  feedbackGood: {
+    backgroundColor: colors.accentRamp[100],
+    borderColor: colors.accentRamp[300],
+  },
+  feedbackBad: {
+    borderColor: colors.neutral[400],
+    borderStyle: 'dashed',
   },
   trail: {
     flexDirection: 'row',
