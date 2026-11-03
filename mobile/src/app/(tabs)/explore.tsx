@@ -251,9 +251,8 @@ export default function ExploreScreen() {
   const [deckTopId, setDeckTopId] = useState<string | null>(null);
   /** Lets the user reopen the key while the sheet is open. */
   /**
-   * Bumped to restart the card deck on the top card: a pin tapped in the
-   * region in focus brings its card up, and the deck only reads which card
-   * to show when it starts.
+   * Bumped to flip the card deck to the top card: a pin tapped in the
+   * region in focus brings its card up (SectionDeck's `jump`).
    */
   const [deckJump, setDeckJump] = useState(0);
   /** Bumped when the sheet is minimised, to undo any pinch on the map. */
@@ -921,10 +920,12 @@ export default function ExploreScreen() {
           {useSections && deck.length > 0 ? (
             <SectionDeck
               // New sections (another view, other filters, zooming onto a
-              // region and back) start a fresh deck on the same card.
-              key={`${scope}:${deckJump}:${deckSections.map((section) => `${section.key}${section.items.length}`).join()}`}
+              // region and back) start a fresh deck on the same card; a pin
+              // tapped in the same region flips this one to its card (`jump`).
+              key={`${scope}:${deckSections.map((section) => `${section.key}${section.items.length}`).join()}`}
               sections={deckSections}
               activeId={deck[deckIndex]?.site.id}
+              jump={deckJump}
               keyOf={(item) => item.site.id}
               onActiveChange={(item) => setDeckTopId(item.site.id)}
               height={deckHeight}

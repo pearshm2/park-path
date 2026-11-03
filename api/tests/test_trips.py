@@ -744,3 +744,24 @@ def test_upload_content_types_match_the_schema():
 
     literal = PhotoUploadRequest.model_fields["content_type"].annotation
     assert set(get_args(literal)) == set(ALLOWED_CONTENT_TYPES)
+
+
+# --- activity ----------------------------------------------------------------------
+
+
+def test_activity_lists_friends_comments_on_my_trips(people, codes):
+    ann, bob = people(), people()
+    ann.befriend(bob)
+    trip_id = ann.log(codes[0], title="Canyon day").json()["id"]
+    client.post(f"/trips/{trip_id}/comments", json={"body": "My own note"}, headers=ann.headers)
+    client.post(f"/trips/{trip_id}/comments", json={"body": "So jealous!"}, headers=bob.headers)
+    client.post(f"/trips/{trip_id}/comments", json={"body": "Next time!"}, headers=bob.headers)
+
+    activity = client.get("/trips/activity", headers=ann.headers).json()
+    assert [a["body"] for a in activity] == ["Next time!", "So jealous!"]
+    first = activity[0]
+    assert first["trip_id"] == trip_id and first["trip_title"] == "Canyon day"
+    assert first["park_code"] == codes[0] and first["author"]["id"] == bob.id
+    # Bob's activity is about his own trips only.
+    assert client.get("/trips/activity", headers=bob.headers).json() == []
+    assert client.get("/trips/activity").status_code == 401

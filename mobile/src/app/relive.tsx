@@ -27,6 +27,10 @@
  * button), at your own pace: its photos hold still, and though the bars
  * still fill, nothing moves on until you tap the right side. It closes
  * after the last slide, with no summary.
+ *
+ * Opened from a friend's post in Friends: `friend` (the trip's id on the
+ * server) plays their trip, fetched from the server, through once on its
+ * own and closes after it, with no summary.
  */
 
 import { useQuery } from '@tanstack/react-query';
@@ -51,6 +55,8 @@ import Svg, { Defs, LinearGradient, Path, Rect, Stop } from 'react-native-svg';
 import { scheduleOnRN } from 'react-native-worklets';
 
 import { listSites } from '../api/parks';
+import { fetchTrip } from '../api/trips';
+import { useAuth } from '../auth/AuthContext';
 import { BodyText, Button, Heading } from '../components';
 import { WaxSeal } from '../components/passport/WaxSeal';
 import { playSound, tap } from '../lib/sounds';
@@ -66,6 +72,7 @@ import { colors, radius, space, useTextScale } from '../theme';
 import { cleanFeedback, feedbackLabel, isGood } from '../trips/feedback';
 import {
   dateLabel,
+  entryFromTrip,
   leadPhoto,
   monthLabel,
   useTrips,
@@ -119,7 +126,24 @@ export default function ReliveScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
-  const { only, dive } = useLocalSearchParams<{ only?: string; dive?: string }>();
+  const { only: onlyParam, dive, friend } = useLocalSearchParams<{
+    only?: string;
+    dive?: string;
+    friend?: string;
+  }>();
+  const { token } = useAuth();
+  const friendId = friend ? Number(friend) : null;
+  const friendTrip = useQuery({
+    queryKey: ['trip', friendId],
+    queryFn: () => fetchTrip(token!, friendId!),
+    enabled: friendId !== null && !!token,
+  });
+  const friendEntry = useMemo(
+    () => (friendTrip.data ? entryFromTrip(friendTrip.data) : null),
+    [friendTrip.data],
+  );
+  // Your own trip, paced by your taps (from Trips).
+  const only = friendId === null ? onlyParam : undefined;
   // A light status bar while Relive is in view, dark again the moment it
   // isn't, however it's left.
   useFocusEffect(
@@ -157,10 +181,17 @@ export default function ReliveScreen() {
 
   // Entries are kept newest first; a journey plays oldest first.
   const trips = useMemo(
-    () => entries.slice().reverse().filter((e) => !only || e.id === only),
-    [entries, only],
+    () =>
+      friendId !== null
+        ? friendEntry
+          ? [friendEntry]
+          : []
+        : entries.slice().reverse().filter((e) => !only || e.id === only),
+    [entries, only, friendId, friendEntry],
   );
-  const slides = useMemo(() => buildSlides(trips, sites, !only), [trips, sites, only]);
+  // One trip (yours from Trips, or a friend's) ends without the summary.
+  const single = !!only || friendId !== null;
+  const slides = useMemo(() => buildSlides(trips, sites, !single), [trips, sites, single]);
   // Start every photo downloading now, so each is there when its slide
   // opens (the parks' photos are large).
   useEffect(() => {
@@ -195,13 +226,14 @@ export default function ReliveScreen() {
     else router.replace('/trips');
   }
 
-  // Nothing to play (every entry deleted meanwhile, or opened before the
-  // journal had loaded): leave.
+  // Nothing to play (every entry deleted meanwhile, opened before the
+  // journal had loaded, or a friend's trip that couldn't be fetched): leave.
+  const waitingForFriend = friendId !== null && friendTrip.isPending;
   useEffect(() => {
-    if (trips.length === 0) leave();
+    if (trips.length === 0 && !waitingForFriend) leave();
     // Only when the trips run out.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [trips.length]);
+  }, [trips.length, waitingForFriend]);
 
   function advanceTo() {
     next();
@@ -267,7 +299,10 @@ export default function ReliveScreen() {
 
       <Pressable
         style={StyleSheet.absoluteFill}
-        onPress={(event) => (event.nativeEvent.locationX < width / 3 ? previous() : next())}
+        // pageX, from the screen's edge: locationX is from the edge of
+        // whatever's under the finger (a tag stamped on the page, the
+        // heading), so a tap on the right of one read as the left.
+        onPress={(event) => (event.nativeEvent.pageX < width / 3 ? previous() : next())}
         onLongPress={pause}
         delayLongPress={220}
         onPressOut={resume}
@@ -331,7 +366,13 @@ export default function ReliveScreen() {
           <BodyText size={12} weight="semibold" color={ON_INK_SOFT} style={styles.topLabel}>
             {slide.kind === 'end'
               ? 'Your journey'
-              : `${only ? monthLabel(slide.entry.date) : `Trip ${slide.trip + 1} of ${trips.length}`}${paused ? ' · Paused' : ''}`}
+              : `${
+                  friendTrip.data
+                    ? `${firstName(friendTrip.data.owner)}'s trip · ${monthLabel(slide.entry.date)}`
+                    : only
+                      ? monthLabel(slide.entry.date)
+                      : `Trip ${slide.trip + 1} of ${trips.length}`
+                }${paused ? ' · Paused' : ''}`}
           </BodyText>
           <Pressable
             onPress={() => leave()}

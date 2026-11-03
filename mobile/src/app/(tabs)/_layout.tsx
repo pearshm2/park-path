@@ -17,6 +17,7 @@ import Svg, { Circle, Path } from 'react-native-svg';
 
 import { useAuth } from '../../auth/AuthContext';
 import { BAR_HEIGHT, RAISE, tabBarBottom } from '../../components/tabBar';
+import { useActivityBadge } from '../../friends/activity';
 import { useFriendsBadge } from '../../friends/useFriendsBadge';
 import { useQuiz } from '../../quiz/QuizContext';
 import { colors, fonts, radius, scaleType, shadow, space, useTextScale } from '../../theme';
@@ -187,7 +188,8 @@ function FloatingTabBar({ state, descriptors, navigation, insets }: TabBarProps)
   const centerIndex = state.routes.findIndex((route) => route.name === CENTER_ROUTE);
   const centerFocused = state.index === centerIndex;
   const friendsFocused = state.routes[state.index]?.name === FRIENDS_ROUTE;
-  const friendsBadge = useFriendsBadge(friendsFocused);
+  // Requests and new friends, plus friends' comments on your trips.
+  const friendsBadge = useFriendsBadge(friendsFocused) + useActivityBadge(friendsFocused);
 
   const scale = useTextScale();
   return (

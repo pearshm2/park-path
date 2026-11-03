@@ -3,7 +3,7 @@
  * went (tap them for their passport), the park and when, their own photos
  * (swipe through them; each with its caption), the title, stars, notes,
  * trails, how it went (feedback tags), who they went with, and a button
- * to read and add comments.
+ * to read and add comments. ▶ on the photo plays the trip in Relive.
  *
  * Their own photos always come first; a trip without any shows the park's
  * own photo instead (and one without that either is a post of words). A
@@ -41,6 +41,7 @@ export function FeedCard({
   site,
   onOwner,
   onComments,
+  onRelive,
 }: {
   trip: TripOut;
   /** The park, once the site list has loaded. */
@@ -49,6 +50,8 @@ export function FeedCard({
   onOwner: () => void;
   /** Open the trip's comments. */
   onComments: () => void;
+  /** Play the trip in Relive. */
+  onRelive: () => void;
 }) {
   // Their own photos that have reached the server; without any, the
   // park's photo stands in.
@@ -130,6 +133,20 @@ export function FeedCard({
               {dateLabel(trip.visited_on)}
             </BodyText>
           </View>
+          <Pressable
+            onPress={onRelive}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel={`Relive ${trip.title || trip.park_name}`}
+            style={({ pressed }) => [styles.relive, pressed && styles.relivePressed]}
+          >
+            <Svg width={13} height={13} viewBox="0 0 24 24">
+              <Path d="M8 5.5v13l10.5-6.5z" fill={colors.neutral[100]} />
+            </Svg>
+            <BodyText size={12} weight="bold" color={colors.neutral[100]}>
+              Relive
+            </BodyText>
+          </Pressable>
           {shots[at]?.stamp ? (
             <View style={styles.stampTag} pointerEvents="none">
               <BodyText size={11} weight="bold" color={colors.neutral[100]} style={styles.park}>
@@ -152,9 +169,23 @@ export function FeedCard({
           <BodyText size={12} weight="bold" color={colors.accentRamp[800]} style={styles.placeName} numberOfLines={1}>
             {trip.park_name.toUpperCase()}
           </BodyText>
-          <BodyText size={12} weight="semibold" color={colors.neutral[600]}>
+          <BodyText size={12} weight="semibold" color={colors.neutral[600]} style={styles.grow}>
             {dateLabel(trip.visited_on)}
           </BodyText>
+          <Pressable
+            onPress={onRelive}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel={`Relive ${trip.title || trip.park_name}`}
+            style={({ pressed }) => [styles.relive, styles.reliveInline, pressed && styles.relivePressed]}
+          >
+            <Svg width={13} height={13} viewBox="0 0 24 24">
+              <Path d="M8 5.5v13l10.5-6.5z" fill={colors.neutral[100]} />
+            </Svg>
+            <BodyText size={12} weight="bold" color={colors.neutral[100]}>
+              Relive
+            </BodyText>
+          </Pressable>
         </View>
       )}
 
@@ -274,6 +305,31 @@ const styles = StyleSheet.create({
   },
   photo: {
     height: PHOTO_HEIGHT,
+  },
+  relive: {
+    position: 'absolute',
+    right: space[3],
+    top: space[3],
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 6,
+    paddingLeft: 9,
+    paddingRight: 12,
+    borderRadius: radius.pill,
+    backgroundColor: colors.accent,
+    ...shadow.sm,
+  },
+  reliveInline: {
+    position: 'relative',
+    right: 0,
+    top: 0,
+  },
+  relivePressed: {
+    opacity: 0.75,
+  },
+  grow: {
+    flex: 1,
   },
   stampTag: {
     position: 'absolute',

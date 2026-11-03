@@ -1,6 +1,7 @@
 /**
- * A trip's comments, from a post in the feed: everyone's comments, oldest
- * first, and a field to add yours. You can delete your own comments, and
+ * A trip's comments, from a post in the feed, or from your own trip (in
+ * Trips, or Activity in Friends): everyone's comments, oldest first, and a
+ * field to add yours. You can delete your own comments, and
  * any on your own trip (long-press, or the × on one you can delete).
  */
 
@@ -19,20 +20,28 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+import { useKeyboardLift } from '../../lib/useKeyboardLift';
 import Svg, { Path } from 'react-native-svg';
 
 import { addComment, deleteComment, fetchComments, type TripComment } from '../../api/comments';
-import { displayName } from '../../api/friends';
+import { displayName, type Person } from '../../api/friends';
 import type { TripOut } from '../../api/trips';
 import { useAuth } from '../../auth/AuthContext';
+import { useTrips } from '../../trips/TripsContext';
 import { colors, fonts, radius, shadow, space } from '../../theme';
 import { Avatar } from '../Avatar';
 import { BodyText, Heading } from '../Typography';
 import { postedAgo } from './FeedCard';
 
-export function CommentsSheet({ trip, onClose }: { trip: TripOut; onClose: () => void }) {
+/** What the sheet needs of a trip: a feed post (TripOut) has it all. */
+export type CommentTarget = Pick<TripOut, 'id' | 'title' | 'park_name'> & { owner: Person };
+
+export function CommentsSheet({ trip, onClose }: { trip: CommentTarget; onClose: () => void }) {
   const insets = useSafeAreaInsets();
+  const keyboard = useKeyboardLift();
   const { token, user } = useAuth();
+  const { refresh: refreshTrips } = useTrips();
   const queryClient = useQueryClient();
   const [draft, setDraft] = useState('');
 
@@ -45,6 +54,9 @@ export function CommentsSheet({ trip, onClose }: { trip: TripOut; onClose: () =>
     Promise.all([
       queryClient.invalidateQueries({ queryKey: ['comments', trip.id] }),
       queryClient.invalidateQueries({ queryKey: ['feed'] }),
+      queryClient.invalidateQueries({ queryKey: ['activity'] }),
+      // Your own trip's count in Trips.
+      Promise.resolve(refreshTrips()),
     ]);
   const post = useMutation({
     mutationFn: (body: string) => addComment(token!, trip.id, body),
@@ -79,9 +91,14 @@ export function CommentsSheet({ trip, onClose }: { trip: TripOut; onClose: () =>
       {/* Android resizes the modal's window for the keyboard itself, so
           'height' here moved the sheet a second time and it bounced up and
           down while typing. Same as the app's other sheets. */}
-      <KeyboardAvoidingView style={styles.overlay} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      {/* iOS moves the sheet up for the keyboard here; Android by `lift`. */}
+      <KeyboardAvoidingView
+        style={[styles.overlay, { paddingBottom: keyboard.lift }]}
+        onLayout={keyboard.onLayout}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel="Close comments" />
-        <View style={[styles.sheet, { paddingBottom: insets.bottom + space[3] }]}>
+        <View style={[styles.sheet, { paddingBottom: (keyboard.lift > 0 ? 0 : insets.bottom) + space[3] }]}>
           <View style={styles.handle} />
           <View style={styles.head}>
             <Heading size={19} style={styles.grow} numberOfLines={1}>

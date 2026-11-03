@@ -38,6 +38,7 @@ import { listSites } from '../../api/parks';
 import { BodyText, Button, Dialog, FilterButton, Heading, Toast, useTabBarSpace } from '../../components';
 import { diveParam } from '../../components/trips/DiveIn';
 import { MemoryBubble } from '../../components/trips/MemoryBubble';
+import { CommentsSheet } from '../../components/friends/CommentsSheet';
 import { PassportStampViewer } from '../../components/trips/PassportPage';
 import { NewEntrySheet } from '../../components/trips/NewEntrySheet';
 import type { Site } from '../../data/parks';
@@ -46,6 +47,7 @@ import { useCelebrations } from '../../celebrations/CelebrationsContext';
 import { playSound } from '../../lib/sounds';
 import { sampleEntries } from '../../trips/sampleTrips';
 import { colors, radius, shadow, space } from '../../theme';
+import { useAuth } from '../../auth/AuthContext';
 import { dateLabel, useTrips, type TripEntry } from '../../trips/TripsContext';
 
 type Sort = 'new' | 'old' | 'region';
@@ -90,6 +92,9 @@ export default function TripsScreen() {
   const [editing, setEditing] = useState<TripEntry | null>(null);
   // The trip whose passport-book stamp photo is open.
   const [stampOf, setStampOf] = useState<TripEntry | null>(null);
+  // The trip whose comments are open (one of yours, on the server).
+  const [commentsOf, setCommentsOf] = useState<TripEntry | null>(null);
+  const { user } = useAuth();
   /** The screen's and the floating header's heights, once laid out; the
    *  bubbles are sized and placed from them. */
   const [screenHeight, setScreenHeight] = useState(0);
@@ -220,6 +225,7 @@ export default function TripsScreen() {
                   onPlay={() => diveInto(item)}
                   onOptions={() => setOptions({ entry: item, step: 'options' })}
                   onPassportStamp={() => setStampOf(item)}
+                  onComments={() => setCommentsOf(item)}
                 />
               )}
             />
@@ -375,6 +381,17 @@ export default function TripsScreen() {
         <Toast message={toast} />
       </View>
 
+      {commentsOf?.serverId != null && user ? (
+        <CommentsSheet
+          trip={{
+            id: commentsOf.serverId,
+            title: commentsOf.title,
+            park_name: siteById.get(commentsOf.siteId)?.name ?? commentsOf.siteId,
+            owner: user,
+          }}
+          onClose={() => setCommentsOf(null)}
+        />
+      ) : null}
       {stampOf?.passportStamp ? (
         <PassportStampViewer
           uri={stampOf.passportStamp}

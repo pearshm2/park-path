@@ -19,6 +19,8 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+import { useKeyboardLift } from '../lib/useKeyboardLift';
 import Svg, { Path } from 'react-native-svg';
 
 import { displayName, handle, type Person } from '../api/friends';
@@ -43,6 +45,7 @@ function asPerson(account: SavedAccount): Person {
 
 export function AccountSwitcher({ onClose }: { onClose: () => void }) {
   const insets = useSafeAreaInsets();
+  const keyboard = useKeyboardLift();
   const { user, switchAccount, signIn, signInWithGoogle } = useAuth();
   const [accounts, setAccounts] = useState<SavedAccount[]>([]);
   /** The account being switched to, while it's checked. */
@@ -119,9 +122,14 @@ export function AccountSwitcher({ onClose }: { onClose: () => void }) {
 
   return (
     <Modal visible transparent animationType="slide" onRequestClose={onClose} statusBarTranslucent>
-      <KeyboardAvoidingView style={styles.overlay} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      {/* iOS moves the sheet up for the keyboard here; Android by `lift`. */}
+      <KeyboardAvoidingView
+        style={[styles.overlay, { paddingBottom: keyboard.lift }]}
+        onLayout={keyboard.onLayout}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel="Close" />
-        <View style={[styles.sheet, { paddingBottom: insets.bottom + space[4] }]}>
+        <View style={[styles.sheet, { paddingBottom: (keyboard.lift > 0 ? 0 : insets.bottom) + space[4] }]}>
           <View style={styles.handle} />
           <View style={styles.head}>
             <Heading size={19} style={styles.grow}>
