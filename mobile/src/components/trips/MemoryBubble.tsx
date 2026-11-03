@@ -95,6 +95,7 @@ export function MemoryBubble({
   onPlay,
   onOptions,
   onPassportStamp,
+  onComments,
 }: {
   entry: TripEntry;
   /** The park, once the site list has loaded. */
@@ -115,6 +116,8 @@ export function MemoryBubble({
   onOptions: () => void;
   /** Open the trip's passport-book stamp photo. */
   onPassportStamp: () => void;
+  /** Open the trip's comments (shown once it has some). */
+  onComments: () => void;
 }) {
   // How far this row is from the middle, in rows (0 = in focus).
   const away = (y: number) => {
@@ -220,6 +223,40 @@ export function MemoryBubble({
                   <Path d="M8 5.5v13l10.5-6.5z" fill={colors.neutral[100]} />
                 </Svg>
               </Pressable>
+              {/* Beside the play button. */}
+              {entry.commentCount ? (
+                <Pressable
+                  onPress={onComments}
+                  hitSlop={8}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${entry.commentCount} ${entry.commentCount === 1 ? 'comment' : 'comments'}. Open them`}
+                  style={({ pressed }) => [styles.commentTag, pressed && styles.commentTagPressed]}
+                >
+                  <Svg width={13} height={13} viewBox="0 0 24 24">
+                    <Path
+                      d="M4 5h16v11H9l-5 4z"
+                      fill="none"
+                      stroke={colors.accentRamp[800]}
+                      strokeWidth={2.4}
+                      strokeLinejoin="round"
+                    />
+                  </Svg>
+                  <BodyText size={11} weight="bold" color={colors.accentRamp[800]}>
+                    {String(entry.commentCount)}
+                  </BodyText>
+                </Pressable>
+              ) : null}
+              {/* In the row with play, not up in the corner, where a stamp tag
+                  above a long title ran into it. */}
+              <Pressable
+                onPress={onOptions}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel={`Options for ${entry.title}`}
+                style={({ pressed }) => [styles.optionsButton, pressed && styles.optionsPressed]}
+              >
+                <MoreIcon />
+              </Pressable>
             </Animated.View>
           </Animated.View>
 
@@ -238,24 +275,6 @@ export function MemoryBubble({
           </Animated.View>
         </Pressable>
 
-        <Animated.View
-          style={[
-            styles.options,
-            { top: diameter * (ROW_SPILL + 0.05), right: diameter * (ROW_SPILL + 0.05) },
-            controlsStyle,
-          ]}
-          pointerEvents={focused ? 'auto' : 'none'}
-        >
-          <Pressable
-            onPress={onOptions}
-            hitSlop={8}
-            accessibilityRole="button"
-            accessibilityLabel={`Options for ${entry.title}`}
-            style={({ pressed }) => [styles.optionsButton, pressed && styles.optionsPressed]}
-          >
-            <MoreIcon />
-          </Pressable>
-        </Animated.View>
       </Animated.View>
     </View>
   );
@@ -320,9 +339,6 @@ const styles = StyleSheet.create({
     marginTop: 4,
     opacity: 0.9,
   },
-  options: {
-    position: 'absolute',
-  },
   optionsButton: {
     width: 32,
     height: 32,
@@ -335,9 +351,28 @@ const styles = StyleSheet.create({
     backgroundColor: colors.neutral[300],
   },
   tagSlot: {
+    flexDirection: 'row',
+    gap: space[2],
     marginBottom: space[2],
   },
+  commentTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    // Matches the "Stamped in person" tag beside it.
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: radius.pill,
+    backgroundColor: 'rgba(249, 244, 237, 0.94)',
+    ...shadow.sm,
+  },
+  commentTagPressed: {
+    opacity: 0.7,
+  },
   reliveSlot: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space[2],
     marginTop: space[2],
   },
   play: {

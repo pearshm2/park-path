@@ -576,6 +576,19 @@ class TripCommentOut(BaseModel):
     created_at: datetime
 
 
+class TripActivityOut(BaseModel):
+    """A friend's comment on one of my trips, for my Activity list."""
+
+    id: int
+    trip_id: int
+    park_code: str
+    park_name: str
+    trip_title: str
+    author: UserOut
+    body: str
+    created_at: datetime
+
+
 # --- Passport (GET /passport) -----------------------------------------------
 
 

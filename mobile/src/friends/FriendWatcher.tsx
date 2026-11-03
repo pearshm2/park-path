@@ -4,7 +4,8 @@
  *
  *  - someone sent you a friend request (by QR code, username or email);
  *  - someone accepted the request you sent them;
- *  - a new friend earned a friends achievement (First friend, Trail crew).
+ *  - a new friend earned a friends achievement (First friend, Trail crew);
+ *  - a friend commented on one of your trips (friends/activity.ts).
  *
  * The lists are checked every POLL_MS while the app is in front, and again
  * whenever it comes back to the front. What's already been seen is kept
@@ -22,6 +23,7 @@ import { useAuth } from '../auth/AuthContext';
 import { useCelebrations, type NewNotice } from '../celebrations/CelebrationsContext';
 import { friendAchievements } from '../data/achievements';
 import { readText, writeText } from '../lib/fileStore';
+import { firstLookCutoff, useActivity } from './activity';
 import { useFriends } from './useFriends';
 
 /** How often to look for new requests while the app is open. */
@@ -33,6 +35,9 @@ export function FriendWatcher() {
   const { userId, status } = useAuth();
   const { friends, incoming, outgoing, refetch, loaded } = useFriends({ pollMs: POLL_MS });
   const { notify } = useCelebrations();
+  const activity = useActivity({ pollMs: POLL_MS });
+  // The newest comment announced, for this account.
+  const announced = useRef<{ for: string; id: number | null } | null>(null);
 
   // What's been seen, for this account: loaded from the phone, then kept here.
   const seen = useRef<Seen | null>(null);
@@ -43,12 +48,58 @@ export function FriendWatcher() {
   const askedBy = useRef<Set<number>>(new Set());
 
   // Look again as soon as the app comes back to the front.
+  const refetchActivity = activity.refetch;
   useEffect(() => {
     const listener = AppState.addEventListener('change', (state) => {
-      if (state === 'active' && status === 'signedIn') void refetch();
+      if (state === 'active' && status === 'signedIn') {
+        void refetch();
+        void refetchActivity();
+      }
     });
     return () => listener.remove();
-  }, [refetch, status]);
+  }, [refetch, refetchActivity, status]);
+
+  // Friends' comments on your trips: each new one, said once.
+  const comments = activity.items;
+  const commentsLoaded = activity.loaded;
+  useEffect(() => {
+    if (status !== 'signedIn' || !userId || !commentsLoaded) return;
+    let cancelled = false;
+    const key = `parkpath.activityAnnounced.${userId}`;
+    (async () => {
+      if (announced.current?.for !== userId) {
+        const saved = await readText(key).catch(() => null);
+        if (cancelled) return;
+        const id = saved ? Number(saved) : NaN;
+        announced.current = { for: userId, id: Number.isFinite(id) ? id : null };
+      }
+      // A first look at this account on this phone: only the last day's.
+      const before = announced.current.id ?? firstLookCutoff(comments);
+      const newest = comments[0]?.id;
+      if (newest === undefined || (before !== null && newest <= before)) return;
+      if (before !== null) {
+        const fresh = comments.filter((c) => c.id > before);
+        const notices: NewNotice[] = fresh.slice(0, 3).map((c) => ({
+          kind: 'friend',
+          title: `${displayName(c.author)} commented on your ${c.park_name} trip`,
+          body: c.body.length > 90 ? `${c.body.slice(0, 89)}…` : c.body,
+        }));
+        if (fresh.length > 3) {
+          notices.push({
+            kind: 'friend',
+            title: `${fresh.length - 3} more comments on your trips`,
+            body: 'Tap to see them in Friends.',
+          });
+        }
+        notify(notices);
+      }
+      announced.current = { for: userId, id: newest };
+      writeText(key, String(newest));
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [status, userId, commentsLoaded, comments, notify]);
 
   useEffect(() => {
     if (status !== 'signedIn' || !userId || !loaded) return;

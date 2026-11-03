@@ -9,14 +9,18 @@
  * cancelling your own, and removing a friend. People show as their name
  * and @username; emails stay private.
  *
+ * Then Activity: friends' comments on your trips, newest first, the new
+ * ones marked (components/friends/ActivityStrip.tsx); tap one to read and
+ * reply. Your own trips don't appear in the feed: they're in Trips.
+ *
  * Below them, the feed: the trips your friends shared with friends,
- * newest first (GET /trips/feed). Pull down to refresh. Tapping a friend,
+ * newest first (GET /trips/feed); ▶ Relive on a post plays it as a reel. Pull down to refresh. Tapping a friend,
  * in the row or on a post, opens their passport: stamps, regions and
  * achievements (components/friends/FriendProfile.tsx).
  */
 
 import { useQuery } from '@tanstack/react-query';
-import { useFocusEffect } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 import {
   Alert,
@@ -38,11 +42,12 @@ import { fetchFeed } from '../../api/trips';
 import { useAuth } from '../../auth/AuthContext';
 import { BodyText, Button, Heading, TextField, useTabBarSpace } from '../../components';
 import { Avatar } from '../../components/Avatar';
-import type { TripOut } from '../../api/trips';
-import { CommentsSheet } from '../../components/friends/CommentsSheet';
+import { ActivityStrip } from '../../components/friends/ActivityStrip';
+import { CommentsSheet, type CommentTarget } from '../../components/friends/CommentsSheet';
 import { FeedCard } from '../../components/friends/FeedCard';
 import { FriendCodeSheet } from '../../components/friends/FriendCode';
 import { FriendProfile } from '../../components/friends/FriendProfile';
+import { useActivity, useActivityNewSince } from '../../friends/activity';
 import { useFriends } from '../../friends/useFriends';
 import { colors, radius, shadow, space } from '../../theme';
 
@@ -62,7 +67,10 @@ export default function FriendsScreen() {
   // Whose passport is open.
   const [profile, setProfile] = useState<Person | null>(null);
   // Whose trip's comments are open.
-  const [commentsOn, setCommentsOn] = useState<TripOut | null>(null);
+  const [commentsOn, setCommentsOn] = useState<CommentTarget | null>(null);
+  const router = useRouter();
+  const activity = useActivity();
+  const newSince = useActivityNewSince();
 
   const feed = useQuery({
     queryKey: ['feed', userId],
@@ -77,10 +85,12 @@ export default function FriendsScreen() {
 
   // Fresh posts and requests each time the tab is opened.
   const { refetch } = feed;
+  const refetchActivity = activity.refetch;
   useFocusEffect(
     useCallback(() => {
       void refetch();
       void refresh();
+      void refetchActivity();
       // Only on focus.
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [refetch]),
@@ -88,7 +98,7 @@ export default function FriendsScreen() {
   const [pulling, setPulling] = useState(false);
   async function pullToRefresh() {
     setPulling(true);
-    await Promise.all([refetch(), refresh()]);
+    await Promise.all([refetch(), refresh(), refetchActivity()]);
     setPulling(false);
   }
 
@@ -248,6 +258,24 @@ export default function FriendsScreen() {
           </View>
         ) : null}
 
+        {/* Friends' comments on your trips. */}
+        {user && activity.items.length > 0 ? (
+          <View style={styles.activity}>
+            <ActivityStrip
+              items={activity.items}
+              newSince={newSince}
+              onOpen={(item) =>
+                setCommentsOn({
+                  id: item.trip_id,
+                  title: item.trip_title,
+                  park_name: item.park_name,
+                  owner: user,
+                })
+              }
+            />
+          </View>
+        ) : null}
+
         {/* The feed: friends' shared trips, newest first. */}
         <View style={styles.section}>
           <BodyText size={10} weight="semibold" color={colors.neutral[600]} style={styles.label}>
@@ -262,6 +290,7 @@ export default function FriendsScreen() {
                   site={siteById.get(trip.park_code)}
                   onOwner={() => setProfile(trip.owner)}
                   onComments={() => setCommentsOn(trip)}
+                  onRelive={() => router.push({ pathname: '/relive', params: { friend: String(trip.id) } })}
                 />
               ))}
             </View>
@@ -476,6 +505,9 @@ const styles = StyleSheet.create({
   section: {
     marginTop: space[6],
     gap: space[2],
+  },
+  activity: {
+    marginTop: space[6],
   },
   label: {
     letterSpacing: 1,

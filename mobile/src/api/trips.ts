@@ -53,6 +53,19 @@ export type TripFields = {
   stamp_photo_key?: string | null;
 };
 
+/** A friend's comment on one of my trips, for my Activity list. */
+export type TripActivity = components['schemas']['TripActivityOut'];
+
+/** GET /trips/{id} — one trip: mine, or a friend's they shared. */
+export function fetchTrip(token: string, id: number): Promise<TripOut> {
+  return request<TripOut>(`/trips/${id}`, { token });
+}
+
+/** GET /trips/activity — friends' comments on my trips, newest first. */
+export function fetchActivity(token: string): Promise<TripActivity[]> {
+  return request<TripActivity[]>('/trips/activity', { token });
+}
+
 /** GET /trips — my trips, newest visit first. */
 export function fetchTrips(token: string): Promise<TripOut[]> {
   return request<TripOut[]>('/trips', { token });

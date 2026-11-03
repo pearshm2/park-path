@@ -70,6 +70,12 @@ type SectionDeckProps<T> = {
   sections: DeckSection<T>[];
   /** Id of the card to open on; undefined starts at the first card. */
   activeId?: string;
+  /**
+   * Bump to flip to `activeId` from wherever the deck is (a pin tapped on
+   * the map), without starting the deck afresh, which left it empty for a
+   * moment while it was rebuilt.
+   */
+  jump?: number;
   keyOf: (item: T) => string;
   onActiveChange: (item: T) => void;
   /**
@@ -87,6 +93,7 @@ type SectionDeckProps<T> = {
 export function SectionDeck<T>({
   sections,
   activeId,
+  jump = 0,
   keyOf,
   onActiveChange,
   renderCard,
@@ -118,6 +125,38 @@ export function SectionDeck<T>({
     [sections[start.page]?.key ?? '']: start.index,
   }));
   const activePage = useRef(start.page);
+
+  // Asked to flip to `activeId`: note where it is now (render-time, so the
+  // rail and the card's state follow at once), and scroll there just after.
+  const [jumpTo, setJumpTo] = useState<{ jump: number; page: number; index: number }>({
+    jump,
+    ...start,
+  });
+  if (jump !== jumpTo.jump) {
+    const target = locate(activeId);
+    setJumpTo({ jump, ...target });
+    const key = sections[target.page]?.key;
+    if (key !== undefined) {
+      setPositions((current) =>
+        current[key] === target.index ? current : { ...current, [key]: target.index },
+      );
+    }
+  }
+  const firstJump = useRef(jump);
+  useEffect(() => {
+    // Not on mount: the deck opens on its card by itself.
+    if (jumpTo.jump === firstJump.current) return;
+    const target = jumpTo;
+    const section = sections[target.page];
+    if (!section) return;
+    if (target.page !== activePage.current) {
+      activePage.current = target.page;
+      pager.current?.scrollToIndex({ index: target.page, animated: false });
+    }
+    lists.current.get(section.key)?.scrollToOffset({ offset: target.index * interval, animated: true });
+    // Only after a new jump; the rest is read as it is then.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [jumpTo]);
 
   function settle(section: DeckSection<T>, index: number) {
     setPositions((current) =>

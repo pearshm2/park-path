@@ -544,6 +544,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/trips/activity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * My Activity
+         * @description Comments others left on my trips (never my own), newest first.
+         */
+        get: operations["my_activity_trips_activity_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/trips/photos/upload-url": {
         parameters: {
             query?: never;
@@ -1153,6 +1173,30 @@ export interface components {
             length_miles: number;
             /** Paths */
             paths: number[][][];
+        };
+        /**
+         * TripActivityOut
+         * @description A friend's comment on one of my trips, for my Activity list.
+         */
+        TripActivityOut: {
+            /** Id */
+            id: number;
+            /** Trip Id */
+            trip_id: number;
+            /** Park Code */
+            park_code: string;
+            /** Park Name */
+            park_name: string;
+            /** Trip Title */
+            trip_title: string;
+            author: components["schemas"]["UserOut"];
+            /** Body */
+            body: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
         };
         /** TripCommentCreate */
         TripCommentCreate: {
@@ -2504,6 +2548,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TripOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    my_activity_trips_activity_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TripActivityOut"][];
                 };
             };
             /** @description Validation Error */

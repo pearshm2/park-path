@@ -102,6 +102,8 @@ export type TripEntry = {
   unsent?: boolean;
   /** Why the server turned it down; not retried until it's edited. */
   syncError?: string;
+  /** How many comments it has on the server (friends' and yours). */
+  commentCount?: number;
 };
 
 /** A photo or video in an entry. */
@@ -202,6 +204,8 @@ type TripsValue = {
   /** Keep a draft, or pass null to drop it. Not state: typing in the
    *  sheet doesn't re-render everything that reads trips. */
   setDraft: (draft: EntryDraft | null) => void;
+  /** Sync with the server soon (after commenting, say, for fresh counts). */
+  refresh: () => void;
 };
 
 const TripsContext = createContext<TripsValue | null>(null);
@@ -435,7 +439,13 @@ function fromServer(trip: TripOut, local?: TripEntry): TripEntry {
     createdAt: local?.createdAt ?? trip.created_at,
     serverId: trip.id,
     serverPark: trip.park_code,
+    commentCount: trip.comment_count ?? 0,
   };
+}
+
+/** A trip from the server as an entry, with nothing of this phone's: a friend's, for Relive. */
+export function entryFromTrip(trip: TripOut): TripEntry {
+  return fromServer(trip);
 }
 
 /**
@@ -916,8 +926,21 @@ export function TripsProvider({ children }: { children: ReactNode }) {
       addEntries,
       getDraft,
       setDraft,
+      refresh: syncSoon,
     }),
-    [entries, visitedIds, visitSummary, unsentCount, add, remove, update, addEntries, getDraft, setDraft],
+    [
+      entries,
+      visitedIds,
+      visitSummary,
+      unsentCount,
+      add,
+      remove,
+      update,
+      addEntries,
+      getDraft,
+      setDraft,
+      syncSoon,
+    ],
   );
 
   return <TripsContext.Provider value={value}>{children}</TripsContext.Provider>;

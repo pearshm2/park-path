@@ -1539,6 +1539,61 @@
         }
       }
     },
+    "/trips/activity": {
+      "get": {
+        "tags": [
+          "trips"
+        ],
+        "summary": "My Activity",
+        "description": "Comments others left on my trips (never my own), newest first.",
+        "operationId": "my_activity_trips_activity_get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 30,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TripActivityOut"
+                  },
+                  "title": "Response My Activity Trips Activity Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/trips/photos/upload-url": {
       "post": {
         "tags": [
@@ -3419,6 +3474,55 @@
           "paths"
         ],
         "title": "TrailOut"
+      },
+      "TripActivityOut": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "trip_id": {
+            "type": "integer",
+            "title": "Trip Id"
+          },
+          "park_code": {
+            "type": "string",
+            "title": "Park Code"
+          },
+          "park_name": {
+            "type": "string",
+            "title": "Park Name"
+          },
+          "trip_title": {
+            "type": "string",
+            "title": "Trip Title"
+          },
+          "author": {
+            "$ref": "#/components/schemas/UserOut"
+          },
+          "body": {
+            "type": "string",
+            "title": "Body"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "trip_id",
+          "park_code",
+          "park_name",
+          "trip_title",
+          "author",
+          "body",
+          "created_at"
+        ],
+        "title": "TripActivityOut",
+        "description": "A friend's comment on one of my trips, for my Activity list."
       },
       "TripCommentCreate": {
         "properties": {

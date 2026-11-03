@@ -4,6 +4,7 @@ Trip journal routes (all require a signed-in user):
   POST   /trips                    log a visit
   GET    /trips                    my entries, newest visit first (?park_code=)
   GET    /trips/feed               friends' shared entries, newest posted first
+  GET    /trips/activity           others' comments on my entries, newest first
   POST   /trips/photos/upload-url  signed form to upload one photo or video to S3
   GET    /trips/{id}               one entry (mine, or a friend's if shared)
   PATCH  /trips/{id}               change my entry (only the fields sent)
@@ -47,6 +48,7 @@ from app.schemas import (
     PhotoUploadOut,
     PhotoUploadRequest,
     StampPhotoOut,
+    TripActivityOut,
     TripCommentCreate,
     TripCommentOut,
     TripCreate,
@@ -305,6 +307,35 @@ def friends_feed(
         stmt = stmt.where(TripEntry.id < before)
     stmt = stmt.order_by(TripEntry.id.desc()).limit(limit)
     return [_out(e, storage) for e in db.scalars(stmt).unique().all()]
+
+
+@router.get("/activity", response_model=list[TripActivityOut])
+def my_activity(
+    limit: int = Query(30, ge=1, le=100),
+    db: Session = Depends(get_db),
+    me: User = Depends(get_current_user),
+):
+    """Comments others left on my trips (never my own), newest first."""
+    stmt = (
+        select(TripComment, TripEntry)
+        .join(TripEntry, TripEntry.id == TripComment.entry_id)
+        .where(TripEntry.user_id == me.id, TripComment.user_id != me.id)
+        .order_by(TripComment.id.desc())
+        .limit(limit)
+    )
+    return [
+        TripActivityOut(
+            id=comment.id,
+            trip_id=entry.id,
+            park_code=entry.site.park_code,
+            park_name=entry.site.name,
+            trip_title=entry.title,
+            author=UserOut.model_validate(comment.user),
+            body=comment.body,
+            created_at=comment.created_at,
+        )
+        for comment, entry in db.execute(stmt).unique().all()
+    ]
 
 
 @router.post("/photos/upload-url", response_model=PhotoUploadOut)
