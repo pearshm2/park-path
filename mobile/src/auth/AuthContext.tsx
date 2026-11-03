@@ -6,8 +6,13 @@
  * verifies it against GET /auth/me — tokens last 24h (see
  * api/app/config.py), so a stored one is frequently expired and trusting
  * it blindly would drop the user into the app only to 401 on first use.
+ *
+ * Every account signed in on this phone is remembered (auth/accounts.ts),
+ * so `switchAccount` can change to another in one tap (Settings: hold your
+ * name).
  */
 
+import { useQueryClient } from '@tanstack/react-query';
 import {
   createContext,
   useCallback,
@@ -28,7 +33,9 @@ import {
   removeAvatar,
   setAvatar,
 } from '../api/auth';
+import { ApiError } from '../api/client';
 import { clearToken, loadToken, saveToken } from '../api/tokenStorage';
+import { forgetAccount, rememberAccount, savedToken } from './accounts';
 import { signInWithGoogle } from './googleSignIn';
 import { removeText } from '../lib/fileStore';
 import { readTokenSubject } from '../lib/jwt';
@@ -71,7 +78,19 @@ type AuthContextValue = {
   changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
   /** Delete the account for good, clear what this phone kept for it, and sign out. */
   deleteAccount: (confirm: string, password?: string) => Promise<void>;
+  /**
+   * Change to another account signed in on this phone. Throws
+   * AccountExpired when its sign-in has run out (sign in to it again).
+   */
+  switchAccount: (id: number) => Promise<void>;
 };
+
+/** A remembered account's sign-in has run out: it needs its password (or Google) again. */
+export class AccountExpired extends Error {
+  constructor() {
+    super('Sign in to this account again');
+  }
+}
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
@@ -80,6 +99,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [welcomeGoogleAccount, setWelcomeGoogleAccount] = useState(false);
+  const queryClient = useQueryClient();
 
   useEffect(() => {
     let cancelled = false;
@@ -99,6 +119,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setToken(stored);
         setUser(me);
         setStatus('signedIn');
+        // Signed in before the switcher existed: list it too.
+        void rememberAccount(me, stored, false);
       } catch {
         // Expired, revoked, or the API is unreachable. Either way we
         // cannot prove the session, so start signed out and let the user
@@ -119,12 +141,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
    * Signup and login differ only in which endpoint issues the token, so
    * the "store it, then identify the user" half is shared.
    */
-  const establishSession = useCallback(async (accessToken: string) => {
+  const establishSession = useCallback(async (accessToken: string, google = false) => {
+    // Possibly another account than the last (the switcher's "Add account"):
+    // nothing of the last one's lingers.
+    queryClient.clear();
     await saveToken(accessToken);
     setToken(accessToken);
 
     try {
-      setUser(await fetchCurrentUser(accessToken));
+      const me = await fetchCurrentUser(accessToken);
+      setUser(me);
+      await rememberAccount(me, accessToken, google);
     } catch {
       // The token is valid — it was just issued — so a failure here is a
       // transient /auth/me problem. Enter the app anyway; the profile can
@@ -133,7 +160,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     setStatus('signedIn');
-  }, []);
+  }, [queryClient]);
 
   const signIn = useCallback(
     async (credentials: Credentials) => {
@@ -153,19 +180,47 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const googleSignIn = useCallback(async () => {
     const { access_token, created } = await signInWithGoogle();
-    await establishSession(access_token);
+    await establishSession(access_token, true);
     setWelcomeGoogleAccount(created);
   }, [establishSession]);
 
   const dismissGoogleWelcome = useCallback(() => setWelcomeGoogleAccount(false), []);
 
   const signOut = useCallback(async () => {
+    // Signing out takes the account off this phone's switcher too.
+    const id = readTokenSubject(token) ?? (user ? String(user.id) : null);
+    if (id) await forgetAccount(Number(id));
     await clearToken();
     setToken(null);
     setUser(null);
     setWelcomeGoogleAccount(false);
     setStatus('signedOut');
-  }, []);
+  }, [token, user]);
+
+  const switchAccount = useCallback(
+    async (id: number) => {
+      const stored = await savedToken(id);
+      if (!stored) throw new AccountExpired();
+      let me: User;
+      try {
+        me = await fetchCurrentUser(stored);
+      } catch (error) {
+        // Run out (or revoked); anything else is a connection problem.
+        if (error instanceof ApiError && error.status === 401) throw new AccountExpired();
+        throw error;
+      }
+      // Nothing of the last account's lingers on screen: everything is
+      // fetched again for this one (per-account data on the phone is
+      // already kept by account).
+      queryClient.clear();
+      await saveToken(stored);
+      setToken(stored);
+      setUser(me);
+      setWelcomeGoogleAccount(false);
+      setStatus('signedIn');
+    },
+    [queryClient],
+  );
 
   const updateProfile = useCallback(
     async (changes: ProfileChanges) => {
@@ -199,6 +254,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // FriendWatcher, useFriendsBadge), so nothing of it lingers.
       const id = readTokenSubject(token) ?? (user ? String(user.id) : null);
       if (id) {
+        await forgetAccount(Number(id));
         for (const key of ['trips', 'tripDeletes', 'tripDraft', 'friendsSeen', 'friendsViewed']) {
           removeText(`parkpath.${key}.${id}`);
         }
@@ -238,6 +294,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       changeAvatar,
       changePassword,
       deleteAccount,
+      switchAccount,
     }),
     [
       status,
@@ -254,6 +311,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       changeAvatar,
       changePassword,
       deleteAccount,
+      switchAccount,
     ],
   );
 

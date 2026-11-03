@@ -34,6 +34,7 @@ import { API_BASE_URL } from '../../api/client';
 import { displayName, handle } from '../../api/friends';
 import { listSites } from '../../api/parks';
 import { useArrivals } from '../../arrivals/ArrivalsContext';
+import { AccountSwitcher } from '../../auth/AccountSwitcher';
 import { useAuth } from '../../auth/AuthContext';
 import { UsernameField } from '../../auth/UsernameField';
 import { normalizeUsername, usernameRuleProblem, useUsernameCheck } from '../../auth/useUsernameCheck';
@@ -63,6 +64,8 @@ export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
   const tabSpace = useTabBarSpace();
   const [section, setSection] = useState<Section>('profile');
+  // After switching account, the profile's fields start again from the new one.
+  const { user: me } = useAuth();
   const open = SECTIONS.find((s) => s.key === section) ?? SECTIONS[0];
 
   return (
@@ -117,7 +120,7 @@ export default function SettingsScreen() {
               {open.label}
             </Heading>
             <View style={styles.card}>
-              {section === 'profile' ? <ProfileSection /> : null}
+              {section === 'profile' ? <ProfileSection key={me?.id} /> : null}
               {section === 'account' ? <AccountSection /> : null}
               {section === 'privacy' ? <PrivacySection /> : null}
               {section === 'notifications' ? <NotificationsSection /> : null}
@@ -140,6 +143,7 @@ function ProfileSection() {
   const [photoMenu, setPhotoMenu] = useState(false);
   const [photoBusy, setPhotoBusy] = useState(false);
   const [photoNote, setPhotoNote] = useState<string | null>(null);
+  const [switching, setSwitching] = useState(false);
 
   const [first, setFirst] = useState(user?.first_name ?? '');
   const [last, setLast] = useState(user?.last_name ?? '');
@@ -275,14 +279,21 @@ function ProfileSection() {
               </View>
             ) : null}
           </Pressable>
-          <View style={styles.grow}>
+          {/* Hold your name for the account switcher (hidden: it's for
+              demos and testing with two accounts). */}
+          <Pressable
+            onLongPress={() => setSwitching(true)}
+            delayLongPress={600}
+            accessibilityHint="Hold to switch account"
+            style={styles.grow}
+          >
             <BodyText size={15} weight="bold" numberOfLines={1}>
               {displayName(user)}
             </BodyText>
             <BodyText size={12.5} weight="medium" color={colors.neutral[600]} numberOfLines={1}>
               {handle(user)}
             </BodyText>
-          </View>
+          </Pressable>
         </View>
         <View style={styles.buttons}>
           <SmallButton label={user.avatar_url ? 'Change photo' : 'Add photo'} onPress={() => setPhotoMenu(true)} />
@@ -290,6 +301,7 @@ function ProfileSection() {
         </View>
         {photoNote ? <NoteText note={{ ok: false, text: photoNote }} /> : null}
       </Row>
+      {switching ? <AccountSwitcher onClose={() => setSwitching(false)} /> : null}
       <Dialog
         visible={photoMenu}
         title="Profile photo"
