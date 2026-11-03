@@ -107,6 +107,19 @@ caves → forest ("cave country"), dunes → desert, badlands → canyon ("hoodo
 
 Equal scores are ordered by annual visits (better-known site first), then name.
 
+## The friends' pick
+
+For a signed-in user with friends, one national park is flagged with
+`"friend": {user_id, first_name, rating, others}`: a park a friend rated
+**4–5★ on a trip they shared with friends** (private trips never count) that
+the user hasn't been to. It comes from outside their top 4 parks, so it
+adds something, and is never the "something different" pick or a park
+they've set aside. The best rating wins, then the most friends who loved
+it, then the user's own score. Its reason names the friend ("Maya loved
+this (5★)", or "Maya and 2 friends loved this"). The app shows it at #5
+with a "Friends' pick" label. With no friend's rating that fits, nothing
+is flagged and #5 is a normal pick.
+
 ## The "why" text
 
 Each scored site gets up to two short phrases for the signals that helped it

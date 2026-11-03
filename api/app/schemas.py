@@ -264,6 +264,16 @@ class SignalScores(BaseModel):
     crowds: float | None
 
 
+class FriendPickOut(BaseModel):
+    """Who loved the friends' pick: the friend who rated it highest."""
+
+    user_id: int
+    first_name: str
+    rating: int
+    # How many other friends also loved it.
+    others: int = 0
+
+
 class RecommendationOut(BaseModel):
     park_code: str
     # 0 to 1. Null for sites with no curated data yet.
@@ -277,6 +287,9 @@ class RecommendationOut(BaseModel):
     # pick, a national park from outside their top 10 (see
     # app/recommender.py). The app shows it at #4.
     different: bool = False
+    # Set on at most one site: the friends' pick, a national park a friend
+    # loved that the user hasn't been to. The app shows it at #5.
+    friend: FriendPickOut | None = None
 
 
 # --- Park maps (GET /sites/{park_code}/map) ---------------------------------

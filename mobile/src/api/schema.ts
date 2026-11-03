@@ -736,6 +736,23 @@ export interface components {
             since: string | null;
         };
         /**
+         * FriendPickOut
+         * @description Who loved the friends' pick: the friend who rated it highest.
+         */
+        FriendPickOut: {
+            /** User Id */
+            user_id: number;
+            /** First Name */
+            first_name: string;
+            /** Rating */
+            rating: number;
+            /**
+             * Others
+             * @default 0
+             */
+            others: number;
+        };
+        /**
          * FriendRequestCreate
          * @description Who to ask: by email, or by username (typed, or from their QR code).
          */
@@ -976,6 +993,7 @@ export interface components {
              * @default false
              */
             different: boolean;
+            friend?: components["schemas"]["FriendPickOut"] | null;
         };
         /** RecommendationRequest */
         RecommendationRequest: {

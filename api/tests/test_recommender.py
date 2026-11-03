@@ -12,6 +12,7 @@ from app.recommender import (
     TERRAIN_MISS_FACTOR,
     TERRAIN_TASTE,
     VISITED_FACTOR,
+    FriendRating,
     Review,
     SiteData,
     Taste,
@@ -530,3 +531,63 @@ def test_a_snoozed_park_frees_its_top_ten_place():
     [before] = flagged(rank(sites, answers(), history=history))
     [after] = flagged(rank(sites, answers(), history=history, snoozed={"top0"}))
     assert (before["park_code"], after["park_code"]) == ("desert1", "desert2")
+
+
+# --- friends' pick ------------------------------------------------------------
+
+
+def friend(name="Maya", rating=5, user_id=1) -> FriendRating:
+    return FriendRating(user_id=user_id, first_name=name, rating=rating)
+
+
+def friend_picks(results) -> list[dict]:
+    return [r for r in results if r["friend"]]
+
+
+def test_friends_pick_is_a_park_a_friend_loved():
+    sites = top_ten() + [make_site("loved", is_named_park=True, seasons=["summer"])]
+    results = rank(sites, answers(), friends={"loved": [friend()]})
+    [pick] = friend_picks(results)
+    assert pick["park_code"] == "loved"
+    assert pick["reason"] == "Maya loved this (5★)"
+    assert pick["friend"] == {"user_id": 1, "first_name": "Maya", "rating": 5, "others": 0}
+
+
+def test_friends_pick_needs_four_or_five_stars():
+    sites = top_ten() + [make_site("meh", is_named_park=True, seasons=["summer"])]
+    assert friend_picks(rank(sites, answers(), friends={"meh": [friend(rating=3)]})) == []
+
+
+def test_friends_pick_skips_the_top_four_visited_and_snoozed():
+    sites = top_ten() + [
+        make_site("been", is_named_park=True, seasons=["summer"]),
+        make_site("later", is_named_park=True, seasons=["summer"]),
+    ]
+    loved = {code: [friend()] for code in ("top0", "been", "later")}
+    history = {"been": visit("been", "canyon")}
+    assert (
+        friend_picks(rank(sites, answers(), history=history, friends=loved, snoozed={"later"}))
+        == []
+    )
+    # Below the top four, a friend's park is fine.
+    [pick] = friend_picks(rank(sites, answers(), friends={"top5": [friend()]}))
+    assert pick["park_code"] == "top5"
+
+
+def test_friends_pick_prefers_the_best_rating_then_more_friends():
+    sites = top_ten() + [
+        make_site(code, is_named_park=True, seasons=["summer"]) for code in ("four", "five", "many")
+    ]
+    friends = {
+        "four": [friend("Ana", 4)],
+        "five": [friend("Ben", 5)],
+        "many": [friend("Cy", 5, 2), friend("Di", 4, 3), friend("Eve", 5, 4)],
+    }
+    [pick] = friend_picks(rank(sites, answers(), friends=friends))
+    assert pick["park_code"] == "many"
+    assert pick["reason"] == "Cy and 2 friends loved this"
+
+
+def test_no_friends_means_no_friends_pick():
+    sites = top_ten() + [make_site("x", is_named_park=True)]
+    assert friend_picks(rank(sites, answers())) == []

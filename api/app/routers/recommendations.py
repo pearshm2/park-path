@@ -5,7 +5,8 @@ Works for everyone: the quiz answers arrive with each request, so no
 account is needed. When the request carries a valid sign-in token, the
 engine also uses that person's logged trips (visited parks move down;
 their stars and feedback tags tune the terrains, crowds, distance and
-seasons; one park is flagged as "something different"). All the scoring lives in
+seasons; one park is flagged as "something different", and one a friend
+loved as the friends' pick). All the scoring lives in
 app/recommender.py; this file only loads the data and hands it over.
 """
 
@@ -16,8 +17,9 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.dependencies import get_optional_user
 from app.models import Site, TripEntry, User
-from app.recommender import Review, SiteData, Visit, rank
+from app.recommender import FriendRating, Review, SiteData, Visit, rank
 from app.schemas import RecommendationOut, RecommendationRequest
+from app.visibility import Visibility, friend_ids
 
 router = APIRouter()
 
@@ -58,6 +60,27 @@ def load_reviews(db: Session, user: User) -> list[Review]:
     ]
 
 
+def load_friend_ratings(db: Session, user: User) -> dict[str, list[FriendRating]]:
+    """Friends' ratings of parks, from the trips they shared with friends."""
+    friends = friend_ids(db, user.id)
+    if not friends:
+        return {}
+    rows = db.execute(
+        select(Site.park_code, User.id, User.first_name, TripEntry.rating)
+        .join(TripEntry, TripEntry.site_id == Site.id)
+        .join(User, User.id == TripEntry.user_id)
+        .where(
+            TripEntry.user_id.in_(friends),
+            TripEntry.visibility == Visibility.FRIENDS.value,
+            TripEntry.rating.is_not(None),
+        )
+    ).all()
+    out: dict[str, list[FriendRating]] = {}
+    for code, user_id, first_name, rating in rows:
+        out.setdefault(code, []).append(FriendRating(user_id, first_name, rating))
+    return out
+
+
 @router.post("", response_model=list[RecommendationOut])
 def recommend(
     payload: RecommendationRequest,
@@ -81,6 +104,7 @@ def recommend(
     ]
     history = load_history(db, user) if user is not None else None
     reviews = load_reviews(db, user) if user is not None else None
+    friends = load_friend_ratings(db, user) if user is not None else None
     return rank(
         sites,
         payload.answers,
@@ -88,4 +112,5 @@ def recommend(
         history=history,
         snoozed={code.lower() for code in payload.snoozed},
         reviews=reviews,
+        friends=friends,
     )

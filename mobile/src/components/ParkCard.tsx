@@ -41,6 +41,7 @@ export function ParkCard({
   match,
   rank,
   different = false,
+  friendPick = false,
   markWishlist = false,
   onOpenTrip,
   saved = false,
@@ -60,6 +61,8 @@ export function ParkCard({
   rank?: number;
   /** The engine's "something different" pick: labelled so on the band. */
   different?: boolean;
+  /** The friends' pick (a park a friend loved): labelled so on the band. */
+  friendPick?: boolean;
   /** Flags a wishlist park on the band, for decks that mix them with others. */
   markWishlist?: boolean;
   /** The visited card's trip link: open that trip, or log one if none. */
@@ -140,6 +143,13 @@ export function ParkCard({
             <View style={styles.differentBadge}>
               <BodyText size={10.5} weight="bold" color={colors.accentRamp[800]} numberOfLines={1}>
                 Something different
+              </BodyText>
+            </View>
+          ) : null}
+          {friendPick && !different ? (
+            <View style={styles.differentBadge}>
+              <BodyText size={10.5} weight="bold" color={colors.accentRamp[800]} numberOfLines={1}>
+                Friends&apos; pick
               </BodyText>
             </View>
           ) : null}
