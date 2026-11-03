@@ -151,6 +151,8 @@ function useSheetSize(extra = 0) {
   return { deck: deck + extra, sheet: SHEET_BAR + deck + extra + space[2] - SHEET_LOWER };
 }
 const SHEET_MS = 260;
+/** The full-screen button's gap above the card sheet. */
+const EXPAND_GAP = 10;
 /**
  * How much the deck rises when a card's arrow shows more about the park:
  * room for a few lines of its description and the rest of its facts.
@@ -858,9 +860,6 @@ export default function ExploreScreen() {
             // the cards leaves the whole map in view.
             focusRegion={focusRegion?.id ?? null}
             featureIcons={scope === 'parks'}
-            // With the sheet open there's no room under the map, so the
-            // button stays in the map's corner; closed, it sits below.
-            onExpand={sheetOpen ? openFullMap : undefined}
             onSelectSite={(site) => {
               if (anchor && site.id === highlightId) {
                 // Tapping the top card's pin again zooms back out.
@@ -888,15 +887,9 @@ export default function ExploreScreen() {
           </Animated.View>
           {!sheetOpen ? (
             <>
-              <Pressable
-                onPress={openFullMap}
-                hitSlop={8}
-                accessibilityRole="button"
-                accessibilityLabel="Open the map full screen"
-                style={({ pressed }) => [styles.expandBelow, pressed && styles.suggestionPressed]}
-              >
-                <ExpandIcon size={16} color={colors.accentRamp[700]} />
-              </Pressable>
+              {/* Room for the full-screen button, which rides on the
+                  card sheet (CardSheet's onExpand). */}
+              <View style={styles.expandRoom} />
               <View
                 style={{ flex: SPARE_BELOW }}
                 onLayout={(event) => measureSpare('below', event.nativeEvent.layout.height)}
@@ -918,6 +911,7 @@ export default function ExploreScreen() {
           }
           extra={deckExtra}
           below={tabSpace}
+          onExpand={openFullMap}
           pages={
             deckSections && deckSections.length > 1 && inSection
               ? { count: deckSections.length, active: inSection.page }
@@ -1086,6 +1080,7 @@ function CardSheet({
   pages,
   extra = 0,
   below = 0,
+  onExpand,
   children,
 }: {
   open: boolean;
@@ -1098,6 +1093,8 @@ function CardSheet({
   extra?: number;
   /** Room under the deck, behind the floating tab bar. */
   below?: number;
+  /** Open the map full screen: a button riding just above the sheet's corner. */
+  onExpand?: () => void;
   children: ReactNode;
 }) {
   const { deck: deckHeight, sheet: sheetHeight } = useSheetSize(extra);
@@ -1140,37 +1137,56 @@ function CardSheet({
     opacity: interpolate(offset.get(), [0, closedY * 0.6], [1, 0], Extrapolation.CLAMP),
   }));
 
+  const height = sheetHeight + DECK_GAP + below;
   return (
-    <Animated.View style={[styles.sheet, { height: sheetHeight + DECK_GAP + below }, slide]}>
-      <GestureDetector gesture={Gesture.Race(drag, tapBar)}>
-        <View
-          accessible
-          accessibilityRole="button"
-          accessibilityLabel={`${open ? 'Hide' : 'Show'} ${title.replaceAll(' → ', ' to ')}`}
-          onAccessibilityTap={() => onOpenChange(!open)}
-          style={styles.sheetBar}
-        >
-          <View style={styles.sheetHandle} />
-          <View style={styles.sheetHead}>
-            <SheetTitle title={title} />
-            {open && pages ? (
-              <View style={styles.pageDots} accessibilityLabel={`Section ${pages.active + 1} of ${pages.count}`}>
-                {Array.from({ length: pages.count }, (_, index) => (
-                  <View
-                    key={index}
-                    style={[styles.pageDot, index === pages.active && styles.pageDotActive]}
-                  />
-                ))}
-              </View>
-            ) : null}
-            <BodyText size={12} weight="semibold" color={colors.accentRamp[700]}>
-              {open ? (status ?? '') : 'Swipe up ▴'}
-            </BodyText>
+    <>
+      {/* Beside the sheet, not in it (Android can't tap a child drawn outside
+          its parent), but on the same slide, so it moves with the sheet's top
+          as it's dragged, opened and closed. */}
+      {onExpand ? (
+        <Animated.View style={[styles.expandRide, { bottom: height + EXPAND_GAP }, slide]}>
+          <Pressable
+            onPress={onExpand}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Open the map full screen"
+            style={({ pressed }) => [styles.expandButton, pressed && styles.suggestionPressed]}
+          >
+            <ExpandIcon size={16} color={colors.accentRamp[700]} />
+          </Pressable>
+        </Animated.View>
+      ) : null}
+      <Animated.View style={[styles.sheet, { height }, slide]}>
+        <GestureDetector gesture={Gesture.Race(drag, tapBar)}>
+          <View
+            accessible
+            accessibilityRole="button"
+            accessibilityLabel={`${open ? 'Hide' : 'Show'} ${title.replaceAll(' → ', ' to ')}`}
+            onAccessibilityTap={() => onOpenChange(!open)}
+            style={styles.sheetBar}
+          >
+            <View style={styles.sheetHandle} />
+            <View style={styles.sheetHead}>
+              <SheetTitle title={title} />
+              {open && pages ? (
+                <View style={styles.pageDots} accessibilityLabel={`Section ${pages.active + 1} of ${pages.count}`}>
+                  {Array.from({ length: pages.count }, (_, index) => (
+                    <View
+                      key={index}
+                      style={[styles.pageDot, index === pages.active && styles.pageDotActive]}
+                    />
+                  ))}
+                </View>
+              ) : null}
+              <BodyText size={12} weight="semibold" color={colors.accentRamp[700]}>
+                {open ? (status ?? '') : 'Swipe up ▴'}
+              </BodyText>
+            </View>
           </View>
-        </View>
-      </GestureDetector>
-      <Animated.View style={[{ height: deckHeight + below, marginTop: DECK_GAP }, deckFade]}>{children}</Animated.View>
-    </Animated.View>
+        </GestureDetector>
+        <Animated.View style={[{ height: deckHeight + below, marginTop: DECK_GAP }, deckFade]}>{children}</Animated.View>
+      </Animated.View>
+    </>
   );
 }
 
@@ -1655,9 +1671,14 @@ const styles = StyleSheet.create({
     backgroundColor: colors.neutral[100],
   },
   // Centred just under the map, so it reads as the map's own button.
-  expandBelow: {
-    alignSelf: 'center',
-    marginTop: space[2],
+  expandRoom: {
+    height: 34 + space[2],
+  },
+  expandRide: {
+    position: 'absolute',
+    right: space[3],
+  },
+  expandButton: {
     width: 34,
     height: 34,
     alignItems: 'center',

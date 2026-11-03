@@ -462,6 +462,11 @@ export function ParkMap({
       scheduleOnRN(beginMove, k.get(), tx.get(), ty.get());
     })
     .onUpdate((event) => {
+      // As the fingers lift, one goes a moment before the other, and the
+      // point between them jumps to the finger still down: following it
+      // moved the map by half the fingers' distance just as it was let go.
+      // Only a two-finger update moves the map.
+      if (event.numberOfPointers !== 2) return;
       const start = gestureStart.get();
       const nextK = Math.min(Math.max(start.k * event.scale, minK), maxK);
       const ratio = nextK / start.k;
@@ -712,6 +717,14 @@ export function ParkMap({
       fade: kind === 'other' ? othersFade : 1,
     };
   };
+  /**
+   * A dot that needs a pin of its own: the selected park (bigger, ringed)
+   * and any with a badge. The rest are plain dots, drawn in layers.
+   */
+  const pinned = (dot: PlacedDot) => dot.site.id === selectedId || badgeFor(dot.site) !== undefined;
+  /** The plain dots among `dots` that pass `keep`, as [x0, y0, x1, y1, ...] in map coordinates. */
+  const plainPoints = (dots: PlacedDot[], keep: (dot: PlacedDot) => boolean) =>
+    dots.flatMap((dot) => (!pinned(dot) && keep(dot) ? [dot.x, dot.y] : []));
   // Draw #1 last so it sits on top where pins overlap.
   picks.sort((a, b) => rankById!.get(b.site.id)! - rankById!.get(a.site.id)!);
   // The selected park goes on top of its own group, glow and all.
@@ -835,6 +848,27 @@ export function ParkMap({
                 </G>
               </>
             ) : null}
+            {/* Plain dots, drawn with the land (DotLayer): they move with it
+                exactly, and nothing about them changes as the map moves. */}
+            {DOT_ORDER.map((status) => (
+              <DotLayer
+                key={status}
+                points={plainPoints(others, (dot) => dot.site.status === status)}
+                r={4}
+                fill={STATUS_DOT[status].fill}
+                stroke={STATUS_DOT[status].stroke}
+                strokeWidth={1.5}
+                opacity={othersFade}
+              />
+            ))}
+            <DotLayer
+              points={plainPoints(matched, () => true)}
+              r={6}
+              fill={MATCH_DOT.fill}
+              stroke={MATCH_DOT.stroke}
+              strokeWidth={1.75}
+              opacity={1}
+            />
           </Zoomed>
 
           {/* Stamps on the completed regions, while their pins are tucked away. */}
@@ -853,8 +887,8 @@ export function ParkMap({
               The fade is set on each shape, not on a group around them: on
               Android a translucent group is drawn through a whole extra
               canvas-sized bitmap, on every frame the map moves. */}
-          <G>{others.map((dot) => <ParkPin key={dot.site.id} {...pinProps(dot, 'other')} />)}</G>
-          <G>{matched.map((dot) => <ParkPin key={dot.site.id} {...pinProps(dot, 'match')} />)}</G>
+          <G>{others.filter(pinned).map((dot) => <ParkPin key={dot.site.id} {...pinProps(dot, 'other')} />)}</G>
+          <G>{matched.filter(pinned).map((dot) => <ParkPin key={dot.site.id} {...pinProps(dot, 'match')} />)}</G>
           <G>{picks.map((dot) => <ParkPin key={dot.site.id} {...pinProps(dot, 'pick')} />)}</G>
         </Svg>
         </View>
@@ -904,6 +938,82 @@ export function ParkMap({
 }
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
+
+/** Plain dots by status, bottom to top: visits stand out over the rest. */
+const DOT_ORDER: SiteStatus[] = ['new', 'wishlist', 'visited'];
+
+/**
+ * Many plain dots of one look as two shapes, drawn inside the land's
+ * group (Zoomed) in map coordinates, so they move with the land exactly.
+ * Each dot is a tiny line with round ends, and its width is kept the
+ * same on screen at any zoom (non-scaling stroke), so the line looks like
+ * a round dot that keeps its size while the land zooms. First a wider one
+ * in the ring colour, then a narrower one in the fill colour on top.
+ *
+ * Nothing here changes as the map moves (only the land's transform does),
+ * which is what keeps it fast: before, each of up to 474 dots was a pin
+ * of its own that Android had to move on every frame.
+ */
+const DotLayer = memo(
+  function DotLayer({
+    points,
+    r,
+    fill,
+    stroke,
+    strokeWidth,
+    opacity,
+  }: {
+    /** [x0, y0, x1, y1, ...] in map coordinates. */
+    points: number[];
+    r: number;
+    fill: string;
+    stroke: string;
+    strokeWidth: number;
+    opacity: number;
+  }) {
+    if (points.length === 0) return null;
+    let d = '';
+    for (let i = 0; i < points.length; i += 2) {
+      // A line a hundredth of a map unit long: round ends make it a dot.
+      d += `M${points[i].toFixed(2)} ${points[i + 1].toFixed(2)}h0.01`;
+    }
+    // A circle of radius r with a ring of strokeWidth across its edge,
+    // as the dots were drawn before.
+    const outer = 2 * r + strokeWidth;
+    const inner = 2 * r - strokeWidth;
+    return (
+      <>
+        <Path
+          d={d}
+          fill="none"
+          stroke={stroke}
+          strokeWidth={outer}
+          strokeLinecap="round"
+          vectorEffect="non-scaling-stroke"
+          opacity={opacity}
+        />
+        <Path
+          d={d}
+          fill="none"
+          stroke={fill}
+          strokeWidth={inner}
+          strokeLinecap="round"
+          vectorEffect="non-scaling-stroke"
+          opacity={opacity}
+        />
+      </>
+    );
+  },
+  // The dots' list is made afresh on each render of the map: compare what's in it.
+  (a, b) =>
+    a.r === b.r &&
+    a.fill === b.fill &&
+    a.stroke === b.stroke &&
+    a.strokeWidth === b.strokeWidth &&
+    a.opacity === b.opacity &&
+    a.points.length === b.points.length &&
+    a.points.every((value, i) => value === b.points[i]),
+);
 
 /** How long a region takes to fill in, and how long it waits first. */
 const FILL_MS = 1400;
