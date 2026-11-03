@@ -190,3 +190,87 @@ def test_feedback_tags_on_trips_tune_recommendations(sites, signed_in):
     # "Fine either way" on crowds, but they found a park too crowded: quiet now counts.
     assert anonymous[sites["match"]]["signals"]["crowds"] is None
     assert rows[sites["match"]]["signals"]["crowds"] is not None
+
+
+# --- the friends' pick --------------------------------------------------------
+
+
+@pytest.fixture
+def parks():
+    """Five canyon national parks that fill the top four, and a coast one below them."""
+    made = [
+        Site(
+            park_code=f"t{uuid.uuid4().hex[:8]}",
+            name=f"Test Canyon {i}",
+            terrain_group="canyon",
+            seasons=["spring"],
+            annual_visits_millions=2.0,
+            is_named_park=True,
+        )
+        for i in range(5)
+    ]
+    coast = Site(
+        park_code=f"t{uuid.uuid4().hex[:8]}",
+        name="Test Coast",
+        terrain_group="coast",
+        # In season, so it scores (below the canyons: not a quiz terrain).
+        seasons=["spring"],
+        annual_visits_millions=1.0,
+        is_named_park=True,
+    )
+    with SessionLocal() as db:
+        db.add_all([*made, coast])
+        db.commit()
+        codes = {"coast": coast.park_code, "coast_id": coast.id}
+        all_codes = [site.park_code for site in made] + [coast.park_code]
+    yield codes
+    with SessionLocal() as db:
+        db.execute(delete(Site).where(Site.park_code.in_(all_codes)))
+        db.commit()
+
+
+def _account():
+    email = f"rec-{uuid.uuid4().hex[:10]}@example.com"
+    body = {"email": email, "password": "correct-horse", **new_names()}
+    token = client.post("/auth/signup", json=body).json()["access_token"]
+    auth = {"Authorization": f"Bearer {token}"}
+    return email, auth, client.get("/auth/me", headers=auth).json()
+
+
+def test_a_friends_loved_park_is_the_friends_pick(parks):
+    me_email, me, _ = _account()
+    friend_email, friend, friend_me = _account()
+    try:
+        request_id = client.post(
+            "/friends/requests", json={"email": friend_email}, headers=me
+        ).json()["id"]
+        client.post(f"/friends/requests/{request_id}/accept", headers=friend)
+        with SessionLocal() as db:
+            db.add(
+                TripEntry(
+                    user_id=friend_me["id"],
+                    site_id=parks["coast_id"],
+                    visited_on=date(2026, 7, 1),
+                    rating=5,
+                    visibility="friends",
+                )
+            )
+            db.commit()
+
+        rows = _by_code(client.post("/recommendations", json={"answers": ANSWERS}, headers=me))
+        pick = rows[parks["coast"]]
+        assert pick["friend"]["first_name"] == friend_me["first_name"]
+        assert pick["reason"] == f"{friend_me['first_name']} loved this (5★)"
+
+        # Kept private, it counts for nothing.
+        with SessionLocal() as db:
+            db.query(TripEntry).filter(TripEntry.user_id == friend_me["id"]).update(
+                {"visibility": "private"}
+            )
+            db.commit()
+        rows = _by_code(client.post("/recommendations", json={"answers": ANSWERS}, headers=me))
+        assert rows[parks["coast"]]["friend"] is None
+    finally:
+        with SessionLocal() as db:
+            db.execute(delete(User).where(User.email.in_([me_email, friend_email])))
+            db.commit()

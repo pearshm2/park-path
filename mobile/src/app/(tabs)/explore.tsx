@@ -93,6 +93,8 @@ import { CapTextScale, colors, radius, shadow, space, useTextScale } from '../..
 
 /** Where the "something different" pick goes among them (0-based: #4). */
 const DIFFERENT_AT = 3;
+/** Where the friends' pick goes (0-based: #5). */
+const FRIEND_AT = 4;
 /** How many recommendations get a numbered pin and a card. */
 const TOP_N = 10;
 /** Stand-ins while a query has no data, kept stable so memos don't rerun. */
@@ -177,7 +179,15 @@ function applyFilters<T extends { site: Site }>(rows: T[], filters: FeedFilters)
 }
 
 /** A card in the deck: a park, plus its match and rank when it has them. */
-type DeckItem = { site: Site; score?: number; reason?: string; rank?: number; different?: boolean };
+type DeckItem = {
+  site: Site;
+  score?: number;
+  reason?: string;
+  rank?: number;
+  different?: boolean;
+  /** The friends' pick: a park a friend loved. */
+  friendPick?: boolean;
+};
 
 function toDeckItem(
   site: Site,
@@ -191,6 +201,7 @@ function toDeckItem(
     reason: match?.reason,
     rank: rankById.get(site.id),
     different: match?.different,
+    friendPick: !!match?.friend,
   };
 }
 
@@ -347,16 +358,21 @@ export default function ExploreScreen() {
 
   // The engine's top 10, untouched by the filters. Its "something
   // different" pick (a terrain new to you; only with trips logged) takes
-  // #4 unless it already ranks higher.
+  // #4, and its friends' pick (a park a friend loved; only with friends
+  // who've shared trips) takes #5, unless either already ranks higher.
   const picks = useMemo(() => {
-    const top = parkMatches.slice(0, TOP_N);
-    const different = parkMatches.find((match) => match.different);
-    if (!different) return top;
-    const at = top.indexOf(different);
-    if (at > -1 && at < DIFFERENT_AT) return top;
-    const rest = top.filter((match) => match !== different);
-    rest.splice(DIFFERENT_AT, 0, different);
-    return rest.slice(0, TOP_N);
+    let top = parkMatches.slice(0, TOP_N);
+    const place = (pick: Recommendation | undefined, slot: number) => {
+      if (!pick) return;
+      const at = top.indexOf(pick);
+      if (at > -1 && at < slot) return;
+      const rest = top.filter((match) => match !== pick);
+      rest.splice(slot, 0, pick);
+      top = rest.slice(0, TOP_N);
+    };
+    place(parkMatches.find((match) => match.different), DIFFERENT_AT);
+    place(parkMatches.find((match) => match.friend), FRIEND_AT);
+    return top;
   }, [parkMatches]);
   const rankById = useMemo(
     () => new Map(picks.map(({ site }, index) => [site.id, index + 1])),
@@ -405,11 +421,12 @@ export default function ExploreScreen() {
   const baseDeck = useMemo<DeckItem[]>(() => {
     if (personalList) return personalList.map((site) => toDeckItem(site, matchById, rankById));
 
-    const top = picks.map(({ site, score, reason, different }, index) => ({
+    const top = picks.map(({ site, score, reason, different, friend }, index) => ({
       site,
       score,
       reason,
       different,
+      friendPick: !!friend,
       rank: index + 1,
     }));
 
@@ -926,6 +943,7 @@ export default function ExploreScreen() {
                   match={item.score}
                   rank={item.rank}
                   different={item.different}
+                  friendPick={item.friendPick}
                   // The full decks mix saved parks in with everything else.
                   markWishlist={scope === 'parks' || scope === 'all'}
                   onOpenTrip={(entry) => openTrip(item.site, entry)}

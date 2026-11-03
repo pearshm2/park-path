@@ -40,7 +40,12 @@ export type Recommendation = {
   signals: SignalScores;
   /** The engine's "something different" pick: a terrain new to you. Shown at #4. */
   different: boolean;
+  /** The friends' pick: a park a friend loved. Shown at #5. */
+  friend: FriendPick | null;
 };
+
+/** Who loved the friends' pick. Generated from the API; see src/api/schema.ts. */
+export type FriendPick = components['schemas']['FriendPickOut'];
 
 /**
  * The scored sites in `scope`, best first. Sites the engine can't score
@@ -67,11 +72,18 @@ export async function recommendations(
   ]);
 
   const siteById = new Map(sites.map((site) => [site.id, site]));
-  return ranked.flatMap(({ park_code, score, reason, signals, different }) => {
+  return ranked.flatMap(({ park_code, score, reason, signals, different, friend }) => {
     const site = siteById.get(park_code);
     if (!site || score === null || score <= 0) return [];
     return [
-      { site, score, reason: reason ?? 'A partial match on your answers', signals, different },
+      {
+        site,
+        score,
+        reason: reason ?? 'A partial match on your answers',
+        signals,
+        different,
+        friend: friend ?? null,
+      },
     ];
   });
 }

@@ -2156,6 +2156,35 @@
         "title": "FriendOut",
         "description": "One entry in the signed-in user's friends list: the *other* person."
       },
+      "FriendPickOut": {
+        "properties": {
+          "user_id": {
+            "type": "integer",
+            "title": "User Id"
+          },
+          "first_name": {
+            "type": "string",
+            "title": "First Name"
+          },
+          "rating": {
+            "type": "integer",
+            "title": "Rating"
+          },
+          "others": {
+            "type": "integer",
+            "title": "Others",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "required": [
+          "user_id",
+          "first_name",
+          "rating"
+        ],
+        "title": "FriendPickOut",
+        "description": "Who loved the friends' pick: the friend who rated it highest."
+      },
       "FriendRequestCreate": {
         "properties": {
           "email": {
@@ -2794,6 +2823,16 @@
             "type": "boolean",
             "title": "Different",
             "default": false
+          },
+          "friend": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FriendPickOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",

@@ -45,6 +45,11 @@ The score is built in three steps:
    reviews count most and each later one a little less (diminishing
    returns): no single terrain or complaint can take over the list.
 
+Two parks can be flagged for a spot of their own in the app's top picks:
+"something different" (#4, see flag_something_different) and the
+friends' pick (#5, see flag_friends_pick): the national park a friend
+loved (4-5 stars on a trip they shared) that they haven't been to.
+
 Sites with no curated data (no terrain, seasons or visitor numbers) get a
 total of None: there is nothing honest to score them on yet.
 
@@ -295,6 +300,15 @@ class Taste:
         return extra
 
 
+@dataclass
+class FriendRating:
+    """A friend's rating of a park, from a trip they shared with friends."""
+
+    user_id: int
+    first_name: str
+    rating: int
+
+
 # ---------------------------------------------------------------------------
 # One function per signal. Each returns a score from 0 to 1, or None.
 # ---------------------------------------------------------------------------
@@ -429,6 +443,7 @@ def rank(
     history: dict[str, Visit] | None = None,
     snoozed: set[str] | None = None,
     reviews: list[Review] | None = None,
+    friends: dict[str, list[FriendRating]] | None = None,
 ) -> list[dict]:
     """
     Score every site against the quiz answers and return them best first.
@@ -439,6 +454,7 @@ def rank(
     `snoozed` holds park codes they've set aside: never the wildcard.
     `reviews` is their trips' stars and feedback tags; without it, each
     visit's best rating stands in (no tags).
+    `friends` is their friends' ratings of parks (park_code -> ratings).
     Sites with no curated data come last, with score None.
     """
     history = history or {}
@@ -494,6 +510,7 @@ def rank(
                 "signals": {k: None if v is None else round(v, 3) for k, v in signals.items()},
                 "visited": visited,
                 "different": False,
+                "friend": None,
                 # Used for picking and sorting only; not part of the response.
                 "_site": site,
                 "_visits": site.annual_visits_millions or 0,
@@ -505,6 +522,8 @@ def rank(
         flag_something_different(
             results, history, answers.terrains, answers.crowds, snoozed or set()
         )
+    if friends:
+        flag_friends_pick(results, friends, snoozed or set())
 
     # Scored sites first (best score, then the better-known site), then the
     # unscored ones alphabetically.
@@ -626,3 +645,69 @@ def flag_something_different(
         ),
         least=True,
     )
+
+
+# The friends' pick: a friend's rating that counts as loving a park.
+FRIEND_LOVED = 4
+# The friends' pick takes #5, so it comes from outside the four above it.
+FRIEND_PICK_AFTER = 4
+
+
+def flag_friends_pick(
+    results: list[dict],
+    friends: dict[str, list[FriendRating]],
+    snoozed: set[str] = frozenset(),
+):
+    """
+    Flag one national park as the friends' pick: one a friend rated 4-5
+    stars on a trip they shared, that the person hasn't been to, from
+    outside their top 4 parks (so it adds something) and not the
+    "something different" pick. Most loved wins: the best rating, then the
+    most friends who loved it, then the person's own score. Its reason
+    names the friend: "Maya loved this (5★)", or "Maya and 2 friends loved
+    this" when several did. With no friends' ratings that fit, nothing is
+    flagged, and #5 is a normal pick.
+    """
+    parks = [
+        r
+        for r in results
+        if r["score"] and r["_site"].is_named_park and r["park_code"] not in snoozed
+    ]
+    parks.sort(key=lambda r: (-r["score"], -r["_visits"], r["_name"]))
+    above = [r["park_code"] for r in parks if not r["different"]][:FRIEND_PICK_AFTER]
+
+    best_pick, best_key, best_lovers = None, None, []
+    for r in parks:
+        code = r["park_code"]
+        if r["visited"] or r["different"] or code in above:
+            continue
+        # Each friend once, at their best rating of it.
+        top: dict[int, FriendRating] = {}
+        for rating in friends.get(code, []):
+            if rating.rating >= FRIEND_LOVED and (
+                rating.user_id not in top or rating.rating > top[rating.user_id].rating
+            ):
+                top[rating.user_id] = rating
+        if not top:
+            continue
+        lovers = sorted(top.values(), key=lambda f: (-f.rating, f.first_name))
+        key = (lovers[0].rating, len(lovers), r["score"])
+        if best_key is None or key > best_key:
+            best_pick, best_key, best_lovers = r, key, lovers
+    if best_pick is None:
+        return
+
+    first = best_lovers[0]
+    others = len(best_lovers) - 1
+    if others == 0:
+        reason = f"{first.first_name} loved this ({first.rating}★)"
+    else:
+        friends_word = "friend" if others == 1 else "friends"
+        reason = f"{first.first_name} and {others} {friends_word} loved this"
+    best_pick["friend"] = {
+        "user_id": first.user_id,
+        "first_name": first.first_name,
+        "rating": first.rating,
+        "others": others,
+    }
+    best_pick["reason"] = reason
