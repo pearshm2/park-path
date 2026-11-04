@@ -6,7 +6,7 @@
  */
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -28,6 +28,7 @@ import { addComment, deleteComment, fetchComments, type TripComment } from '../.
 import { displayName, type Person } from '../../api/friends';
 import type { TripOut } from '../../api/trips';
 import { useAuth } from '../../auth/AuthContext';
+import { markRead, useActivity } from '../../friends/activity';
 import { useTrips } from '../../trips/TripsContext';
 import { colors, fonts, radius, shadow, space } from '../../theme';
 import { Avatar } from '../Avatar';
@@ -40,8 +41,18 @@ export type CommentTarget = Pick<TripOut, 'id' | 'title' | 'park_name'> & { owne
 export function CommentsSheet({ trip, onClose }: { trip: CommentTarget; onClose: () => void }) {
   const insets = useSafeAreaInsets();
   const keyboard = useKeyboardLift();
-  const { token, user } = useAuth();
+  const { token, user, userId } = useAuth();
   const { refresh: refreshTrips } = useTrips();
+  const activity = useActivity();
+  // Your own trip's comments, opened: friends' comments on it are read.
+  const ownTrip = user?.id === trip.owner.id;
+  useEffect(() => {
+    if (!ownTrip || !userId) return;
+    markRead(
+      userId,
+      activity.items.filter((item) => item.trip_id === trip.id).map((item) => item.id),
+    );
+  }, [ownTrip, userId, activity.items, trip.id]);
   const queryClient = useQueryClient();
   const [draft, setDraft] = useState('');
 

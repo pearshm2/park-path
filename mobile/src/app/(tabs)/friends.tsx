@@ -42,12 +42,13 @@ import { fetchFeed } from '../../api/trips';
 import { useAuth } from '../../auth/AuthContext';
 import { BodyText, Button, Heading, TextField, useTabBarSpace } from '../../components';
 import { Avatar } from '../../components/Avatar';
-import { ActivityStrip } from '../../components/friends/ActivityStrip';
+import { ActivityPage, ActivityStrip } from '../../components/friends/ActivityStrip';
 import { CommentsSheet, type CommentTarget } from '../../components/friends/CommentsSheet';
 import { FeedCard } from '../../components/friends/FeedCard';
 import { FriendCodeSheet } from '../../components/friends/FriendCode';
 import { FriendProfile } from '../../components/friends/FriendProfile';
-import { useActivity, useActivityNewSince } from '../../friends/activity';
+import { markAllRead, stripItems, useActivity, useRead } from '../../friends/activity';
+import type { TripActivity } from '../../api/trips';
 import { useFriends } from '../../friends/useFriends';
 import { colors, radius, shadow, space } from '../../theme';
 
@@ -70,7 +71,14 @@ export default function FriendsScreen() {
   const [commentsOn, setCommentsOn] = useState<CommentTarget | null>(null);
   const router = useRouter();
   const activity = useActivity();
-  const newSince = useActivityNewSince();
+  const isRead = useRead();
+  const [allActivity, setAllActivity] = useState(false);
+  /** A friend's comment on your trip: open that trip's comments (which reads them). */
+  function openActivity(item: TripActivity) {
+    if (!user) return;
+    setAllActivity(false);
+    setCommentsOn({ id: item.trip_id, title: item.trip_title, park_name: item.park_name, owner: user });
+  }
 
   const feed = useQuery({
     queryKey: ['feed', userId],
@@ -259,19 +267,15 @@ export default function FriendsScreen() {
         ) : null}
 
         {/* Friends' comments on your trips. */}
-        {user && activity.items.length > 0 ? (
+        {user && isRead && activity.items.length > 0 ? (
           <View style={styles.activity}>
             <ActivityStrip
-              items={activity.items}
-              newSince={newSince}
-              onOpen={(item) =>
-                setCommentsOn({
-                  id: item.trip_id,
-                  title: item.trip_title,
-                  park_name: item.park_name,
-                  owner: user,
-                })
-              }
+              items={stripItems(activity.items, isRead)}
+              total={activity.items.length}
+              unread={activity.items.filter((item) => !isRead(item)).length}
+              isRead={isRead}
+              onOpen={openActivity}
+              onSeeAll={() => setAllActivity(true)}
             />
           </View>
         ) : null}
@@ -309,6 +313,18 @@ export default function FriendsScreen() {
         </View>
       </ScrollView>
 
+      {allActivity && isRead && userId ? (
+        <ActivityPage
+          items={activity.items}
+          isRead={isRead}
+          onOpen={openActivity}
+          onMarkAllRead={() => {
+            const newest = activity.items[0]?.id;
+            if (newest !== undefined) markAllRead(userId, newest);
+          }}
+          onClose={() => setAllActivity(false)}
+        />
+      ) : null}
       {commentsOn ? <CommentsSheet trip={commentsOn} onClose={() => setCommentsOn(null)} /> : null}
       {profile ? (
         <FriendProfile

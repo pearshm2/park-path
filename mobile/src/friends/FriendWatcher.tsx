@@ -78,20 +78,26 @@ export function FriendWatcher() {
       const newest = comments[0]?.id;
       if (newest === undefined || (before !== null && newest <= before)) return;
       if (before !== null) {
+        // One comment says who and what; more than one, a single notice.
         const fresh = comments.filter((c) => c.id > before);
-        const notices: NewNotice[] = fresh.slice(0, 3).map((c) => ({
-          kind: 'friend',
-          title: `${displayName(c.author)} commented on your ${c.park_name} trip`,
-          body: c.body.length > 90 ? `${c.body.slice(0, 89)}…` : c.body,
-        }));
-        if (fresh.length > 3) {
-          notices.push({
-            kind: 'friend',
-            title: `${fresh.length - 3} more comments on your trips`,
-            body: 'Tap to see them in Friends.',
-          });
+        const [only] = fresh;
+        if (fresh.length === 1 && only) {
+          notify([
+            {
+              kind: 'friend',
+              title: `${displayName(only.author)} commented on your ${only.park_name} trip`,
+              body: only.body.length > 90 ? `${only.body.slice(0, 89)}…` : only.body,
+            },
+          ]);
+        } else if (fresh.length > 1) {
+          notify([
+            {
+              kind: 'friend',
+              title: `${fresh.length} new comments on your trips`,
+              body: 'Tap to see them in Friends.',
+            },
+          ]);
         }
-        notify(notices);
       }
       announced.current = { for: userId, id: newest };
       writeText(key, String(newest));
