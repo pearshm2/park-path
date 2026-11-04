@@ -61,9 +61,9 @@ export function fetchTrip(token: string, id: number): Promise<TripOut> {
   return request<TripOut>(`/trips/${id}`, { token });
 }
 
-/** GET /trips/activity — friends' comments on my trips, newest first. */
+/** GET /trips/activity — friends' last 100 comments on my trips, newest first. */
 export function fetchActivity(token: string): Promise<TripActivity[]> {
-  return request<TripActivity[]>('/trips/activity', { token });
+  return request<TripActivity[]>('/trips/activity?limit=100', { token });
 }
 
 /** GET /trips — my trips, newest visit first. */
