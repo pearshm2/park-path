@@ -41,19 +41,20 @@ export function ActivityStrip({
   return (
     <View style={styles.section}>
       <View style={styles.head}>
-        <BodyText size={10} weight="semibold" color={colors.neutral[600]} style={styles.label}>
+        <BodyText size={10} weight="semibold" color={colors.neutral[600]} style={styles.label} numberOfLines={1}>
           ACTIVITY ON YOUR TRIPS
         </BodyText>
         {unread > 0 ? (
+          // Never squeezed (it lost its "new" when the row ran short).
           <View style={styles.newCount}>
-            <BodyText size={10.5} weight="bold" color={colors.neutral[100]}>
-              {`${unread} new`}
+            <BodyText size={10.5} weight="bold" color={colors.neutral[100]} numberOfLines={1}>
+              {`${unread > 9 ? '9+' : unread} new`}
             </BodyText>
           </View>
         ) : null}
         <View style={styles.grow} />
-        <Pressable onPress={onSeeAll} hitSlop={10} accessibilityRole="button">
-          <BodyText size={12} weight="semibold" color={colors.accentRamp[700]}>
+        <Pressable onPress={onSeeAll} hitSlop={10} accessibilityRole="button" style={styles.seeAll}>
+          <BodyText size={12} weight="semibold" color={colors.accentRamp[700]} numberOfLines={1}>
             {`See all ${total} ›`}
           </BodyText>
         </Pressable>
@@ -176,12 +177,17 @@ const styles = StyleSheet.create({
     gap: space[2],
   },
   label: {
+    flexShrink: 1,
     letterSpacing: 1.2,
+  },
+  seeAll: {
+    flexShrink: 0,
   },
   grow: {
     flex: 1,
   },
   newCount: {
+    flexShrink: 0,
     paddingVertical: 1,
     paddingHorizontal: 7,
     borderRadius: radius.pill,
