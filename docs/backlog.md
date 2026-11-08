@@ -3,16 +3,10 @@
 Work that's been deliberately deferred or cut, so it isn't forgotten. Move an
 item back into the active list when the team agrees to pick it up.
 
-Last updated: Oct 24.
+Last updated: Nov 8.
 
 ## Deferred: recommendation engine
 
-- **Friends' picks signal.** "Your friends liked or visited this park,"
-  from friends' wishlists and, later, trips, respecting `visibility.py`.
-  Built as a fifth signal that returns "no data" until switched on, so it
-  has no effect on scores until then. Replaces the pitch's "collaborative
-  filtering" (similar strangers), which needs far more users than we have.
-- **Trips feeding recommendations** (E2). Needs the trips backend.
 - **Accessibility as a signal.** Needs real per-park accessibility data.
 - **Per-person signal order** ("What matters most" in Settings). The engine
   already reads its weights from one config (`DEFAULT_WEIGHTS`).
@@ -37,7 +31,16 @@ than they help *choose* one, so they wait until the core is done.
   (snooze a park for 30 days) is the only way to pass on a park, so the
   engine never learns "I don't like this park at all" from one tap. The
   `site_feedback` and `user_tag_weights` tables (migration 0006) stay
-  unused.
+  unused. What the engine learns from instead: the stars and feedback tags
+  on your own trips (PR #47).
+
+## Done since (no longer deferred)
+
+- **Friends' pick** (PR #48): #5 is a national park a friend rated 4–5★
+  on a trip they shared. It stands in for the pitch's "collaborative
+  filtering" (similar strangers), which needs far more users than we have.
+- **Trips feeding recommendations** (engine v2, then reviews in PR #47).
+- **Scheduled NPS sync**: weekly, with GitHub Actions (see `docs/deploy.md`).
 
 ## After the demo (agreed, not cut)
 

@@ -1,82 +1,52 @@
 # ParkPath: What's Left
 
-Status as of **Monday, Oct 26, 2026**. This checks `main` (with main through PR #38) against our 8-week plan. Demo day is **Wednesday, Oct 28**.
+Status as of **Sunday, Nov 8, 2026**, checking `main` through PR #53. The demos on Oct 28, Nov 2 and Nov 4 are done.
 
-**Decided Oct 24:** no thumbs up/down. To pass on a park, you snooze it with "Not for now", so the engine doesn't get "I don't like this park at all" feedback. (See `docs/backlog.md` → Cut.)
-
-**Where we stand:** weeks 1–6 are essentially done. Mobile typecheck and lint pass, and all 251 API tests pass. Trip photos and videos now upload to S3 (PR #35); only the passport-stamp photo stays on the phone.
+**Where we stand:** the app is feature-complete for the capstone. Mobile typecheck and lint pass, and all 285 API tests pass. What's left is split into what the project still needs, and what a real release would need on top.
 
 Sizes: **S** = an hour or two · **M** = about a day · **L** = several days
 
 ---
 
-## Before Wednesday's demo
+## For the capstone
 
-- [x] ~~**Decide how to demo around photo sync.**~~ Uploads landed in PR #35 (fixed in #38): friends see trips with their photos and videos.
-- [ ] **Set `GOOGLE_CLIENT_IDS` on Render.** Without it, Google sign-in returns 503 on the hosted API. Otherwise demo with email login. *(Sebastian)*
-- [ ] **Check the Render database's age.** Free Render Postgres is deleted after 30 days. Upgrade it, or be ready to re-seed it. *(Sebastian)*
-- [x] **Set up demo accounts:** Halie plus three friends, with trips and comments. See `docs/demo-accounts.md`.
-- [ ] **Pick quiz answers that land on a curated park.** Only 119 of 474 sites have match scores. *(Dylan)*
-- [x] **Replace the default app icon and splash screen** with the ParkPath logo. *(Halie)*
-- [ ] **Don't claim "collaborative filtering" in the talk.** The README pitches it, but it isn't built.
-
----
-
-## Frontend (Halie)
-
-- [x] **Upload trip photos and videos to S3.** Done in PR #35, except the passport-stamp photo (needs somewhere on the server to keep it). Call `POST /trips/photos/upload-url`, upload, then send `photo_keys`. Do the passport-stamp photo too. **M–L**
-  `mobile/src/api/trips.ts`, `mobile/src/trips/TripsContext.tsx`
-- [x] **Forgot password:** link hidden (`PASSWORD_RESET_ENABLED` in `AuthForm.tsx`). Was: hide the link (**S**), or build it with the backend (**M**). The screen calls `/auth/password-reset`, which doesn't exist.
-  `(auth)/forgot-password.tsx`
-- [x] **Error and retry states** on Explore (a "Try again" bar) and site detail. Trips still works offline from the phone's journal. Was: If the API is unreachable, Explore shows an empty map. Trips and site detail have the same gap. **S–M**
-  `(tabs)/explore.tsx` lines 244–260, `(tabs)/trips.tsx` line 100, `site/[id].tsx` line 34
-- [x] **Replace the "Coming next" card on the site page** (match scores, PR #33), for example with the four match scores `/recommendations` already returns. **S–M**
-  `site/[id].tsx` around lines 130–137
-- [x] **Save quiz answers and snoozes to the server** so they survive a new phone (`QuizContext.tsx`, `useSnoozed.ts`).
-  `quiz.tsx`, `QuizContext.tsx`, `useSnoozed.ts`
-- [x] **Clean-ups.** Fix stale "device-only" comments in `(tabs)/trips.tsx` (lines 14–15) and `api/trips.ts` (lines 6–9). Replace the create-expo-app boilerplate in `mobile/README.md`. **S**
-
-## Backend (Sebastian)
-
-- [ ] **Password reset**, after the demo (decided Oct 26: not cut). Needs an email provider; then turn the app's link back on. **M**
-- [x] **Store quiz answers and snoozes on the server:** `/quiz` and `/snoozes`, migration 0017.
-- [x] **Add the S3 and Google env vars to `render.yaml`** with `sync: false` (`S3_BUCKET`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `GOOGLE_CLIENT_IDS`). Create the bucket and IAM user, then update `docs/deploy.md`. **S**
-- [ ] *Optional:* run the NPS sync on a Render cron schedule. Today it's a manual command. **S–M**
-
-## Recommendation engine (Dylan)
-
-Engine code: `api/app/recommender.py`. (`parkpath-recommendation-engine/` is the design prototype, not the engine.)
-
-- [ ] **Add a "Friends' picks" signal.** It stands in for the collaborative filtering in our pitch. **M**
-- [x] **Let past trips shape future recommendations** (backlog E2, engine v2). **M**
-- [ ] **Curate the remaining 355 sites.** They return `score: null` today. **M**, mostly manual
-- [ ] *Smaller backlog items:* per-person signal order, road distance, an accessibility signal. **S–L**
-
-## Release and infra
-
-- [x] **Document the APK build:** `docs/apk.md` (PR #36).
-- [ ] **Build the release-candidate APK** from main (it needs PR #37 and #38's photo upload fix), following `docs/apk.md`. **S** *(Halie / Dylan)*
-- [x] **Write a demo seed script** for users, friendships, trips and comments: `api/seed_demo.py`.
-- [ ] *Optional:* add an EAS build or a mobile test job to CI. **M** *(Dylan)*
-
-## QA (Dylan leads)
-
-- [ ] **Bug bash**, with findings written down in `docs/`. **M**
-- [ ] **Install test** of the APK on a phone outside the team. **S**
+- [ ] **Fix the layout on phones with button navigation** (◁ ○ ▢, e.g. Sebastian's Note 20 Ultra): the system buttons covered the tab bar. **S** *(Dylan)*
+- [ ] **Weekly NPS sync** with GitHub Actions (`.github/workflows/nps-sync.yml`). Needs two repository secrets; see `docs/deploy.md`. **S** *(Dylan)*
+- [ ] **Mobile automated tests.** None exist yet; the API has 285 pytest tests. Set up the tooling and a first handful, run in CI. **M** *(Dylan)*
+- [ ] **Set `GOOGLE_CLIENT_IDS` on Render.** Without it, Google sign-in returns 503 on the hosted API. *(Sebastian)*
+- [ ] **Check the Render database's age.** Free Render Postgres is deleted after 30 days. Upgrade it, or be ready to re-seed it (`docs/deploy.md`, step 5). *(Sebastian)*
+- [ ] **Password reset** (decided Oct 26: not cut). Needs an email provider; then turn the app's link back on. **M** *(Sebastian)*
+- [ ] **Bug bash**, with findings written down in `docs/`, and an **install test** of the APK on a phone outside the team. **S–M** *(Dylan leads)*
 - [ ] **Backup demo recording.** **S**
-- [ ] **Mobile automated tests.** None exist; the API has 251 pytest tests. **M–L**
+- [ ] Ask the team: should the account switcher (hold your name in Settings) be a visible button?
+
+## If the app were released
+
+- [ ] **Quests:** after a trip, a quest to visit 2–4 nearby unvisited sites; a reward seal in Passport. **M–L**
+- [ ] **Night-sky dark mode.** Touches most screens. **M**
+- [ ] **Local data on the phone:** screens open instantly and work without signal; photo caching after. **M**
+- [ ] **Badge colours by region.** **S**
+- [ ] **Curate the remaining 355 sites.** They return `score: null` today. **M**, mostly manual
+- [ ] **SDK 58 upgrade**, on its own branch with an APK test after. **M**
+- [ ] **Longer sign-ins** (refresh tokens): sign-in tokens last 24 hours today. **M**
+- [ ] **Play Store basics:** privacy policy, store listing, signed release build. **M**
+- [ ] **Crash reporting and server rate limits.** **S–M**
+- [ ] **Monetisation:** charge for photo and video storage ("ParkPath+"), keep the rest free.
+- [ ] *Engine backlog:* per-person signal order, road distance, an accessibility signal (`docs/backlog.md`). **S–L**
 
 ---
 
 ## Already done
 
-- Auth (email + Google), usernames, profile photos, account deletion
-- Onboarding quiz
-- Explore map with real NPS data and top-10 picks, each with a reason
+- Auth (email + Google), usernames, profile photos, account deletion, and a hidden account switcher for demos
+- Onboarding quiz, saved to the server with "Not for now" snoozes (and a Set aside list to bring parks back)
+- Explore map with real NPS data and top-10 picks, each with its match score and reason; a fast map of all 474 sites
+- Recommendation engine v2: quiz signals, trip history, star ratings and feedback tags with diminishing returns, a "Something different" pick at #4 and a Friends' pick at #5 (`docs/recommendation-engine.md`)
 - Site detail with Google Maps directions, plus official NPS brochure maps
-- Trips journal, synced to the server with its photos and videos (S3), with "Relive" playback
+- Trips journal, synced to the server with its photos, videos and passport-stamp photo (S3), with Relive playback ending on a "How it was" page
 - Passport stamps, region map, 30 achievements and celebrations
-- Friends by username, email or QR code, with a feed, comments and notifications
+- Friends by username, email or QR code, with a feed, comments, Relive on friends' posts, Activity for comments on your trips, and notifications
 - Settings, and in-app arrival reminders
+- New app icon and splash (the landscape map pin)
 - CI: lint, API tests against Postgres, and an OpenAPI contract check
-- Render deploy blueprint
+- Render deploy blueprint; installable APK (`docs/apk.md`); demo seed script (`api/seed_demo.py`)
