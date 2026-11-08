@@ -9,6 +9,8 @@ import { useState } from 'react';
 import { KeyboardAvoidingView, Modal, Platform, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { useKeyboardLift } from '../lib/useKeyboardLift';
+
 import { Button } from '../components/Button';
 import { TextField } from '../components/TextField';
 import { BodyText, Heading } from '../components/Typography';
@@ -27,6 +29,7 @@ export function UsernamePrompt() {
 
 function Prompt({ user }: { user: User }) {
   const insets = useSafeAreaInsets();
+  const keyboard = useKeyboardLift();
   const { updateProfile, dismissGoogleWelcome } = useAuth();
   const [first, setFirst] = useState(user.first_name);
   const [last, setLast] = useState(user.last_name);
@@ -63,8 +66,13 @@ function Prompt({ user }: { user: User }) {
 
   return (
     <Modal visible transparent animationType="fade" statusBarTranslucent onRequestClose={() => {}}>
-      <KeyboardAvoidingView style={styles.overlay} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <View style={[styles.sheet, { marginBottom: insets.bottom + 14 }]}>
+      {/* iOS moves the sheet up for the keyboard here; Android by `lift`. */}
+      <KeyboardAvoidingView
+        style={[styles.overlay, { paddingBottom: keyboard.lift }]}
+        onLayout={keyboard.onLayout}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
+        <View style={[styles.sheet, { marginBottom: (keyboard.lift > 0 ? 0 : insets.bottom) + 14 }]}>
           <Heading size={21} style={styles.title}>
             Welcome to ParkPath
           </Heading>
