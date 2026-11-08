@@ -32,6 +32,8 @@ from app.models import Site
 
 NPS_PARKS_URL = "https://developer.nps.gov/api/v1/parks"
 PAGE_SIZE = 50  # parks per request; ~10 requests for the whole system
+# A live fetch with fewer usable parks than this is treated as an NPS outage.
+MIN_PARKS = 400
 
 # api/data/nps_snapshot.json
 SNAPSHOT_PATH = Path(__file__).resolve().parent.parent / "data" / "nps_snapshot.json"
@@ -177,6 +179,14 @@ def main() -> None:
         raw_parks = fetch_all_parks(settings.nps_api_key)
         rows = transform_all(raw_parks)
         print(f"  got {len(raw_parks)} records, {len(rows)} usable parks")
+        # NPS has ~474 sites. Far fewer means its API had a bad day: stop
+        # with an error (the weekly job then shows as failed) rather than
+        # report a "sync" that barely happened.
+        if len(rows) < MIN_PARKS:
+            raise SystemExit(
+                f"Only {len(rows)} usable parks came back from NPS (expected {MIN_PARKS}+). "
+                "Nothing was saved; try again later."
+            )
 
         if args.save_snapshot:
             SNAPSHOT_PATH.parent.mkdir(parents=True, exist_ok=True)

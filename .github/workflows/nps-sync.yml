@@ -1,0 +1,79 @@
+name: Weekly NPS sync
+
+# Refreshes the park data on Render from the NPS API once a week, so names,
+# descriptions, photos and links stay current without anyone running
+# `python -m app.nps_sync` by hand. It only writes the NPS-owned columns:
+# our curated data (terrain, seasons, effort, ...) is never touched.
+#
+# Needs two repository secrets (Settings -> Secrets and variables ->
+# Actions -> New repository secret):
+#   PROD_DATABASE_URL  Render: parkpath-db -> Connect -> External Database URL
+#   NPS_API_KEY        the same key that's on Render
+# Without them, the job says so and stops without doing anything.
+#
+# Run it any time from the Actions tab: "Weekly NPS sync" -> "Run workflow".
+
+on:
+  schedule:
+    # Mondays 07:17 UTC (2-3 am in the US): quiet, and off the busy top of
+    # the hour, when GitHub delays scheduled jobs the most.
+    - cron: "17 7 * * 1"
+  workflow_dispatch:
+
+# Never two syncs at once.
+concurrency:
+  group: nps-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    defaults:
+      run:
+        working-directory: api
+
+    env:
+      DATABASE_URL: ${{ secrets.PROD_DATABASE_URL }}
+      NPS_API_KEY: ${{ secrets.NPS_API_KEY }}
+      ENVIRONMENT: production
+
+    steps:
+      - name: Check the secrets are set
+        id: secrets
+        run: |
+          if [ -z "$DATABASE_URL" ] || [ -z "$NPS_API_KEY" ]; then
+            echo "::warning::PROD_DATABASE_URL or NPS_API_KEY isn't set in the repository's secrets, so nothing was synced. See the top of .github/workflows/nps-sync.yml."
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.secrets.outputs.ready == 'true'
+
+      - uses: actions/setup-python@v5
+        if: steps.secrets.outputs.ready == 'true'
+        with:
+          python-version: "3.11" # matches api/Dockerfile
+          cache: pip
+          cache-dependency-path: api/requirements.txt
+
+      - name: Install dependencies
+        if: steps.secrets.outputs.ready == 'true'
+        run: pip install -r requirements.txt
+
+      # --save-snapshot also writes data/nps_snapshot.json, kept below as a
+      # download: a fresh copy for the offline fallback (--from-snapshot).
+      - name: Sync parks from NPS
+        if: steps.secrets.outputs.ready == 'true'
+        run: python -m app.nps_sync --save-snapshot
+
+      - name: Keep the fresh snapshot
+        if: steps.secrets.outputs.ready == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: nps-snapshot
+          path: api/data/nps_snapshot.json
+          retention-days: 30
