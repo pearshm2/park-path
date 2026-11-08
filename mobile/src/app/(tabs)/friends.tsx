@@ -50,6 +50,7 @@ import { FriendProfile } from '../../components/friends/FriendProfile';
 import { markAllRead, stripItems, useActivity, useRead } from '../../friends/activity';
 import type { TripActivity } from '../../api/trips';
 import { useFriends } from '../../friends/useFriends';
+import { useKeyboardLift } from '../../lib/useKeyboardLift';
 import { colors, radius, shadow, space } from '../../theme';
 
 /** "Oct 2026" from an ISO date. */
@@ -369,6 +370,7 @@ function InviteSheet({
   send: ReturnType<typeof useFriends>['send'];
 }) {
   const insets = useSafeAreaInsets();
+  const keyboard = useKeyboardLift();
   const [who, setWho] = useState('');
   const [result, setResult] = useState<{ ok: boolean; text: string } | null>(null);
 
@@ -407,13 +409,16 @@ function InviteSheet({
   }
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={close}>
+    // Edge to edge (statusBarTranslucent), so `keyboard` measures from the screen's top.
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={close} statusBarTranslucent>
+      {/* iOS moves the sheet up for the keyboard here; Android by `lift`. */}
       <KeyboardAvoidingView
-        style={styles.overlay}
+        style={[styles.overlay, { paddingBottom: keyboard.lift }]}
+        onLayout={keyboard.onLayout}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
         <Pressable style={StyleSheet.absoluteFill} onPress={close} accessibilityLabel="Close" />
-        <View style={[styles.sheet, { marginBottom: insets.bottom + 14 }]}>
+        <View style={[styles.sheet, { marginBottom: (keyboard.lift > 0 ? 0 : insets.bottom) + 14 }]}>
           <Heading size={19}>Invite a friend</Heading>
           <BodyText size={12.5} lineHeightRatio={1.45} color={colors.neutral[700]}>
             Add someone by their ParkPath username (or the email they signed up with). They&apos;ll

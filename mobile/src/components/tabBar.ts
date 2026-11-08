@@ -6,6 +6,7 @@
  * keeps its own content clear of it with `useTabBarSpace()`.
  */
 
+import { Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export const BAR_HEIGHT = 66;
@@ -13,16 +14,26 @@ export const BAR_HEIGHT = 66;
 export const RAISE = 18;
 
 /**
- * Space under the bar: half the bottom inset, so it sits partly in the
- * home-indicator zone, but never under 16, which clears the indicator line
- * on both iOS and Android (its top sits about 13 up from the edge). With no
- * inset at all, the app ends above the system's own bar (Android's
- * three-button navigation), so there's no line to clear: a small gap does.
+ * Space under the bar. With a gesture bar at the bottom (Android's
+ * gesture navigation, iPhone's home indicator), half the bottom inset, so
+ * the bar sits partly in that zone, but never under 16, which clears the
+ * indicator line (its top sits about 13 up from the edge). Android's
+ * button navigation (◁ ○ ▢) is a full bar of buttons, about 48 tall, that
+ * the app now draws behind (edge to edge): the bar sits wholly above it,
+ * or the buttons land on top of the tabs. With no inset at all, the app
+ * ends above the system's bar already, so a small gap does.
  */
 export function tabBarBottom(insetBottom: number): number {
   if (insetBottom < 1) return 6;
+  if (Platform.OS === 'android' && insetBottom >= BUTTON_NAV_MIN) return insetBottom + 6;
   return Math.max(insetBottom / 2, 16);
 }
+
+/**
+ * An Android bottom inset this tall is button navigation (about 48);
+ * gesture navigation's is about 16 to 24.
+ */
+const BUTTON_NAV_MIN = 32;
 
 /** How much of the bottom of the screen the bar covers, circle included. */
 export function useTabBarSpace(): number {
