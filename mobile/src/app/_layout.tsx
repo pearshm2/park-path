@@ -17,7 +17,7 @@ import { Stack } from 'expo-router';
 import * as ScreenOrientation from 'expo-screen-orientation';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 // Needed at the root for any gesture to work, e.g. pinch-to-zoom on the Explore map.
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -101,17 +101,24 @@ export default function RootLayout() {
  * Keeps the splash screen up until both the stored session and the
  * stored quiz answers have been read. Without this the user would see
  * the sign-in screen for a frame before being redirected into the app.
+ *
+ * Only on launch: once the app is open it stays open. Switching accounts
+ * reads the next account's quiz answers again, and waiting here then
+ * threw away every open screen, so the app started over (landing away
+ * from Settings, where the switch was made).
  */
 function SessionGate() {
   const { status } = useAuth();
   const { ready: quizReady } = useQuiz();
   const settled = status !== 'restoring' && quizReady;
+  const [opened, setOpened] = useState(false);
+  if (settled && !opened) setOpened(true);
 
   useEffect(() => {
     if (settled) SplashScreen.hideAsync().catch(() => {});
   }, [settled]);
 
-  if (!settled) return <View style={styles.ground} />;
+  if (!opened) return <View style={styles.ground} />;
 
   return (
     <Stack

@@ -10,15 +10,15 @@ Sizes: **S** = an hour or two · **M** = about a day · **L** = several days
 
 ## For the capstone
 
-- [ ] **Fix the layout on phones with button navigation** (◁ ○ ▢, e.g. Sebastian's Note 20 Ultra): the system buttons covered the tab bar. **S** *(Dylan)*
-- [ ] **Weekly NPS sync** with GitHub Actions (`.github/workflows/nps-sync.yml`). Needs two repository secrets; see `docs/deploy.md`. **S** *(Dylan)*
+- [x] **Fix the layout on phones with button navigation** (◁ ○ ▢, e.g. Sebastian's Note 20 Ultra): the system buttons covered the tab bar. Done in PR #54.
+- [ ] **Weekly NPS sync** with GitHub Actions (PR #55). Left: add the two repository secrets and run it once; see `docs/deploy.md`. **S** *(Dylan)*
 - [ ] **Mobile automated tests.** None exist yet; the API has 285 pytest tests. Set up the tooling and a first handful, run in CI. **M** *(Dylan)*
 - [ ] **Set `GOOGLE_CLIENT_IDS` on Render.** Without it, Google sign-in returns 503 on the hosted API. *(Sebastian)*
 - [ ] **Check the Render database's age.** Free Render Postgres is deleted after 30 days. Upgrade it, or be ready to re-seed it (`docs/deploy.md`, step 5). *(Sebastian)*
 - [ ] **Password reset** (decided Oct 26: not cut). Needs an email provider; then turn the app's link back on. **M** *(Sebastian)*
-- [ ] **Bug bash**, with findings written down in `docs/`, and an **install test** of the APK on a phone outside the team. **S–M** *(Dylan leads)*
+- [ ] **Bug bash** with `docs/test-plan.md` (record results there), including the **install test** of the APK on a phone outside the team. **S–M** *(Dylan leads)*
 - [ ] **Backup demo recording.** **S**
-- [ ] Ask the team: should the account switcher (hold your name in Settings) be a visible button?
+- [ ] Ask the team: should the account switcher (tap your name in Settings) be a visible button?
 
 ## If the app were released
 

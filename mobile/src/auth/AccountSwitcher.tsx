@@ -1,5 +1,5 @@
 /**
- * The hidden account switcher (Settings: hold your name). Lists every
+ * The account switcher (Settings: tap your name). Lists every
  * account signed in on this phone (auth/accounts.ts): tap one to switch to
  * it at once, or, when its sign-in has run out (after a day), sign in to
  * it again right here. "Add an account" signs in to another without

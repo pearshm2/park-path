@@ -8,7 +8,7 @@
  * it blindly would drop the user into the app only to 401 on first use.
  *
  * Every account signed in on this phone is remembered (auth/accounts.ts),
- * so `switchAccount` can change to another in one tap (Settings: hold your
+ * so `switchAccount` can change to another in one tap (Settings: tap your
  * name).
  */
 

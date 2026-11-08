@@ -279,12 +279,11 @@ function ProfileSection() {
               </View>
             ) : null}
           </Pressable>
-          {/* Hold your name for the account switcher (hidden: it's for
-              demos and testing with two accounts). */}
+          {/* Tap your name for the account switcher (not marked as a
+              button yet: it's for demos and testing with two accounts). */}
           <Pressable
-            onLongPress={() => setSwitching(true)}
-            delayLongPress={600}
-            accessibilityHint="Hold to switch account"
+            onPress={() => setSwitching(true)}
+            accessibilityHint="Opens the account switcher"
             style={styles.grow}
           >
             <BodyText size={15} weight="bold" numberOfLines={1}>
