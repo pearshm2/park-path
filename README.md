@@ -47,4 +47,5 @@ The API docs are then at http://localhost:8000/docs. Tests: `pytest` from `api/`
 - `docs/apk.md` – building the installable Android app
 - `docs/expo-go-phone-login.md` – running against a local API from a phone
 - `docs/demo-accounts.md`, `docs/demo.md` – demo accounts and the demo script
+- `docs/test-plan.md` – the manual test plan (bug bash), with space for results
 - `docs/remaining-work.md`, `docs/backlog.md` – what's left, deferred or cut
