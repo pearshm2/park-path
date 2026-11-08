@@ -103,6 +103,32 @@ code. The installable APK removes that; see the APK section once it exists.)
 - **Secrets** (`SECRET_KEY`, `NPS_API_KEY`, the AWS keys) live in
   `parkpath-api` → **Environment** in the dashboard, never in the repo.
 
+## Weekly NPS sync (GitHub Actions)
+
+`.github/workflows/nps-sync.yml` refreshes the park data on Render from the
+NPS API every Monday morning (07:17 UTC), so park names, descriptions,
+photos and links stay current. It runs `python -m app.nps_sync`, which only
+writes the NPS-owned columns: curated data (terrain, seasons, effort, ...)
+is never touched. Each run also keeps a fresh `nps_snapshot.json` as a
+download on the run's page, for 30 days.
+
+It needs two repository secrets, set once (a repo admin does this):
+
+1. GitHub → the repo → **Settings → Secrets and variables → Actions →
+   New repository secret**.
+2. `PROD_DATABASE_URL`: in Render, `parkpath-db` → **Connect** → copy the
+   **External Database URL**.
+3. `NPS_API_KEY`: the same key as on Render.
+
+Then try it: **Actions → Weekly NPS sync → Run workflow**. A green run ends
+with `Done. Sent 474 parks.` in the "Sync parks from NPS" step. If NPS
+sends back far fewer parks than usual (an outage), the run fails without
+saving anything, and GitHub emails whoever last edited the workflow. Without
+the secrets, the run passes with a warning and does nothing.
+
+If the free database is recreated (the 30-day reset), its URL changes:
+update `PROD_DATABASE_URL` too.
+
 ## Photo storage (S3)
 
 Trip photos and videos go straight from the phone to a private S3 bucket

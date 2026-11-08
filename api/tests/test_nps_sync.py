@@ -138,3 +138,15 @@ def test_upsert_keeps_curated_fields(test_codes):
         assert site.terrain_group == "canyon"
         assert site.effort == 3
         assert site.seasons == ["spring", "fall"]
+
+
+def test_a_thin_live_fetch_saves_nothing(monkeypatch):
+    """An NPS outage (far fewer parks than usual) stops the sync with an error."""
+    from app import nps_sync
+
+    monkeypatch.setattr(nps_sync.settings, "nps_api_key", "fake-key")
+    monkeypatch.setattr(nps_sync, "fetch_all_parks", lambda key: [fake_nps_park("zz01")])
+    monkeypatch.setattr(nps_sync, "upsert_sites", lambda db, rows: pytest.fail("saved anyway"))
+    monkeypatch.setattr("sys.argv", ["nps_sync"])
+    with pytest.raises(SystemExit, match="Only 1 usable parks"):
+        nps_sync.main()
