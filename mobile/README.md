@@ -52,5 +52,8 @@ npm run typecheck
   `api/openapi.json`; after the API changes, run `npm run api:types`
 - `src/data/`: static data (regions, quiz, achievements)
 - `src/theme/`: colours, fonts and spacing
+- `src/friends/`: friends, the feed's unread counts, and Activity (comments
+  on your trips)
+- `src/lib/`: small helpers (storage, sounds, keyboard handling)
 - Contexts for app-wide state: `src/auth`, `src/trips`, `src/quiz`,
   `src/wishlist`, `src/celebrations`, `src/arrivals`
