@@ -11,12 +11,17 @@ import { Image } from 'expo-image';
 import { Modal, Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 
-import { colors, radius, shadow, space } from '../../theme';
+import { colors, glass, radius, shadow, space } from '../../theme';
 import { dateLabel } from '../../trips/TripsContext';
 import { BodyText, Heading } from '../Typography';
 
 /** The passport book's paper, and its ruled lines. */
 const PAPER = '#f4ecdb';
+/**
+ * Ink printed on the paper. Paper is paper in every palette, so its ink
+ * stays dark too (the palette's own text colours turn light in dark mode).
+ */
+const PAPER_INK = { title: '#201e1d', kicker: '#643312', note: '#645c50' };
 const RULE = 'rgba(122, 44, 38, 0.12)';
 
 export function PassportPage({
@@ -39,7 +44,7 @@ export function PassportPage({
           <View key={i} style={[styles.rule, { top: 28 + i * 34 }]} />
         ))}
       </View>
-      <BodyText size={11} weight="bold" color={colors.accentRamp[800]} style={styles.kicker}>
+      <BodyText size={11} weight="bold" color={PAPER_INK.kicker} style={styles.kicker}>
         PASSPORT TO YOUR NATIONAL PARKS
       </BodyText>
       <View style={[styles.pasted, { width: photo, height: photo }]}>
@@ -47,10 +52,10 @@ export function PassportPage({
         <View style={[styles.tape, styles.tapeLeft]} />
         <View style={[styles.tape, styles.tapeRight]} />
       </View>
-      <Heading size={22} style={styles.park}>
+      <Heading size={22} color={PAPER_INK.title} style={styles.park}>
         {park}
       </Heading>
-      <BodyText size={13} weight="semibold" color={colors.neutral[700]}>
+      <BodyText size={13} weight="semibold" color={PAPER_INK.note}>
         {`Stamped in person · ${dateLabel(date)}`}
       </BodyText>
     </View>
@@ -77,7 +82,7 @@ export function PassportStampViewer({
         </Pressable>
         <Pressable onPress={onClose} hitSlop={12} accessibilityRole="button" accessibilityLabel="Close" style={styles.close}>
           <Svg width={18} height={18} viewBox="0 0 24 24">
-            <Path d="M6 6l12 12M18 6L6 18" stroke={colors.neutral[100]} strokeWidth={2.6} strokeLinecap="round" />
+            <Path d="M6 6l12 12M18 6L6 18" stroke={colors.onColor} strokeWidth={2.6} strokeLinecap="round" />
           </Svg>
         </Pressable>
       </Pressable>
@@ -147,7 +152,9 @@ const styles = StyleSheet.create({
   pasted: {
     marginTop: space[3],
     marginBottom: space[3],
-    backgroundColor: colors.neutral[200],
+    get backgroundColor() {
+      return colors.neutral[200];
+    },
     borderWidth: 5,
     borderColor: '#fffaf0',
     transform: [{ rotate: '-2.5deg' }],
@@ -178,10 +185,14 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     paddingHorizontal: 10,
     borderRadius: radius.pill,
-    backgroundColor: 'rgba(249, 244, 237, 0.94)',
+    get backgroundColor() {
+      return glass(0.94);
+    },
     ...shadow.sm,
   },
   tagPressed: {
-    backgroundColor: colors.neutral[300],
+    get backgroundColor() {
+      return colors.neutral[300];
+    },
   },
 });

@@ -11,6 +11,7 @@
  * visited.
  */
 
+import { colors, isDark } from '../theme';
 import type { Site } from './parks';
 
 export type RegionId =
@@ -35,7 +36,7 @@ export type Region = {
   states: string[];
 };
 
-export const REGIONS: Region[] = [
+const PASTELS: Region[] = [
   { id: 'pnw', label: 'Pacific Northwest', fill: '#c8dcc0', earned: '#7fae6e', states: ['53', '41', '16'] },
   { id: 'california', label: 'California & Sierra', fill: '#dbe6b9', earned: '#a9c35a', states: ['06', '32'] },
   { id: 'southwest', label: 'Southwest desert', fill: '#f0c39c', earned: '#e08a4a', states: ['04', '35', '49'] },
@@ -72,6 +73,37 @@ export const REGIONS: Region[] = [
   },
   { id: 'akhi', label: 'Alaska & Hawaii', fill: '#e6c7bc', earned: '#cc8f7a', states: ['02', '15'] },
 ];
+
+/**
+ * In the dark palettes (theme/appearance.ts), the pastels are mixed about
+ * halfway into the dark surface, so the map reads as dim land at night
+ * rather than bright cut-outs inside dark borders. The "earned" shades
+ * keep more of their colour: a completed region should still stand out.
+ */
+function mix(hex: string, into: string, amount: number): string {
+  const a = parseInt(hex.slice(1), 16);
+  const b = parseInt(into.slice(1), 16);
+  const channel = (shift: number) =>
+    Math.round(((a >> shift) & 255) * (1 - amount) + ((b >> shift) & 255) * amount);
+  return `#${[16, 8, 0].map((shift) => channel(shift).toString(16).padStart(2, '0')).join('')}`;
+}
+
+/**
+ * The regions, with `fill` and `earned` read when drawn (getters), so a
+ * change of palette shows at once.
+ */
+export const REGIONS: Region[] = PASTELS.map((region) => {
+  const { fill, earned, ...rest } = region;
+  return {
+    ...rest,
+    get fill() {
+      return isDark ? mix(fill, colors.neutral[200], 0.55) : fill;
+    },
+    get earned() {
+      return isDark ? mix(earned, colors.neutral[200], 0.3) : earned;
+    },
+  };
+});
 
 /** State FIPS id -> region, for coloring the outlines. */
 export const STATE_REGION: Record<string, Region> = Object.fromEntries(

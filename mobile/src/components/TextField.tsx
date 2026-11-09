@@ -83,7 +83,9 @@ const styles = StyleSheet.create({
     fontFamily: fonts.body,
     fontSize: 12,
     marginBottom: 5,
-    color: colors.textLabel,
+    get color() {
+      return colors.textLabel;
+    },
   },
   input: {
     minHeight: MIN_TAP_TARGET,
@@ -91,25 +93,37 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     fontFamily: fonts.body,
     fontSize: 14,
-    color: colors.text,
+    get color() {
+      return colors.text;
+    },
     // Light cream with a clear edge: it reads as a place to type on the
     // sand page and on cards alike.
-    backgroundColor: colors.neutral[100],
+    get backgroundColor() {
+      return colors.neutral[100];
+    },
     borderWidth: 1,
-    borderColor: colors.neutral[300],
+    get borderColor() {
+      return colors.neutral[300];
+    },
     borderRadius: radius.pill,
   },
   inputFocused: {
-    borderColor: colors.accent,
+    get borderColor() {
+      return colors.accent;
+    },
   },
   inputError: {
-    borderColor: colors.accentRamp[700],
+    get borderColor() {
+      return colors.accentRamp[700];
+    },
   },
   error: {
     fontFamily: fonts.bodyMedium,
     fontSize: 12,
     lineHeight: 12 * 1.4,
-    color: colors.accentRamp[700],
+    get color() {
+      return colors.accentRamp[700];
+    },
     marginTop: space[1],
     paddingHorizontal: 14,
   },

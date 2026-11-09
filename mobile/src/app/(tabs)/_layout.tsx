@@ -11,7 +11,7 @@
 
 import { Redirect, Tabs, useFocusEffect } from 'expo-router';
 import { setStatusBarStyle } from 'expo-status-bar';
-import { useCallback, type ComponentProps } from 'react';
+import { type ComponentProps, useCallback, useEffect } from 'react';
 import { Pressable, StyleSheet, Text, View, type ColorValue } from 'react-native';
 import Svg, { Circle, Path } from 'react-native-svg';
 
@@ -20,7 +20,17 @@ import { BAR_HEIGHT, RAISE, tabBarBottom } from '../../components/tabBar';
 import { useActivityBadge } from '../../friends/activity';
 import { useFriendsBadge } from '../../friends/useFriendsBadge';
 import { useQuiz } from '../../quiz/QuizContext';
-import { colors, fonts, radius, scaleType, shadow, space, useTextScale } from '../../theme';
+import {
+  colors,
+  fonts,
+  isDark,
+  radius,
+  scaleType,
+  shadow,
+  space,
+  useTextScale,
+  useThemeVersion,
+} from '../../theme';
 
 const ICON_SIZE = 23;
 const STROKE = 2.75;
@@ -116,7 +126,10 @@ export default function TabsLayout() {
   // Back on the tabs from Relive (dark, with a light status bar): dark
   // status bar again. Set here rather than trusting Relive's to undo
   // itself, which a dive's full-screen layer can leave stuck on light.
-  useFocusEffect(useCallback(() => setStatusBarStyle('dark'), []));
+  // The look can change while here (theme/live.ts): redraw, and set the status bar to match.
+  const themeVersion = useThemeVersion();
+  useFocusEffect(useCallback(() => setStatusBarStyle(isDark ? 'light' : 'dark'), []));
+  useEffect(() => setStatusBarStyle(isDark ? 'light' : 'dark'), [themeVersion]);
 
   if (status !== 'signedIn') return <Redirect href="/sign-in" />;
   // The app's content is keyed off the quiz answers, so there is nothing
@@ -133,7 +146,8 @@ export default function TabsLayout() {
       tabBar={(props) => <FloatingTabBar {...props} />}
       screenOptions={{
         headerShown: false,
-        sceneStyle: styles.scene,
+        // A fresh object, so a change of look reaches the scenes.
+        sceneStyle: { backgroundColor: colors.bg },
       }}
     >
       <Tabs.Screen
@@ -262,7 +276,7 @@ function FloatingTabBar({ state, descriptors, navigation, insets }: TabBarProps)
                 pressed && styles.centerButtonPressed,
               ]}
             >
-              <ExploreIcon color={colors.neutral[100]} />
+              <ExploreIcon color={colors.onColor} />
             </View>
           )}
         </Pressable>
@@ -285,7 +299,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     height: BAR_HEIGHT,
     borderRadius: radius.lg,
-    backgroundColor: colors.neutral[100],
+    get backgroundColor() {
+      return colors.neutral[100];
+    },
     // A box shadow rather than Android's elevation, which drew a square
     // shaded box behind the bar's rounded ends.
     boxShadow: '0 3px 10px rgba(46, 43, 37, 0.16)',
@@ -312,7 +328,9 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
     // Always filled and shown or hidden by opacity: on Android, changing a
     // rounded view's background colour after mount can drop the rounding.
-    backgroundColor: colors.accent,
+    get backgroundColor() {
+      return colors.accent;
+    },
     opacity: 0,
   },
   dotActive: {
@@ -328,16 +346,22 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.accent,
+    get backgroundColor() {
+      return colors.accent;
+    },
     // A ring in the bar's colour, so it reads as sitting on the icon.
     borderWidth: 1.5,
-    borderColor: colors.neutral[100],
+    get borderColor() {
+      return colors.neutral[100];
+    },
   },
   badgeText: {
     fontFamily: fonts.bodySemibold,
     fontSize: 10,
     lineHeight: 12,
-    color: colors.neutral[100],
+    get color() {
+      return colors.onColor;
+    },
   },
   centerRing: {
     position: 'absolute',
@@ -348,7 +372,9 @@ const styles = StyleSheet.create({
     borderRadius: (CIRCLE + RING * 2) / 2,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.bg,
+    get backgroundColor() {
+      return colors.bg;
+    },
   },
   centerButton: {
     width: CIRCLE,
@@ -356,13 +382,17 @@ const styles = StyleSheet.create({
     borderRadius: CIRCLE / 2,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.accent,
+    get backgroundColor() {
+      return colors.accent;
+    },
     ...shadow.sm,
   },
   centerButtonPressed: {
     opacity: 0.85,
   },
   scene: {
-    backgroundColor: colors.bg,
+    get backgroundColor() {
+      return colors.bg;
+    },
   },
 });

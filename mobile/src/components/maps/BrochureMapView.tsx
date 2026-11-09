@@ -116,7 +116,9 @@ const styles = StyleSheet.create({
     position: 'absolute',
     borderWidth: 6,
     borderRadius: 12,
-    borderColor: colors.accent,
+    get borderColor() {
+      return colors.accent;
+    },
     backgroundColor: 'rgba(214, 127, 72, 0.18)',
   },
 });

@@ -135,6 +135,8 @@ const styles = StyleSheet.create({
     fontSize: 11,
     letterSpacing: 11 * 0.14,
     textTransform: 'uppercase',
-    color: colors.accentRamp[700],
+    get color() {
+      return colors.accentRamp[700];
+    },
   },
 });

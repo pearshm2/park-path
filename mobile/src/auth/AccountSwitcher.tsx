@@ -269,7 +269,9 @@ const styles = StyleSheet.create({
     paddingTop: space[2],
     borderTopLeftRadius: radius.lg,
     borderTopRightRadius: radius.lg,
-    backgroundColor: colors.neutral[100],
+    get backgroundColor() {
+      return colors.neutral[100];
+    },
     ...shadow.lg,
   },
   handle: {
@@ -277,7 +279,9 @@ const styles = StyleSheet.create({
     width: 40,
     height: 4,
     borderRadius: 2,
-    backgroundColor: colors.neutral[300],
+    get backgroundColor() {
+      return colors.neutral[300];
+    },
     marginBottom: space[2],
   },
   head: {
@@ -292,7 +296,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: radius.pill,
-    backgroundColor: colors.neutral[200],
+    get backgroundColor() {
+      return colors.neutral[200];
+    },
   },
   grow: {
     flex: 1,
@@ -312,7 +318,9 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
   },
   accountCurrent: {
-    backgroundColor: colors.accentRamp[100],
+    get backgroundColor() {
+      return colors.accentRamp[100];
+    },
   },
   pressed: {
     opacity: 0.6,
@@ -325,7 +333,9 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
     borderWidth: 1.5,
     borderStyle: 'dashed',
-    borderColor: colors.accentRamp[400],
+    get borderColor() {
+      return colors.accentRamp[400];
+    },
   },
   form: {
     gap: space[3],

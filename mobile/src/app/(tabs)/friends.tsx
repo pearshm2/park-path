@@ -50,8 +50,9 @@ import { FriendProfile } from '../../components/friends/FriendProfile';
 import { markAllRead, stripItems, useActivity, useRead } from '../../friends/activity';
 import type { TripActivity } from '../../api/trips';
 import { useFriends } from '../../friends/useFriends';
+import { Backdrop } from '../../components/Backdrop';
 import { useKeyboardLift } from '../../lib/useKeyboardLift';
-import { colors, radius, shadow, space } from '../../theme';
+import { colors, radius, shadow, space, useThemeVersion } from '../../theme';
 
 /** "Oct 2026" from an ISO date. */
 function monthYear(iso: string | null): string | null {
@@ -60,6 +61,7 @@ function monthYear(iso: string | null): string | null {
 }
 
 export default function FriendsScreen() {
+  const themeVersion = useThemeVersion();
   const insets = useSafeAreaInsets();
   const tabSpace = useTabBarSpace();
   const { user, token, userId } = useAuth();
@@ -133,7 +135,9 @@ export default function FriendsScreen() {
   const requests = incoming.length + outgoing.length;
 
   return (
-    <View style={styles.screen}>
+    // Drawn afresh in the new colours when the look changes (theme/live.ts).
+    <View key={themeVersion} style={styles.screen}>
+      <Backdrop />
       <ScrollView
         refreshControl={
           <RefreshControl refreshing={pulling} onRefresh={pullToRefresh} tintColor={colors.accent} colors={[colors.accent]} />
@@ -468,7 +472,9 @@ function InviteSheet({
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: colors.bg,
+    get backgroundColor() {
+      return colors.bg;
+    },
   },
   content: {
     paddingHorizontal: space[4],
@@ -491,8 +497,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderRadius: radius.pill,
     borderWidth: 1.5,
-    borderColor: colors.accentRamp[400],
-    backgroundColor: colors.neutral[100],
+    get borderColor() {
+      return colors.accentRamp[400];
+    },
+    get backgroundColor() {
+      return colors.neutral[100];
+    },
   },
   invite: {
     paddingVertical: 10,
@@ -539,7 +549,9 @@ const styles = StyleSheet.create({
     gap: space[3],
     padding: space[3],
     borderRadius: radius.lg,
-    backgroundColor: colors.neutral[100],
+    get backgroundColor() {
+      return colors.neutral[100];
+    },
     ...shadow.sm,
   },
   requestText: {
@@ -554,7 +566,9 @@ const styles = StyleSheet.create({
     marginTop: space[3],
     padding: space[4],
     borderRadius: radius.lg,
-    backgroundColor: colors.neutral[100],
+    get backgroundColor() {
+      return colors.neutral[100];
+    },
     ...shadow.sm,
   },
   error: {
@@ -570,7 +584,9 @@ const styles = StyleSheet.create({
     marginHorizontal: 14,
     padding: space[4],
     borderRadius: radius.lg,
-    backgroundColor: colors.neutral[100],
+    get backgroundColor() {
+      return colors.neutral[100];
+    },
     ...shadow.lg,
   },
   sheetActions: {

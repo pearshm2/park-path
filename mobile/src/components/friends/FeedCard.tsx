@@ -126,10 +126,10 @@ export function FeedCard({
             <Rect x="0" y="0" width="1" height="1" fill={`url(#feed-${trip.id})`} />
           </Svg>
           <View style={styles.photoWords} pointerEvents="none">
-            <BodyText size={11} weight="bold" color={colors.neutral[100]} style={styles.park} numberOfLines={1}>
+            <BodyText size={11} weight="bold" color={colors.onColor} style={styles.park} numberOfLines={1}>
               {trip.park_name.toUpperCase()}
             </BodyText>
-            <BodyText size={12.5} weight="semibold" color={colors.neutral[100]}>
+            <BodyText size={12.5} weight="semibold" color={colors.onColor}>
               {dateLabel(trip.visited_on)}
             </BodyText>
           </View>
@@ -141,15 +141,15 @@ export function FeedCard({
             style={({ pressed }) => [styles.relive, pressed && styles.relivePressed]}
           >
             <Svg width={13} height={13} viewBox="0 0 24 24">
-              <Path d="M8 5.5v13l10.5-6.5z" fill={colors.neutral[100]} />
+              <Path d="M8 5.5v13l10.5-6.5z" fill={colors.onColor} />
             </Svg>
-            <BodyText size={12} weight="bold" color={colors.neutral[100]}>
+            <BodyText size={12} weight="bold" color={colors.onColor}>
               Relive
             </BodyText>
           </Pressable>
           {shots[at]?.stamp ? (
             <View style={styles.stampTag} pointerEvents="none">
-              <BodyText size={11} weight="bold" color={colors.neutral[100]} style={styles.park}>
+              <BodyText size={11} weight="bold" color={colors.onColor} style={styles.park}>
                 PASSPORT STAMP
               </BodyText>
             </View>
@@ -180,9 +180,9 @@ export function FeedCard({
             style={({ pressed }) => [styles.relive, styles.reliveInline, pressed && styles.relivePressed]}
           >
             <Svg width={13} height={13} viewBox="0 0 24 24">
-              <Path d="M8 5.5v13l10.5-6.5z" fill={colors.neutral[100]} />
+              <Path d="M8 5.5v13l10.5-6.5z" fill={colors.onColor} />
             </Svg>
-            <BodyText size={12} weight="bold" color={colors.neutral[100]}>
+            <BodyText size={12} weight="bold" color={colors.onColor}>
               Relive
             </BodyText>
           </Pressable>
@@ -280,14 +280,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: space[3],
     paddingVertical: space[3],
     borderTopWidth: 1,
-    borderTopColor: colors.neutral[200],
+    get borderTopColor() {
+      return colors.neutral[200];
+    },
   },
   footerPressed: {
-    backgroundColor: colors.neutral[200],
+    get backgroundColor() {
+      return colors.neutral[200];
+    },
   },
   card: {
     borderRadius: radius.lg,
-    backgroundColor: colors.neutral[100],
+    get backgroundColor() {
+      return colors.neutral[100];
+    },
     overflow: 'hidden',
     ...shadow.sm,
   },
@@ -317,7 +323,9 @@ const styles = StyleSheet.create({
     paddingLeft: 9,
     paddingRight: 12,
     borderRadius: radius.pill,
-    backgroundColor: colors.accent,
+    get backgroundColor() {
+      return colors.accent;
+    },
     ...shadow.sm,
   },
   reliveInline: {
@@ -354,7 +362,9 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(249, 244, 237, 0.5)',
   },
   dotOn: {
-    backgroundColor: colors.neutral[100],
+    get backgroundColor() {
+      return colors.neutral[100];
+    },
   },
   place: {
     flexDirection: 'row',
@@ -408,11 +418,17 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   feedbackGood: {
-    backgroundColor: colors.accentRamp[100],
-    borderColor: colors.accentRamp[300],
+    get backgroundColor() {
+      return colors.accentRamp[100];
+    },
+    get borderColor() {
+      return colors.accentRamp[300];
+    },
   },
   feedbackBad: {
-    borderColor: colors.neutral[400],
+    get borderColor() {
+      return colors.neutral[400];
+    },
     borderStyle: 'dashed',
   },
   trail: {
@@ -422,6 +438,8 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
     paddingHorizontal: 9,
     borderRadius: radius.pill,
-    backgroundColor: colors.neutral[200],
+    get backgroundColor() {
+      return colors.neutral[200];
+    },
   },
 });

@@ -47,7 +47,7 @@ export function ActivityStrip({
         {unread > 0 ? (
           // Never squeezed (it lost its "new" when the row ran short).
           <View style={styles.newCount}>
-            <BodyText size={10.5} weight="bold" color={colors.neutral[100]} numberOfLines={1}>
+            <BodyText size={10.5} weight="bold" color={colors.onColor} numberOfLines={1}>
               {`${unread > 9 ? '9+' : unread} new`}
             </BodyText>
           </View>
@@ -191,11 +191,15 @@ const styles = StyleSheet.create({
     paddingVertical: 1,
     paddingHorizontal: 7,
     borderRadius: radius.pill,
-    backgroundColor: colors.accent,
+    get backgroundColor() {
+      return colors.accent;
+    },
   },
   card: {
     borderRadius: radius.lg,
-    backgroundColor: colors.neutral[100],
+    get backgroundColor() {
+      return colors.neutral[100];
+    },
     overflow: 'hidden',
     ...shadow.sm,
   },
@@ -207,10 +211,14 @@ const styles = StyleSheet.create({
   },
   rowRule: {
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.neutral[300],
+    get borderTopColor() {
+      return colors.neutral[300];
+    },
   },
   rowNew: {
-    backgroundColor: colors.accentRamp[100],
+    get backgroundColor() {
+      return colors.accentRamp[100];
+    },
   },
   pressed: {
     opacity: 0.7,
@@ -227,12 +235,16 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: colors.accent,
+    get backgroundColor() {
+      return colors.accent;
+    },
   },
   page: {
     flex: 1,
     paddingHorizontal: space[4],
-    backgroundColor: colors.bg,
+    get backgroundColor() {
+      return colors.bg;
+    },
   },
   pageHead: {
     flexDirection: 'row',
@@ -255,6 +267,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: radius.pill,
-    backgroundColor: colors.neutral[200],
+    get backgroundColor() {
+      return colors.neutral[200];
+    },
   },
 });

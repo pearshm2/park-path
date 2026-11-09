@@ -536,11 +536,15 @@ function FittingTags({ tags }: { tags: (CardTag | null)[] }) {
 const styles = StyleSheet.create({
   card: {
     borderRadius: radius.card,
-    backgroundColor: colors.neutral[100],
+    get backgroundColor() {
+      return colors.neutral[100];
+    },
     // The card sits on a sheet of the same colour, so the edge needs both a
     // line and a shadow to read on a phone.
     borderWidth: 1,
-    borderColor: colors.neutral[300],
+    get borderColor() {
+      return colors.neutral[300];
+    },
     ...shadow.md,
   },
   clip: {
@@ -569,7 +573,9 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
     paddingHorizontal: 8,
     borderRadius: radius.pill,
-    backgroundColor: colors.neutral[100],
+    get backgroundColor() {
+      return colors.neutral[100];
+    },
   },
   wishlistRing: {
     width: 9,
@@ -588,7 +594,9 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
     borderWidth: 1.5,
     borderColor: '#c8961e',
-    backgroundColor: colors.neutral[100],
+    get backgroundColor() {
+      return colors.neutral[100];
+    },
     flexShrink: 1,
   },
   tripLink: {
@@ -606,14 +614,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: 9,
     borderRadius: radius.pill,
     borderWidth: 1,
-    borderColor: colors.accentRamp[600],
-    backgroundColor: colors.accentRamp[100],
+    get borderColor() {
+      return colors.accentRamp[600];
+    },
+    get backgroundColor() {
+      return colors.accentRamp[100];
+    },
   },
   rankBadge: {
     paddingVertical: 2,
     paddingHorizontal: 9,
     borderRadius: radius.pill,
-    backgroundColor: colors.neutral[900],
+    get backgroundColor() {
+      return colors.neutral[900];
+    },
   },
   body: {
     flex: 1,
@@ -637,10 +651,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: radius.pill,
-    backgroundColor: colors.neutral[200],
+    get backgroundColor() {
+      return colors.neutral[200];
+    },
   },
   expandPressed: {
-    backgroundColor: colors.neutral[300],
+    get backgroundColor() {
+      return colors.neutral[300];
+    },
   },
   tip: {
     position: 'absolute',
@@ -651,12 +669,16 @@ const styles = StyleSheet.create({
     paddingVertical: 7,
     paddingHorizontal: 10,
     borderRadius: radius.md,
-    backgroundColor: colors.neutral[900],
+    get backgroundColor() {
+      return colors.neutral[900];
+    },
     zIndex: 10,
     ...shadow.md,
   },
   saveOn: {
-    backgroundColor: colors.accent2Ramp[100],
+    get backgroundColor() {
+      return colors.accent2Ramp[100];
+    },
   },
   meta: {
     flexDirection: 'row',
@@ -686,7 +708,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 7,
     paddingVertical: 1,
     borderRadius: radius.pill,
-    backgroundColor: colors.accentRamp[700],
+    get backgroundColor() {
+      return colors.accentRamp[700];
+    },
   },
   details: {
     flex: 1,
@@ -710,7 +734,9 @@ const styles = StyleSheet.create({
     marginTop: 6,
     marginBottom: 2,
     borderRadius: radius.pill,
-    backgroundColor: colors.neutral[200],
+    get backgroundColor() {
+      return colors.neutral[200];
+    },
   },
   switchOption: {
     alignItems: 'center',
@@ -719,7 +745,9 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
   },
   switchActive: {
-    backgroundColor: colors.accent,
+    get backgroundColor() {
+      return colors.accent;
+    },
   },
   factRow: {
     flexDirection: 'row',
@@ -727,7 +755,9 @@ const styles = StyleSheet.create({
     gap: space[2],
     paddingVertical: 4,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.divider,
+    get borderBottomColor() {
+      return colors.divider;
+    },
   },
   factLabel: {
     flex: 1,
@@ -738,10 +768,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     paddingVertical: 2,
     borderRadius: radius.pill,
-    backgroundColor: colors.neutral[200],
+    get backgroundColor() {
+      return colors.neutral[200];
+    },
   },
   moreTogglePressed: {
-    backgroundColor: colors.neutral[300],
+    get backgroundColor() {
+      return colors.neutral[300];
+    },
   },
   tags: {
     flexDirection: 'row',

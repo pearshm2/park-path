@@ -47,7 +47,9 @@ const styles = StyleSheet.create({
     paddingVertical: space[2],
     paddingHorizontal: space[4],
     borderRadius: radius.pill,
-    backgroundColor: colors.neutral[900],
+    get backgroundColor() {
+      return colors.neutral[900];
+    },
     ...shadow.md,
   },
   text: {
@@ -55,6 +57,8 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 13 * 1.4,
     textAlign: 'center',
-    color: colors.bg,
+    get color() {
+      return colors.bg;
+    },
   },
 });

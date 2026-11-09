@@ -14,7 +14,7 @@ export { ExpandIcon } from './ExpandIcon';
 export { FullMapView, turnSideways } from './FullMapView';
 export { GoogleButton, OrDivider } from './GoogleButton';
 export { ParkCard } from './ParkCard';
-export { MATCH_DOT, ParkMap, PICK_FILL, STATUS_DOT } from './ParkMap';
+export { MATCH_DOT, ParkMap, PICK, STATUS_DOT } from './ParkMap';
 export { ProgressBar } from './ProgressBar';
 export { SearchButton, SearchPanel } from './SearchPanel';
 export { SECTION_PEEK, SectionDeck, sectionCardHeight, type DeckSection } from './SectionDeck';

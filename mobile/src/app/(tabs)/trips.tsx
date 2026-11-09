@@ -36,6 +36,7 @@ import Svg, { Defs, LinearGradient, Path, Rect, Stop } from 'react-native-svg';
 
 import { listSites } from '../../api/parks';
 import { BodyText, Button, Dialog, FilterButton, Heading, Toast, useTabBarSpace } from '../../components';
+import { Backdrop } from '../../components/Backdrop';
 import { diveParam } from '../../components/trips/DiveIn';
 import { MemoryBubble } from '../../components/trips/MemoryBubble';
 import { CommentsSheet } from '../../components/friends/CommentsSheet';
@@ -46,7 +47,7 @@ import { regionForState } from '../../data/regions';
 import { useCelebrations } from '../../celebrations/CelebrationsContext';
 import { playSound } from '../../lib/sounds';
 import { sampleEntries } from '../../trips/sampleTrips';
-import { colors, radius, shadow, space } from '../../theme';
+import { colors, radius, shadow, space, useThemeVersion } from '../../theme';
 import { useAuth } from '../../auth/AuthContext';
 import { dateLabel, useTrips, type TripEntry } from '../../trips/TripsContext';
 
@@ -62,6 +63,7 @@ const SORTS: { value: Sort; label: string }[] = [
 const ROW_SHARE = 0.72;
 
 export default function TripsScreen() {
+  const themeVersion = useThemeVersion();
   const insets = useSafeAreaInsets();
   const tabSpace = useTabBarSpace();
   const router = useRouter();
@@ -181,13 +183,15 @@ export default function TripsScreen() {
   }
 
   return (
-    <View
+    // Drawn afresh in the new colours when the look changes (theme/live.ts).
+    <View key={themeVersion}
       style={styles.screen}
       onLayout={(event) => {
         const height = event.nativeEvent.layout.height;
         setScreenHeight((h) => (Math.abs(h - height) > 1 ? height : h));
       }}
     >
+      <Backdrop />
       {sorted.length > 0 ? (
         <View style={StyleSheet.absoluteFill}>
           {ready ? (
@@ -537,11 +541,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: radius.pill,
-    backgroundColor: colors.accentRamp[100],
+    get backgroundColor() {
+      return colors.accentRamp[100];
+    },
   },
   screen: {
     flex: 1,
-    backgroundColor: colors.bg,
+    get backgroundColor() {
+      return colors.bg;
+    },
   },
   gutter: {
     paddingHorizontal: space[4],
@@ -596,7 +604,9 @@ const styles = StyleSheet.create({
     minWidth: 190,
     padding: 5,
     borderRadius: radius.md,
-    backgroundColor: colors.neutral[100],
+    get backgroundColor() {
+      return colors.neutral[100];
+    },
     ...shadow.md,
   },
   menuItem: {
@@ -609,7 +619,9 @@ const styles = StyleSheet.create({
     borderRadius: radius.sm,
   },
   menuItemPressed: {
-    backgroundColor: colors.accentRamp[100],
+    get backgroundColor() {
+      return colors.accentRamp[100];
+    },
   },
   relive: {
     flexDirection: 'row',
@@ -619,11 +631,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: 13,
     borderRadius: radius.pill,
     borderWidth: 1.5,
-    borderColor: colors.accent,
-    backgroundColor: colors.accentRamp[100],
+    get borderColor() {
+      return colors.accent;
+    },
+    get backgroundColor() {
+      return colors.accentRamp[100];
+    },
   },
   relivePressed: {
-    backgroundColor: colors.accentRamp[200],
+    get backgroundColor() {
+      return colors.accentRamp[200];
+    },
   },
   top: {
     position: 'absolute',
@@ -637,7 +655,9 @@ const styles = StyleSheet.create({
     marginTop: space[4],
     padding: space[4],
     borderRadius: radius.lg,
-    backgroundColor: colors.neutral[100],
+    get backgroundColor() {
+      return colors.neutral[100];
+    },
   },
   emptyButton: {
     alignSelf: 'flex-start',

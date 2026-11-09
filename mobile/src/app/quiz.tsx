@@ -275,7 +275,9 @@ function toggle<T>(list: T[], value: T): T[] {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: colors.bg,
+    get backgroundColor() {
+      return colors.bg;
+    },
     paddingHorizontal: space[6],
   },
   progressRow: {

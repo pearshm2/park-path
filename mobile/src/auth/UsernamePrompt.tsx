@@ -108,7 +108,9 @@ const styles = StyleSheet.create({
     marginHorizontal: 14,
     padding: space[4],
     borderRadius: radius.lg,
-    backgroundColor: colors.neutral[100],
+    get backgroundColor() {
+      return colors.neutral[100];
+    },
     ...shadow.lg,
   },
   title: {

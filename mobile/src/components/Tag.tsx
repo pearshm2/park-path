@@ -48,15 +48,31 @@ const styles = StyleSheet.create({
 });
 
 const toneContainer = StyleSheet.create({
-  accent: { backgroundColor: colors.accentRamp[100] },
-  accent2: { backgroundColor: colors.accent2Ramp[100] },
-  neutral: { backgroundColor: colors.neutral[100] },
-  outline: { borderColor: colors.accent },
+  get accent() {
+    return { backgroundColor: colors.accentRamp[100] };
+  },
+  get accent2() {
+    return { backgroundColor: colors.accent2Ramp[100] };
+  },
+  get neutral() {
+    return { backgroundColor: colors.neutral[100] };
+  },
+  get outline() {
+    return { borderColor: colors.accent };
+  },
 });
 
 const toneLabel = StyleSheet.create({
-  accent: { color: colors.accentRamp[800] },
-  accent2: { color: colors.accent2Ramp[800] },
-  neutral: { color: colors.neutral[800] },
-  outline: { color: colors.accent },
+  get accent() {
+    return { color: colors.accentRamp[800] };
+  },
+  get accent2() {
+    return { color: colors.accent2Ramp[800] };
+  },
+  get neutral() {
+    return { color: colors.neutral[800] };
+  },
+  get outline() {
+    return { color: colors.accent };
+  },
 });

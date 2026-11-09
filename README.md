@@ -10,7 +10,7 @@ ParkPath suggests your next national park from a short quiz: the scenery you lik
 - **Trips:** a journal of your visits (stars, feedback tags, trails, who you went with, photos, videos, a passport-stamp photo), synced to the server, with Relive to play a trip back as a reel.
 - **Passport:** stamps, a region map, achievements and celebrations.
 - **Friends:** add by username, email or QR code; a feed of friends' trips with comments and Relive; Activity for comments on your trips, with notifications.
-- **Settings:** profile and photo, quiz answers, text size, arrival reminders, set-aside parks, account deletion.
+- **Settings:** profile and photo, quiz answers, light or dark mode (three dark looks, under a faint night sky; light has a trail-map backdrop), text size, arrival reminders, set-aside parks, account deletion.
 
 ## Structure
 - `mobile/` – React Native + Expo app (TypeScript); see `mobile/README.md`

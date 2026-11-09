@@ -18,7 +18,7 @@ import Svg, { Path } from 'react-native-svg';
 
 import { displayName, handle, type Person } from '../../api/friends';
 import type { useFriends } from '../../friends/useFriends';
-import { colors, radius, shadow, space } from '../../theme';
+import { colors, glass, radius, shadow, space } from '../../theme';
 import { Avatar } from '../Avatar';
 import { Button } from '../Button';
 import { BodyText, Heading } from '../Typography';
@@ -175,22 +175,22 @@ function Scanner({
       <View style={[styles.scanTop, { paddingTop: insets.top + space[2] }]}>
         <Pressable onPress={onBack} hitSlop={12} accessibilityRole="button" accessibilityLabel="Back to your code" style={styles.round}>
           <Svg width={18} height={18} viewBox="0 0 24 24">
-            <Path d="M15 5l-7 7 7 7" fill="none" stroke={colors.neutral[100]} strokeWidth={2.6} strokeLinecap="round" strokeLinejoin="round" />
+            <Path d="M15 5l-7 7 7 7" fill="none" stroke={colors.onColor} strokeWidth={2.6} strokeLinecap="round" strokeLinejoin="round" />
           </Svg>
         </Pressable>
-        <BodyText size={15} weight="bold" color={colors.neutral[100]}>
+        <BodyText size={15} weight="bold" color={colors.onColor}>
           Scan a friend code
         </BodyText>
         <Pressable onPress={onClose} hitSlop={12} accessibilityRole="button" accessibilityLabel="Close" style={styles.round}>
           <Svg width={18} height={18} viewBox="0 0 24 24">
-            <Path d="M6 6l12 12M18 6L6 18" stroke={colors.neutral[100]} strokeWidth={2.6} strokeLinecap="round" />
+            <Path d="M6 6l12 12M18 6L6 18" stroke={colors.onColor} strokeWidth={2.6} strokeLinecap="round" />
           </Svg>
         </Pressable>
       </View>
 
       {permission && !permission.granted ? (
         <View style={styles.permission}>
-          <BodyText size={14} lineHeightRatio={1.5} color={colors.neutral[100]} style={styles.centered}>
+          <BodyText size={14} lineHeightRatio={1.5} color={colors.onColor} style={styles.centered}>
             {permission.canAskAgain
               ? 'ParkPath needs the camera to scan a friend code.'
               : 'Camera access is off for ParkPath. You can turn it on in Settings.'}
@@ -201,7 +201,7 @@ function Scanner({
         // The frame to hold the code in.
         <View style={styles.frameWrap} pointerEvents="none">
           <View style={styles.frame} />
-          <BodyText size={13} weight="semibold" color={colors.neutral[100]} style={styles.centered}>
+          <BodyText size={13} weight="semibold" color={colors.onColor} style={styles.centered}>
             Point at the code on your friend&apos;s phone
           </BodyText>
         </View>
@@ -265,7 +265,9 @@ const styles = StyleSheet.create({
     marginHorizontal: 14,
     padding: space[4],
     borderRadius: radius.lg,
-    backgroundColor: colors.neutral[100],
+    get backgroundColor() {
+      return colors.neutral[100];
+    },
     ...shadow.lg,
   },
   centered: {
@@ -274,9 +276,13 @@ const styles = StyleSheet.create({
   code: {
     padding: space[3],
     borderRadius: radius.md,
-    backgroundColor: colors.neutral[100],
+    get backgroundColor() {
+      return colors.neutral[100];
+    },
     borderWidth: 1,
-    borderColor: colors.neutral[300],
+    get borderColor() {
+      return colors.neutral[300];
+    },
   },
   who: {
     flexDirection: 'row',
@@ -328,7 +334,9 @@ const styles = StyleSheet.create({
     height: FRAME,
     borderRadius: radius.lg,
     borderWidth: 3,
-    borderColor: 'rgba(249, 244, 237, 0.9)',
+    get borderColor() {
+      return glass(0.9);
+    },
   },
   result: {
     position: 'absolute',
@@ -338,7 +346,9 @@ const styles = StyleSheet.create({
     gap: space[3],
     padding: space[4],
     borderRadius: radius.lg,
-    backgroundColor: colors.neutral[100],
+    get backgroundColor() {
+      return colors.neutral[100];
+    },
     ...shadow.lg,
   },
 });

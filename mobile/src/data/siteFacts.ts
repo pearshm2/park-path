@@ -10,9 +10,9 @@ import type { Site } from './parks';
 /** `note` is a smaller line under the value, where there is one. */
 export type FactRow = { label: string; value: string; color: string; note?: string };
 
-/** A plus in green, everything else plain. */
-const YES = colors.accent2Ramp[700];
-const PLAIN = colors.neutral[700];
+/** A plus in green, everything else plain (read when used: the palette can change). */
+const yes = () => colors.accent2Ramp[700];
+const plain = () => colors.neutral[700];
 
 const EFFORT = ['Easy', 'Moderate', 'Strenuous'];
 
@@ -55,25 +55,25 @@ export function stayLabel(site: Site): string | null {
 export function factRows(site: Site, referenceVisits?: number): FactRow[] {
   const rows: FactRow[] = [];
   const seasons = seasonsLabel(site);
-  if (seasons) rows.push({ label: 'Best time to go', value: seasons, color: YES });
+  if (seasons) rows.push({ label: 'Best time to go', value: seasons, color: yes() });
   const stay = stayLabel(site);
-  if (stay) rows.push({ label: 'Typical stay', value: stay, color: PLAIN });
+  if (stay) rows.push({ label: 'Typical stay', value: stay, color: plain() });
   if (site.effort !== null) {
-    rows.push({ label: 'Effort', value: EFFORT[site.effort - 1], color: PLAIN });
+    rows.push({ label: 'Effort', value: EFFORT[site.effort - 1], color: plain() });
   }
   if (site.permit !== null) {
     rows.push({
       label: 'Permit or lottery',
       value: site.permit ? 'Needed for some areas' : 'None needed',
-      color: site.permit ? PLAIN : YES,
+      color: site.permit ? plain() : yes(),
     });
   }
   if (site.vis !== null) {
-    rows.push({ label: 'Annual visits', value: visitsLabel(site.vis), color: PLAIN });
+    rows.push({ label: 'Annual visits', value: visitsLabel(site.vis), color: plain() });
     rows.push({
       label: 'Average per day',
       value: `${Math.round((site.vis * 1_000_000) / 365).toLocaleString()} people`,
-      color: PLAIN,
+      color: plain(),
     });
     if (referenceVisits) {
       const share = (site.vis / referenceVisits) * 100;
@@ -82,10 +82,10 @@ export function factRows(site: Site, referenceVisits?: number): FactRow[] {
         label: 'Crowding',
         value: crowd,
         note: `${share < 1 ? 'Under 1' : Math.round(share)}% of the Smokies' traffic`,
-        color: crowd === 'Quiet' ? YES : PLAIN,
+        color: crowd === 'Quiet' ? yes() : plain(),
       });
     }
   }
-  rows.push({ label: 'Designation', value: site.kind, color: PLAIN });
+  rows.push({ label: 'Designation', value: site.kind, color: plain() });
   return rows;
 }

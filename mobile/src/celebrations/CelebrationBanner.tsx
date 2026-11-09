@@ -15,7 +15,7 @@ import Svg, { Path } from 'react-native-svg';
 import { useAuth } from '../auth/AuthContext';
 import { BodyText } from '../components';
 import { playSound, tap } from '../lib/sounds';
-import { colors, radius, shadow, space } from '../theme';
+import { colors, glass, radius, shadow, space } from '../theme';
 import { useCelebrations } from './CelebrationsContext';
 
 /**
@@ -98,16 +98,16 @@ export function CelebrationBanner() {
           {notice.kind === 'achievement' ? <MedalIcon /> : notice.kind === 'friend' ? <FriendIcon /> : <RegionIcon />}
         </View>
         <View style={styles.text}>
-          <BodyText size={13.5} weight="bold" color={colors.neutral[100]} numberOfLines={1}>
+          <BodyText size={13.5} weight="bold" color={colors.onColor} numberOfLines={1}>
             {notice.title}
           </BodyText>
-          <BodyText size={12} lineHeightRatio={1.35} color="rgba(249, 244, 237, 0.8)" numberOfLines={2}>
+          <BodyText size={12} lineHeightRatio={1.35} color={glass(0.8)} numberOfLines={2}>
             {notice.body}
           </BodyText>
         </View>
         <Pressable onPress={dismissNotice} hitSlop={10} accessibilityLabel="Dismiss" style={styles.close}>
           <Svg width={14} height={14} viewBox="0 0 24 24">
-            <Path d="M6 6l12 12M18 6L6 18" stroke={colors.neutral[100]} strokeWidth={2.6} strokeLinecap="round" />
+            <Path d="M6 6l12 12M18 6L6 18" stroke={colors.onColor} strokeWidth={2.6} strokeLinecap="round" />
           </Svg>
         </Pressable>
       </Pressable>

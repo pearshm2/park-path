@@ -184,7 +184,9 @@ const styles = StyleSheet.create({
   outline: {
     borderWidth: 3,
     borderStyle: 'dashed',
-    borderColor: colors.neutral[400],
+    get borderColor() {
+      return colors.neutral[400];
+    },
   },
   pressed: {
     opacity: 0.7,

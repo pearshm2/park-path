@@ -96,11 +96,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: space[3] * 1.2,
     borderRadius: radius.pill,
     borderWidth: 1,
-    borderColor: colors.divider,
-    backgroundColor: colors.neutral[100],
+    get borderColor() {
+      return colors.divider;
+    },
+    get backgroundColor() {
+      return colors.neutral[100];
+    },
   },
   pressed: {
-    backgroundColor: colors.neutral[200],
+    get backgroundColor() {
+      return colors.neutral[200];
+    },
   },
   disabled: {
     opacity: 0.45,
@@ -110,7 +116,9 @@ const styles = StyleSheet.create({
     fontFamily: fonts.heading,
     fontSize: 14,
     lineHeight: 14 * 1.2,
-    color: colors.text,
+    get color() {
+      return colors.text;
+    },
   },
   dividerRow: {
     flexDirection: 'row',
@@ -120,11 +128,15 @@ const styles = StyleSheet.create({
   dividerLine: {
     flex: 1,
     height: 1,
-    backgroundColor: colors.divider,
+    get backgroundColor() {
+      return colors.divider;
+    },
   },
   dividerLabel: {
     fontFamily: fonts.body,
     fontSize: 12,
-    color: colors.textMuted,
+    get color() {
+      return colors.textMuted;
+    },
   },
 });

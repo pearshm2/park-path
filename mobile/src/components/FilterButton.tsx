@@ -69,12 +69,20 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
   },
   resting: {
-    backgroundColor: colors.accentRamp[100],
-    borderColor: colors.accent,
+    get backgroundColor() {
+      return colors.accentRamp[100];
+    },
+    get borderColor() {
+      return colors.accent;
+    },
   },
   active: {
-    backgroundColor: colors.accent,
-    borderColor: colors.accent,
+    get backgroundColor() {
+      return colors.accent;
+    },
+    get borderColor() {
+      return colors.accent;
+    },
   },
   pressed: {
     opacity: 0.88,
@@ -94,7 +102,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 5,
     borderRadius: radius.pill,
     borderWidth: 1.5,
-    borderColor: colors.accent,
-    backgroundColor: colors.bg,
+    get borderColor() {
+      return colors.accent;
+    },
+    get backgroundColor() {
+      return colors.bg;
+    },
   },
 });

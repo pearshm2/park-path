@@ -435,7 +435,9 @@ const styles = StyleSheet.create({
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: colors.neutral[400],
+    get backgroundColor() {
+      return colors.neutral[400];
+    },
   },
   railDotSmall: {
     width: 4,
@@ -445,7 +447,9 @@ const styles = StyleSheet.create({
   railDotActive: {
     width: 6,
     height: 16,
-    backgroundColor: colors.accent,
+    get backgroundColor() {
+      return colors.accent;
+    },
   },
   slot: {
     marginLeft: SIDE_LEFT,

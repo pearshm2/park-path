@@ -443,7 +443,9 @@ function FullScreenBody({
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: colors.bg,
+    get backgroundColor() {
+      return colors.bg;
+    },
   },
   content: {
     paddingHorizontal: space[4],
@@ -473,18 +475,28 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
     paddingHorizontal: 12,
     borderRadius: radius.pill,
-    backgroundColor: colors.neutral[100],
+    get backgroundColor() {
+      return colors.neutral[100];
+    },
     borderWidth: 1,
-    borderColor: colors.neutral[300],
+    get borderColor() {
+      return colors.neutral[300];
+    },
   },
   chipActive: {
-    backgroundColor: colors.neutral[800],
-    borderColor: colors.neutral[800],
+    get backgroundColor() {
+      return colors.neutral[800];
+    },
+    get borderColor() {
+      return colors.neutral[800];
+    },
   },
   map: {
     marginTop: space[3],
     borderRadius: radius.card,
-    backgroundColor: colors.neutral[100],
+    get backgroundColor() {
+      return colors.neutral[100];
+    },
     overflow: 'hidden',
     ...shadow.sm,
   },
@@ -497,11 +509,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: radius.pill,
-    backgroundColor: colors.neutral[100],
+    get backgroundColor() {
+      return colors.neutral[100];
+    },
     ...shadow.sm,
   },
   expandPressed: {
-    backgroundColor: colors.neutral[300],
+    get backgroundColor() {
+      return colors.neutral[300];
+    },
   },
   hint: {
     marginTop: space[2],
@@ -510,7 +526,9 @@ const styles = StyleSheet.create({
     marginTop: space[4],
     padding: space[4],
     borderRadius: radius.card,
-    backgroundColor: colors.neutral[100],
+    get backgroundColor() {
+      return colors.neutral[100];
+    },
   },
   official: {
     alignSelf: 'flex-start',
@@ -533,10 +551,14 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
   },
   rowActive: {
-    backgroundColor: colors.accentRamp[100],
+    get backgroundColor() {
+      return colors.accentRamp[100];
+    },
   },
   rowPressed: {
-    backgroundColor: colors.neutral[200],
+    get backgroundColor() {
+      return colors.neutral[200];
+    },
   },
   rowName: {
     flex: 1,
@@ -546,7 +568,9 @@ const styles = StyleSheet.create({
   },
   full: {
     flex: 1,
-    backgroundColor: colors.neutral[100],
+    get backgroundColor() {
+      return colors.neutral[100];
+    },
   },
   fullTop: {
     position: 'absolute',
@@ -560,7 +584,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: radius.pill,
-    backgroundColor: colors.neutral[100],
+    get backgroundColor() {
+      return colors.neutral[100];
+    },
     ...shadow.sm,
   },
   fullTitle: {
@@ -568,7 +594,9 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     paddingHorizontal: 12,
     borderRadius: radius.pill,
-    backgroundColor: colors.neutral[100],
+    get backgroundColor() {
+      return colors.neutral[100];
+    },
     ...shadow.sm,
   },
   fullBottom: {

@@ -165,7 +165,9 @@ const styles = StyleSheet.create({
     maxWidth: 420,
     padding: space[6],
     borderRadius: radius.lg,
-    backgroundColor: colors.bg,
+    get backgroundColor() {
+      return colors.bg;
+    },
     ...shadow.lg,
   },
   icon: {
@@ -194,13 +196,25 @@ const styles = StyleSheet.create({
 });
 
 const toneStyles = StyleSheet.create({
-  default: { backgroundColor: colors.accentRamp[100] },
-  danger: { backgroundColor: colors.accentRamp[700] },
-  cancel: { borderWidth: 1.5, borderColor: colors.neutral[400] },
+  get default() {
+    return { backgroundColor: colors.accentRamp[100] };
+  },
+  get danger() {
+    return { backgroundColor: colors.accentRamp[700] };
+  },
+  get cancel() {
+    return { borderWidth: 1.5, borderColor: colors.neutral[400] };
+  },
 });
 
 const pressedStyles = StyleSheet.create({
-  default: { backgroundColor: colors.accentRamp[200] },
-  danger: { backgroundColor: colors.accentRamp[800] },
-  cancel: { backgroundColor: colors.tintText07 },
+  get default() {
+    return { backgroundColor: colors.accentRamp[200] };
+  },
+  get danger() {
+    return { backgroundColor: colors.accentRamp[800] };
+  },
+  get cancel() {
+    return { backgroundColor: colors.tintText07 };
+  },
 });

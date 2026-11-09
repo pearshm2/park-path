@@ -87,8 +87,12 @@ const styles = StyleSheet.create({
     padding: space[4],
     borderRadius: radius.lg,
     borderWidth: 1.5,
-    borderColor: colors.accent2Ramp[300],
-    backgroundColor: colors.neutral[100],
+    get borderColor() {
+      return colors.accent2Ramp[300];
+    },
+    get backgroundColor() {
+      return colors.neutral[100];
+    },
     zIndex: 100,
     ...shadow.lg,
   },
@@ -113,7 +117,9 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
   },
   laterPressed: {
-    backgroundColor: colors.neutral[200],
+    get backgroundColor() {
+      return colors.neutral[200];
+    },
   },
   start: {
     paddingVertical: 10,

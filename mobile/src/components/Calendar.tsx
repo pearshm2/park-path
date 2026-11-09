@@ -235,8 +235,12 @@ const styles = StyleSheet.create({
     padding: space[3],
     borderRadius: radius.lg,
     borderWidth: 1.5,
-    borderColor: colors.neutral[300],
-    backgroundColor: colors.neutral[100],
+    get borderColor() {
+      return colors.neutral[300];
+    },
+    get backgroundColor() {
+      return colors.neutral[100];
+    },
   },
   header: {
     flexDirection: 'row',
@@ -253,7 +257,9 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
   },
   titlePressed: {
-    backgroundColor: colors.neutral[200],
+    get backgroundColor() {
+      return colors.neutral[200];
+    },
   },
   arrow: {
     width: 34,
@@ -289,15 +295,23 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
   },
   dayPressed: {
-    backgroundColor: colors.neutral[200],
+    get backgroundColor() {
+      return colors.neutral[200];
+    },
   },
   today: {
     borderWidth: 1.5,
-    borderColor: colors.accent,
+    get borderColor() {
+      return colors.accent;
+    },
   },
   chosen: {
-    backgroundColor: colors.accent,
-    borderColor: colors.accent,
+    get backgroundColor() {
+      return colors.accent;
+    },
+    get borderColor() {
+      return colors.accent;
+    },
   },
   years: {
     flexDirection: 'row',
@@ -312,10 +326,16 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: radius.pill,
     borderWidth: 1.5,
-    borderColor: colors.neutral[300],
+    get borderColor() {
+      return colors.neutral[300];
+    },
   },
   yearActive: {
-    backgroundColor: colors.accent,
-    borderColor: colors.accent,
+    get backgroundColor() {
+      return colors.accent;
+    },
+    get borderColor() {
+      return colors.accent;
+    },
   },
 });
