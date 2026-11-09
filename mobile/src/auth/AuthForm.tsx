@@ -412,7 +412,9 @@ const BLOB_SIZE = 230;
 const styles = StyleSheet.create({
   flex: {
     flex: 1,
-    backgroundColor: colors.bg,
+    get backgroundColor() {
+      return colors.bg;
+    },
   },
   content: {
     flexGrow: 1,
@@ -431,7 +433,9 @@ const styles = StyleSheet.create({
     width: BLOB_SIZE,
     height: BLOB_SIZE,
     borderRadius: BLOB_SIZE / 2,
-    backgroundColor: colors.accent2Ramp[200],
+    get backgroundColor() {
+      return colors.accent2Ramp[200];
+    },
   },
   blobTerracotta: {
     position: 'absolute',
@@ -440,7 +444,9 @@ const styles = StyleSheet.create({
     width: BLOB_SIZE * 0.72,
     height: BLOB_SIZE * 0.72,
     borderRadius: (BLOB_SIZE * 0.72) / 2,
-    backgroundColor: colors.accentRamp[200],
+    get backgroundColor() {
+      return colors.accentRamp[200];
+    },
   },
   header: {
     gap: space[1],
@@ -474,9 +480,13 @@ const styles = StyleSheet.create({
   formError: {
     padding: space[3],
     borderRadius: radius.md,
-    backgroundColor: colors.accentRamp[100],
+    get backgroundColor() {
+      return colors.accentRamp[100];
+    },
     borderWidth: 1,
-    borderColor: colors.accentRamp[300],
+    get borderColor() {
+      return colors.accentRamp[300];
+    },
   },
   submit: {
     marginTop: space[1],

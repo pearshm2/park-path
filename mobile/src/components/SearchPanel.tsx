@@ -21,7 +21,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
 
 import type { Site } from '../data/parks';
-import { colors, fonts, radius, scaleType, space, useTextScale } from '../theme';
+import { colors, fonts, glass, radius, scaleType, space, useTextScale } from '../theme';
 import { BodyText } from './Typography';
 
 /** How many matches the panel lists. */
@@ -201,8 +201,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderRadius: radius.pill,
     borderWidth: 1.5,
-    borderColor: colors.accent,
-    backgroundColor: colors.accentRamp[100],
+    get borderColor() {
+      return colors.accent;
+    },
+    get backgroundColor() {
+      return colors.accentRamp[100];
+    },
   },
   buttonPressed: {
     opacity: 0.8,
@@ -211,7 +215,9 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: space[4],
     // The ground colour, mostly opaque: the map stays faintly visible behind.
-    backgroundColor: 'rgba(249, 244, 237, 0.96)',
+    get backgroundColor() {
+      return glass(0.96);
+    },
   },
   head: {
     flexDirection: 'row',
@@ -228,8 +234,12 @@ const styles = StyleSheet.create({
     paddingVertical: space[3],
     borderRadius: radius.md,
     borderWidth: 1.5,
-    borderColor: colors.accent,
-    backgroundColor: colors.surface,
+    get borderColor() {
+      return colors.accent;
+    },
+    get backgroundColor() {
+      return colors.surface;
+    },
   },
   input: {
     flex: 1,
@@ -238,7 +248,9 @@ const styles = StyleSheet.create({
     padding: 0,
     fontFamily: fonts.bodyMedium,
     fontSize: 20,
-    color: colors.text,
+    get color() {
+      return colors.text;
+    },
   },
   results: {
     flex: 1,
@@ -249,10 +261,14 @@ const styles = StyleSheet.create({
     paddingVertical: space[3],
     paddingHorizontal: space[2],
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.divider,
+    get borderBottomColor() {
+      return colors.divider;
+    },
   },
   resultPressed: {
-    backgroundColor: colors.tintText07,
+    get backgroundColor() {
+      return colors.tintText07;
+    },
   },
   miss: {
     paddingVertical: space[3],

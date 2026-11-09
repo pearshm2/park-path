@@ -73,10 +73,11 @@ import {
   type DeckSection,
   SearchPanel,
   MATCH_DOT,
-  PICK_FILL,
+  PICK,
   STATUS_DOT,
   type FeedFilters,
 } from '../../components';
+import { Backdrop } from '../../components/Backdrop';
 import type { Site, SiteStatus } from '../../data/parks';
 import { useTrips, type TripEntry } from '../../trips/TripsContext';
 import {
@@ -89,7 +90,7 @@ import {
 import { useCelebrations } from '../../celebrations/CelebrationsContext';
 import { useSnoozed } from '../../wishlist/useSnoozed';
 import { useWishlist } from '../../wishlist/useWishlist';
-import { CapTextScale, colors, radius, shadow, space, useTextScale } from '../../theme';
+import { CapTextScale, colors, radius, shadow, space, useTextScale, useThemeVersion } from '../../theme';
 
 /** Where the "something different" pick goes among them (0-based: #4). */
 const DIFFERENT_AT = 3;
@@ -231,6 +232,7 @@ function byRegion(a: DeckItem, b: DeckItem): number {
 }
 
 export default function ExploreScreen() {
+  const themeVersion = useThemeVersion();
   const insets = useSafeAreaInsets();
   const { width: windowWidth } = useWindowDimensions();
   const textScale = useTextScale();
@@ -669,7 +671,9 @@ export default function ExploreScreen() {
               LETS_GO;
 
   return (
-    <View style={[styles.screen, { paddingTop: insets.top + space[2] }]}>
+    // Drawn afresh in the new colours when the look changes (theme/live.ts).
+    <View key={themeVersion} style={[styles.screen, { paddingTop: insets.top + space[2] }]}>
+      <Backdrop />
       <View style={styles.header}>
         <View style={styles.headerText}>
           <Heading size={TITLE_SIZE}>Explore</Heading>
@@ -1492,7 +1496,7 @@ function MapKey({
       <View style={[styles.keyRow, { marginTop: styles.keyRow.marginTop + 4 * r }]}>
         <View style={styles.keyItem}>
           <View style={styles.pickSwatch}>
-            <BodyText size={8} weight="bold" color={colors.neutral[100]}>
+            <BodyText size={8} weight="bold" color={colors.onColor}>
               1
             </BodyText>
           </View>
@@ -1559,7 +1563,9 @@ function MapKey({
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: colors.bg,
+    get backgroundColor() {
+      return colors.bg;
+    },
   },
   header: {
     flexDirection: 'row',
@@ -1597,15 +1603,21 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderRadius: radius.pill,
     borderWidth: 1.5,
-    borderColor: colors.accent,
-    backgroundColor: colors.accentRamp[100],
+    get borderColor() {
+      return colors.accent;
+    },
+    get backgroundColor() {
+      return colors.accentRamp[100];
+    },
   },
   scopeMenu: {
     position: 'absolute',
     width: 250,
     padding: space[2],
     borderRadius: radius.md,
-    backgroundColor: colors.neutral[100],
+    get backgroundColor() {
+      return colors.neutral[100];
+    },
     ...shadow.lg,
   },
   scopeKicker: {
@@ -1620,10 +1632,14 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   scopeOptionActive: {
-    backgroundColor: colors.accentRamp[100],
+    get backgroundColor() {
+      return colors.accentRamp[100];
+    },
   },
   suggestionPressed: {
-    backgroundColor: colors.tintText07,
+    get backgroundColor() {
+      return colors.tintText07;
+    },
   },
   stage: {
     flex: 1,
@@ -1668,8 +1684,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: space[4],
     borderRadius: radius.pill,
     borderWidth: 1,
-    borderColor: colors.neutral[300],
-    backgroundColor: colors.neutral[100],
+    get borderColor() {
+      return colors.neutral[300];
+    },
+    get backgroundColor() {
+      return colors.neutral[100];
+    },
   },
   // Centred just under the map, so it reads as the map's own button.
   expandRoom: {
@@ -1685,7 +1705,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: radius.pill,
-    backgroundColor: colors.neutral[100],
+    get backgroundColor() {
+      return colors.neutral[100];
+    },
     ...shadow.sm,
   },
   // Open, close under the collapsed key, to give the map the room.
@@ -1701,7 +1723,9 @@ const styles = StyleSheet.create({
     // A little taller than its contents, so the key reads as its own block.
     paddingVertical: space[4],
     borderRadius: radius.md,
-    backgroundColor: colors.neutral[100],
+    get backgroundColor() {
+      return colors.neutral[100];
+    },
   },
   keyCollapsed: {
     flexDirection: 'row',
@@ -1727,7 +1751,9 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     paddingHorizontal: space[3],
     borderRadius: radius.pill,
-    backgroundColor: colors.bg,
+    get backgroundColor() {
+      return colors.bg;
+    },
   },
   regionTitleSwatch: {
     width: 14,
@@ -1742,7 +1768,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: space[3],
     borderRadius: radius.pill,
     borderWidth: 1.5,
-    borderColor: colors.accent,
+    get borderColor() {
+      return colors.accent;
+    },
   },
   keyKicker: {
     marginTop: space[3],
@@ -1765,7 +1793,9 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: PICK_FILL,
+    get backgroundColor() {
+      return PICK.fill;
+    },
   },
   matchSwatch: {
     width: 13,
@@ -1824,7 +1854,9 @@ const styles = StyleSheet.create({
     bottom: 0,
     borderTopLeftRadius: radius.lg,
     borderTopRightRadius: radius.lg,
-    backgroundColor: colors.neutral[100],
+    get backgroundColor() {
+      return colors.neutral[100];
+    },
     ...shadow.lg,
   },
   sheetBar: {
@@ -1841,11 +1873,15 @@ const styles = StyleSheet.create({
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: colors.neutral[400],
+    get backgroundColor() {
+      return colors.neutral[400];
+    },
   },
   pageDotActive: {
     width: 16,
-    backgroundColor: colors.accent,
+    get backgroundColor() {
+      return colors.accent;
+    },
   },
   sheetTitleRow: {
     flexDirection: 'row',
@@ -1861,7 +1897,9 @@ const styles = StyleSheet.create({
     width: 38,
     height: 4,
     borderRadius: radius.pill,
-    backgroundColor: colors.neutral[400],
+    get backgroundColor() {
+      return colors.neutral[400];
+    },
   },
   sheetHead: {
     flexDirection: 'row',
@@ -1885,7 +1923,9 @@ const styles = StyleSheet.create({
     paddingVertical: space[3],
     paddingHorizontal: space[4],
     borderRadius: radius.md,
-    backgroundColor: colors.neutral[900],
+    get backgroundColor() {
+      return colors.neutral[900];
+    },
     zIndex: 50,
     ...shadow.lg,
   },
@@ -1902,13 +1942,17 @@ const styles = StyleSheet.create({
     paddingVertical: space[3],
     paddingHorizontal: space[4],
     borderRadius: radius.md,
-    backgroundColor: colors.neutral[900],
+    get backgroundColor() {
+      return colors.neutral[900];
+    },
   },
   empty: {
     marginHorizontal: space[4],
     padding: space[4],
     borderRadius: radius.card,
-    backgroundColor: colors.neutral[100],
+    get backgroundColor() {
+      return colors.neutral[100];
+    },
     ...shadow.sm,
   },
   emptyBody: {

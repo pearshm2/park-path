@@ -37,6 +37,7 @@ import { listSites } from '../../api/parks';
 import { useCelebrations } from '../../celebrations/CelebrationsContext';
 import { playSound } from '../../lib/sounds';
 import { BodyText, FilterButton, Heading, ParkMap, useTabBarSpace } from '../../components';
+import { Backdrop } from '../../components/Backdrop';
 import { AchievementRow } from '../../components/passport/AchievementRow';
 import { Stamp } from '../../components/passport/Stamp';
 import {
@@ -49,7 +50,7 @@ import {
 } from '../../data/achievements';
 import type { Site } from '../../data/parks';
 import { completedRegions, regionForState, REGIONS, type RegionId } from '../../data/regions';
-import { CapTextScale, colors, radius, shadow, space } from '../../theme';
+import { CapTextScale, colors, radius, shadow, space, useThemeVersion } from '../../theme';
 import { useFriends } from '../../friends/useFriends';
 import { monthLabel, useTrips } from '../../trips/TripsContext';
 
@@ -73,6 +74,7 @@ const TABS: { value: Tab; label: string }[] = [
 const GAP = space[3];
 
 export default function PassportScreen() {
+  const themeVersion = useThemeVersion();
   const insets = useSafeAreaInsets();
   const tabSpace = useTabBarSpace();
   const router = useRouter();
@@ -324,7 +326,9 @@ export default function PassportScreen() {
   }
 
   return (
-    <View style={styles.screen}>
+    // Drawn afresh in the new colours when the look changes (theme/live.ts).
+    <View key={themeVersion} style={styles.screen}>
+    <Backdrop />
     <ScrollView
       ref={scroller}
       style={styles.scroll}
@@ -670,7 +674,9 @@ function MenuItem({ label, active, onPress }: { label: string; active: boolean; 
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: colors.bg,
+    get backgroundColor() {
+      return colors.bg;
+    },
   },
   scroll: {
     flex: 1,
@@ -704,7 +710,9 @@ const styles = StyleSheet.create({
     padding: 4,
     marginTop: space[2],
     borderRadius: radius.pill,
-    backgroundColor: colors.neutral[200],
+    get backgroundColor() {
+      return colors.neutral[200];
+    },
   },
   tab: {
     flex: 1,
@@ -713,19 +721,25 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
   },
   tabActive: {
-    backgroundColor: colors.accent,
+    get backgroundColor() {
+      return colors.accent;
+    },
   },
   notice: {
     marginTop: space[4],
     padding: space[4],
     borderRadius: radius.lg,
-    backgroundColor: colors.neutral[100],
+    get backgroundColor() {
+      return colors.neutral[100];
+    },
   },
   mapCard: {
     marginTop: space[4],
     padding: space[3],
     borderRadius: radius.lg,
-    backgroundColor: colors.neutral[100],
+    get backgroundColor() {
+      return colors.neutral[100];
+    },
     ...shadow.sm,
   },
   kicker: {
@@ -768,7 +782,9 @@ const styles = StyleSheet.create({
     minWidth: 220,
     padding: 5,
     borderRadius: radius.md,
-    backgroundColor: colors.neutral[100],
+    get backgroundColor() {
+      return colors.neutral[100];
+    },
     zIndex: 2,
     ...shadow.md,
   },
@@ -788,13 +804,17 @@ const styles = StyleSheet.create({
     borderRadius: radius.sm,
   },
   menuItemPressed: {
-    backgroundColor: colors.accentRamp[100],
+    get backgroundColor() {
+      return colors.accentRamp[100];
+    },
   },
   menuDivider: {
     height: 1,
     marginVertical: 4,
     marginHorizontal: 12,
-    backgroundColor: colors.divider,
+    get backgroundColor() {
+      return colors.divider;
+    },
   },
   grid: {
     flexDirection: 'row',

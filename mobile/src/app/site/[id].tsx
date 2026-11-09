@@ -249,7 +249,9 @@ function MatchCard({ match, pending }: { match: Recommendation | undefined; pend
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: colors.bg,
+    get backgroundColor() {
+      return colors.bg;
+    },
   },
   content: {
     paddingHorizontal: space[4],
@@ -259,7 +261,9 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     paddingHorizontal: 12,
     borderRadius: radius.pill,
-    backgroundColor: colors.neutral[100],
+    get backgroundColor() {
+      return colors.neutral[100];
+    },
     ...shadow.sm,
   },
   backPressed: {
@@ -270,7 +274,9 @@ const styles = StyleSheet.create({
     aspectRatio: 16 / 10,
     marginTop: space[4],
     borderRadius: radius.lg,
-    backgroundColor: colors.neutral[200],
+    get backgroundColor() {
+      return colors.neutral[200];
+    },
   },
   kicker: {
     marginTop: space[4],
@@ -297,7 +303,9 @@ const styles = StyleSheet.create({
     marginTop: space[4],
     padding: space[4],
     borderRadius: radius.card,
-    backgroundColor: colors.neutral[100],
+    get backgroundColor() {
+      return colors.neutral[100];
+    },
     ...shadow.sm,
   },
   cardTitle: {
@@ -309,7 +317,9 @@ const styles = StyleSheet.create({
     gap: space[3],
     paddingBottom: 7,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.divider,
+    get borderBottomColor() {
+      return colors.divider;
+    },
   },
   // The label keeps its width; a long value wraps instead of squeezing it.
   rowLabel: {
@@ -340,7 +350,9 @@ const styles = StyleSheet.create({
     gap: space[3],
     paddingTop: 6,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.divider,
+    get borderTopColor() {
+      return colors.divider;
+    },
   },
   signalText: {
     width: 128,
@@ -349,13 +361,17 @@ const styles = StyleSheet.create({
     flex: 1,
     height: 8,
     borderRadius: radius.pill,
-    backgroundColor: colors.neutral[200],
+    get backgroundColor() {
+      return colors.neutral[200];
+    },
     overflow: 'hidden',
   },
   barFill: {
     height: '100%',
     borderRadius: radius.pill,
-    backgroundColor: colors.accentRamp[600],
+    get backgroundColor() {
+      return colors.accentRamp[600];
+    },
   },
   signalValue: {
     width: 44,

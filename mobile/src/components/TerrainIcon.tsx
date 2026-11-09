@@ -34,15 +34,78 @@ const PATHS: Record<TerrainGroup, string[]> = {
 
 /** Band fill behind the glyph, and the glyph's own colour. */
 const TONES: Record<TerrainGroup, { band: string; ink: string }> = {
-  mountain: { band: colors.accent2Ramp[300], ink: colors.accent2Ramp[800] },
-  canyon: { band: colors.accentRamp[300], ink: colors.accentRamp[800] },
-  desert: { band: colors.accentRamp[200], ink: colors.accentRamp[800] },
-  forest: { band: colors.accent2Ramp[400], ink: colors.accent2Ramp[900] },
-  coast: { band: colors.accent2Ramp[200], ink: colors.accent2Ramp[800] },
-  water: { band: colors.accent2Ramp[100], ink: colors.accent2Ramp[700] },
-  dunes: { band: colors.accentRamp[100], ink: colors.accentRamp[700] },
-  caves: { band: colors.neutral[300], ink: colors.neutral[800] },
-  badlands: { band: colors.neutral[200], ink: colors.neutral[700] },
+  mountain: {
+    get band() {
+      return colors.accent2Ramp[300];
+    },
+    get ink() {
+      return colors.accent2Ramp[800];
+    },
+  },
+  canyon: {
+    get band() {
+      return colors.accentRamp[300];
+    },
+    get ink() {
+      return colors.accentRamp[800];
+    },
+  },
+  desert: {
+    get band() {
+      return colors.accentRamp[200];
+    },
+    get ink() {
+      return colors.accentRamp[800];
+    },
+  },
+  forest: {
+    get band() {
+      return colors.accent2Ramp[400];
+    },
+    get ink() {
+      return colors.accent2Ramp[900];
+    },
+  },
+  coast: {
+    get band() {
+      return colors.accent2Ramp[200];
+    },
+    get ink() {
+      return colors.accent2Ramp[800];
+    },
+  },
+  water: {
+    get band() {
+      return colors.accent2Ramp[100];
+    },
+    get ink() {
+      return colors.accent2Ramp[700];
+    },
+  },
+  dunes: {
+    get band() {
+      return colors.accentRamp[100];
+    },
+    get ink() {
+      return colors.accentRamp[700];
+    },
+  },
+  caves: {
+    get band() {
+      return colors.neutral[300];
+    },
+    get ink() {
+      return colors.neutral[800];
+    },
+  },
+  badlands: {
+    get band() {
+      return colors.neutral[200];
+    },
+    get ink() {
+      return colors.neutral[700];
+    },
+  },
 };
 
 /** A site with no curated terrain gets the neutral tone. */

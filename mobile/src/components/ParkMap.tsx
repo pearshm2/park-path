@@ -105,16 +105,51 @@ const FIT_COLLECTION = {
 
 /** How each visit status draws as a small dot. Shared with the map key. */
 export const STATUS_DOT: Record<SiteStatus, { fill: string; stroke: string; label: string }> = {
-  visited: { fill: colors.accentRamp[700], stroke: colors.neutral[100], label: 'Visited' },
-  wishlist: { fill: colors.neutral[100], stroke: colors.accent2Ramp[700], label: 'Wishlist' },
-  new: { fill: colors.neutral[600], stroke: colors.neutral[100], label: 'Not yet' },
+  visited: {
+    get fill() {
+      return colors.accentRamp[700];
+    },
+    get stroke() {
+      return colors.neutral[100];
+    },
+    label: 'Visited',
+  },
+  wishlist: {
+    get fill() {
+      return colors.neutral[100];
+    },
+    get stroke() {
+      return colors.accent2Ramp[700];
+    },
+    label: 'Wishlist',
+  },
+  new: {
+    get fill() {
+      return colors.neutral[600];
+    },
+    get stroke() {
+      return colors.neutral[100];
+    },
+    label: 'Not yet',
+  },
 };
 
 /** The numbered pin's fill. Shared with the map key. */
-export const PICK_FILL = colors.accent;
+export const PICK = {
+  get fill() {
+    return colors.accent;
+  },
+};
 
 /** A park that matches the active filters. Shared with the map key. */
-export const MATCH_DOT = { fill: colors.accent2Ramp[600], stroke: colors.neutral[100] };
+export const MATCH_DOT = {
+  get fill() {
+    return colors.accent2Ramp[600];
+  },
+  get stroke() {
+    return colors.neutral[100];
+  },
+};
 
 /** Small dots are hard to hit with a finger, so taps reach this far from one. */
 const HIT_RADIUS = 11;
@@ -1085,7 +1120,7 @@ const ParkPin = memo(function ParkPin({
   if (feature) {
     const ring =
       kind === 'pick'
-        ? PICK_FILL
+        ? PICK.fill
         : kind === 'match'
           ? MATCH_DOT.fill
           : site.status === 'new'
@@ -1111,8 +1146,8 @@ const ParkPin = memo(function ParkPin({
               cx={nx}
               cy={ny}
               r={7.5}
-              fill={PICK_FILL}
-              stroke={colors.neutral[100]}
+              fill={PICK.fill}
+              stroke={colors.onColor}
               strokeWidth={1.5}
             />
             <SvgText
@@ -1122,7 +1157,7 @@ const ParkPin = memo(function ParkPin({
               fontSize={9.5}
               fontFamily={fonts.bodyBold}
               fontWeight="bold"
-              fill={colors.neutral[100]}
+              fill={colors.onColor}
             >
               {String(rank)}
             </SvgText>
@@ -1135,8 +1170,8 @@ const ParkPin = memo(function ParkPin({
       <>
         <Circle
           r={selected ? 12 : 10}
-          fill={selected ? colors.accentRamp[700] : PICK_FILL}
-          stroke={colors.neutral[100]}
+          fill={selected ? colors.accentRamp[700] : PICK.fill}
+          stroke={colors.onColor}
           strokeWidth={2}
         />
         <SvgText
@@ -1146,7 +1181,7 @@ const ParkPin = memo(function ParkPin({
           fontSize={11}
           fontFamily={fonts.bodyBold}
           fontWeight="bold"
-          fill={colors.neutral[100]}
+          fill={colors.onColor}
         >
           {String(rank)}
         </SvgText>
@@ -1226,8 +1261,12 @@ function frameBounds(
 
 /** The badge ring for parks you've been to or saved; a plain white edge otherwise. */
 const STATUS_RING: Record<Exclude<SiteStatus, 'new'>, string> = {
-  visited: colors.accentRamp[700],
-  wishlist: colors.accent2Ramp[700],
+  get visited() {
+    return colors.accentRamp[700];
+  },
+  get wishlist() {
+    return colors.accent2Ramp[700];
+  },
 };
 
 type Point = { x: number; y: number };
@@ -1381,7 +1420,7 @@ function CompleteStamp() {
   const r = STAMP_R;
   return (
     <G transform="rotate(-12)">
-      <Circle r={r} fill={colors.neutral[100]} opacity={0.92} />
+      <Circle r={r} fill={colors.onColor} opacity={0.92} />
       <Circle r={r} fill="none" stroke={EARNED_EDGE} strokeWidth={2.5} />
       <Circle
         r={r - 4.5}
@@ -1461,7 +1500,9 @@ function mainLand(feature: StateFeature, toPath: GeoPath): StateFeature {
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: colors.bg,
+    get backgroundColor() {
+      return colors.bg;
+    },
     overflow: 'hidden',
   },
   // Drawing past the box (see `canvas`): let it, and let what's beyond show
@@ -1477,7 +1518,9 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
     paddingHorizontal: 12,
     borderRadius: radius.pill,
-    backgroundColor: colors.neutral[100],
+    get backgroundColor() {
+      return colors.neutral[100];
+    },
     ...shadow.sm,
   },
   expand: {
@@ -1489,7 +1532,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: radius.pill,
-    backgroundColor: colors.neutral[100],
+    get backgroundColor() {
+      return colors.neutral[100];
+    },
     ...shadow.sm,
   },
   resetPressed: {

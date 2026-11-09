@@ -3,6 +3,8 @@ export {
   bodySize,
   colors,
   fonts,
+  glass,
+  isDark,
   HEADING_LETTER_SPACING_RATIO,
   HEADING_LINE_HEIGHT_RATIO,
   headingSize,
@@ -11,6 +13,8 @@ export {
   shadow,
   space,
 } from './tokens';
+export { DARK_PALETTES, type AppearanceChoice } from './appearance';
+export { currentAppearance, setAppearance, useAppearanceChoice, useThemeVersion } from './live';
 export { useAppFonts } from './fonts';
 export {
   CapTextScale,

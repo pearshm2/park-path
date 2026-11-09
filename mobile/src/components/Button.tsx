@@ -118,19 +118,35 @@ const styles = StyleSheet.create({
 });
 
 const variantStyles = StyleSheet.create({
-  primary: { backgroundColor: colors.accent },
-  secondary: { borderColor: colors.divider },
+  get primary() {
+    return { backgroundColor: colors.accent };
+  },
+  get secondary() {
+    return { borderColor: colors.divider };
+  },
   ghost: {},
 });
 
 const pressedStyles = StyleSheet.create({
-  primary: { backgroundColor: colors.accentRamp[700] },
-  secondary: { backgroundColor: colors.tintText14 },
-  ghost: { backgroundColor: colors.tintAccent18 },
+  get primary() {
+    return { backgroundColor: colors.accentRamp[700] };
+  },
+  get secondary() {
+    return { backgroundColor: colors.tintText14 };
+  },
+  get ghost() {
+    return { backgroundColor: colors.tintAccent18 };
+  },
 });
 
 const labelStyles = StyleSheet.create({
-  primary: { color: colors.bg },
-  secondary: { color: colors.text },
-  ghost: { color: colors.accent },
+  get primary() {
+    return { color: colors.bg };
+  },
+  get secondary() {
+    return { color: colors.text };
+  },
+  get ghost() {
+    return { color: colors.accent };
+  },
 });

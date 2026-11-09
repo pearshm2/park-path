@@ -95,6 +95,9 @@ navigation: gestures / buttons
 | 6.7 | Arrival reminders on, near a park (or skip) | A reminder to log the visit | |
 | 6.8 | Sign out | Back to sign-in; that account is gone from the switcher | |
 | 6.9 | Delete a test account | It's gone; signing in with it fails | |
+| 6.10 | Display → Appearance: Dark, then each look, then Light | Changes straight away, no restart; stars in dark, faint trail map in light; text on photos stays readable | |
+| 6.11 | Appearance: Match phone, then flip the phone's dark theme | The app follows within a moment | |
+| 6.12 | Pick Campfire, close the app fully, reopen | Opens in Campfire (no flash of light) | |
 
 ## 7. Other phones
 

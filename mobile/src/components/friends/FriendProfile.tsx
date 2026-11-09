@@ -187,7 +187,9 @@ function Section({ title, meta, children }: { title: string; meta: string; child
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: colors.bg,
+    get backgroundColor() {
+      return colors.bg;
+    },
   },
   content: {
     paddingHorizontal: space[4],
@@ -202,7 +204,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: radius.pill,
-    backgroundColor: colors.neutral[200],
+    get backgroundColor() {
+      return colors.neutral[200];
+    },
   },
   who: {
     alignItems: 'center',
@@ -222,7 +226,9 @@ const styles = StyleSheet.create({
     gap: space[3],
     padding: space[4],
     borderRadius: radius.lg,
-    backgroundColor: colors.neutral[100],
+    get backgroundColor() {
+      return colors.neutral[100];
+    },
     ...shadow.sm,
   },
   statRow: {
@@ -257,7 +263,9 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     paddingHorizontal: 12,
     borderRadius: radius.pill,
-    backgroundColor: colors.accent2Ramp[100],
+    get backgroundColor() {
+      return colors.accent2Ramp[100];
+    },
   },
   list: {
     gap: space[2],
@@ -268,7 +276,9 @@ const styles = StyleSheet.create({
     gap: space[3],
     padding: space[3],
     borderRadius: radius.md,
-    backgroundColor: colors.neutral[100],
+    get backgroundColor() {
+      return colors.neutral[100];
+    },
     ...shadow.sm,
   },
   badge: {
@@ -277,7 +287,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: radius.pill,
-    backgroundColor: colors.accentRamp[100],
+    get backgroundColor() {
+      return colors.accentRamp[100];
+    },
   },
   grow: {
     flex: 1,

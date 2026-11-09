@@ -566,11 +566,11 @@ export function NewEntrySheet({
                       accessibilityLabel={`Remove ${name}`}
                       style={({ pressed }) => [styles.trailOn, pressed && styles.trailOnPressed]}
                     >
-                      <PinIcon color={colors.neutral[100]} />
-                      <BodyText size={12} weight="semibold" color={colors.neutral[100]} numberOfLines={1}>
+                      <PinIcon color={colors.onColor} />
+                      <BodyText size={12} weight="semibold" color={colors.onColor} numberOfLines={1}>
                         {name}
                       </BodyText>
-                      <BodyText size={11} weight="bold" color={colors.neutral[100]}>
+                      <BodyText size={11} weight="bold" color={colors.onColor}>
                         ✕
                       </BodyText>
                     </Pressable>
@@ -595,7 +595,7 @@ export function NewEntrySheet({
                     accessibilityLabel={`Add ${trailText.trim()}`}
                     style={({ pressed }) => [styles.trailAdd, pressed && styles.trailAddPressed]}
                   >
-                    <BodyText size={13} weight="semibold" color={colors.neutral[100]}>
+                    <BodyText size={13} weight="semibold" color={colors.onColor}>
                       Add
                     </BodyText>
                   </Pressable>
@@ -687,10 +687,10 @@ export function NewEntrySheet({
                         {m.kind === 'video' ? (
                           <View style={styles.videoBadge} pointerEvents="none">
                             <Svg width={10} height={10} viewBox="0 0 24 24">
-                              <Path d="M7 4.5v15l12-7.5z" fill={colors.neutral[100]} />
+                              <Path d="M7 4.5v15l12-7.5z" fill={colors.onColor} />
                             </Svg>
                             {m.duration ? (
-                              <BodyText size={10} weight="bold" color={colors.neutral[100]}>
+                              <BodyText size={10} weight="bold" color={colors.onColor}>
                                 {clock(m.duration)}
                               </BodyText>
                             ) : null}
@@ -702,7 +702,7 @@ export function NewEntrySheet({
                           accessibilityLabel={m.kind === 'video' ? 'Remove video' : 'Remove photo'}
                           style={styles.thumbRemove}
                         >
-                          <BodyText size={11} weight="bold" color={colors.neutral[100]}>
+                          <BodyText size={11} weight="bold" color={colors.onColor}>
                             ✕
                           </BodyText>
                         </Pressable>
@@ -991,7 +991,9 @@ const styles = StyleSheet.create({
     height: '88%',
     borderTopLeftRadius: radius.lg,
     borderTopRightRadius: radius.lg,
-    backgroundColor: colors.bg,
+    get backgroundColor() {
+      return colors.bg;
+    },
     ...shadow.lg,
   },
   grabber: {
@@ -1000,7 +1002,9 @@ const styles = StyleSheet.create({
     height: 5,
     marginTop: space[3],
     borderRadius: radius.pill,
-    backgroundColor: colors.neutral[400],
+    get backgroundColor() {
+      return colors.neutral[400];
+    },
   },
   sheetContent: {
     paddingHorizontal: space[4],
@@ -1015,7 +1019,9 @@ const styles = StyleSheet.create({
     marginTop: 6,
     padding: 5,
     borderRadius: radius.md,
-    backgroundColor: colors.neutral[100],
+    get backgroundColor() {
+      return colors.neutral[100];
+    },
     ...shadow.md,
   },
   result: {
@@ -1027,7 +1033,9 @@ const styles = StyleSheet.create({
     borderRadius: radius.sm,
   },
   resultPressed: {
-    backgroundColor: colors.accentRamp[200],
+    get backgroundColor() {
+      return colors.accentRamp[200];
+    },
   },
   resultName: {
     flex: 1,
@@ -1043,17 +1051,25 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     borderRadius: radius.pill,
     borderWidth: 1.5,
-    borderColor: colors.neutral[300],
-    backgroundColor: colors.neutral[100],
+    get borderColor() {
+      return colors.neutral[300];
+    },
+    get backgroundColor() {
+      return colors.neutral[100];
+    },
   },
   datePressed: {
-    backgroundColor: colors.neutral[200],
+    get backgroundColor() {
+      return colors.neutral[200];
+    },
   },
   dateText: {
     flex: 1,
   },
   dateOpen: {
-    borderColor: colors.accent,
+    get borderColor() {
+      return colors.accent;
+    },
   },
   notes: {
     minHeight: 84,
@@ -1084,11 +1100,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: space[2],
     borderRadius: radius.pill,
     borderWidth: 1.5,
-    borderColor: colors.neutral[400],
+    get borderColor() {
+      return colors.neutral[400];
+    },
   },
   feedbackOn: {
-    backgroundColor: colors.accent,
-    borderColor: colors.accent,
+    get backgroundColor() {
+      return colors.accent;
+    },
+    get borderColor() {
+      return colors.accent;
+    },
   },
   feedbackOther: {
     opacity: 0.45,
@@ -1110,10 +1132,14 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     paddingHorizontal: 11,
     borderRadius: radius.pill,
-    backgroundColor: colors.neutral[200],
+    get backgroundColor() {
+      return colors.neutral[200];
+    },
   },
   suggestionPressed: {
-    backgroundColor: colors.accentRamp[200],
+    get backgroundColor() {
+      return colors.accentRamp[200];
+    },
   },
   chips: {
     flexDirection: 'row',
@@ -1129,11 +1155,17 @@ const styles = StyleSheet.create({
     paddingRight: 12,
     borderRadius: radius.pill,
     borderWidth: 1.5,
-    borderColor: colors.neutral[400],
+    get borderColor() {
+      return colors.neutral[400];
+    },
   },
   chipOn: {
-    backgroundColor: colors.accentRamp[100],
-    borderColor: colors.accent,
+    get backgroundColor() {
+      return colors.accentRamp[100];
+    },
+    get borderColor() {
+      return colors.accent;
+    },
   },
   addPhotos: {
     flexDirection: 'row',
@@ -1144,11 +1176,17 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     borderWidth: 1.5,
     borderStyle: 'dashed',
-    borderColor: colors.accentRamp[400],
-    backgroundColor: colors.accentRamp[100],
+    get borderColor() {
+      return colors.accentRamp[400];
+    },
+    get backgroundColor() {
+      return colors.accentRamp[100];
+    },
   },
   addPhotosPressed: {
-    backgroundColor: colors.accentRamp[200],
+    get backgroundColor() {
+      return colors.accentRamp[200];
+    },
   },
   addText: {
     flex: 1,
@@ -1172,7 +1210,9 @@ const styles = StyleSheet.create({
     height: 84,
     borderRadius: radius.sm,
     overflow: 'hidden',
-    backgroundColor: colors.neutral[200],
+    get backgroundColor() {
+      return colors.neutral[200];
+    },
     transform: [{ rotate: '-3deg' }],
     ...shadow.sm,
   },
@@ -1203,7 +1243,9 @@ const styles = StyleSheet.create({
   },
   // Behind a video's first frame, or in its place where the phone can't draw one.
   videoThumb: {
-    backgroundColor: colors.neutral[800],
+    get backgroundColor() {
+      return colors.neutral[800];
+    },
   },
   videoBadge: {
     position: 'absolute',
@@ -1228,10 +1270,14 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     paddingHorizontal: 11,
     borderRadius: radius.pill,
-    backgroundColor: colors.accent,
+    get backgroundColor() {
+      return colors.accent;
+    },
   },
   trailOnPressed: {
-    backgroundColor: colors.accentRamp[600],
+    get backgroundColor() {
+      return colors.accentRamp[600];
+    },
   },
   trailInput: {
     flexDirection: 'row',
@@ -1245,17 +1291,23 @@ const styles = StyleSheet.create({
     paddingVertical: 11,
     paddingHorizontal: 16,
     borderRadius: radius.pill,
-    backgroundColor: colors.accent,
+    get backgroundColor() {
+      return colors.accent;
+    },
   },
   trailAddPressed: {
-    backgroundColor: colors.accentRamp[600],
+    get backgroundColor() {
+      return colors.accentRamp[600];
+    },
   },
   thumb: {
     width: 64,
     height: 64,
     borderRadius: radius.sm,
     overflow: 'hidden',
-    backgroundColor: colors.neutral[200],
+    get backgroundColor() {
+      return colors.neutral[200];
+    },
   },
   thumbRemove: {
     position: 'absolute',
@@ -1276,7 +1328,9 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 14,
     borderRadius: radius.md,
-    backgroundColor: colors.accentRamp[100],
+    get backgroundColor() {
+      return colors.accentRamp[100];
+    },
   },
   restoredText: {
     flex: 1,

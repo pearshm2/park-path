@@ -137,7 +137,9 @@ const BLOB_SIZE = 210;
 const styles = StyleSheet.create({
   flex: {
     flex: 1,
-    backgroundColor: colors.bg,
+    get backgroundColor() {
+      return colors.bg;
+    },
   },
   content: {
     flexGrow: 1,
@@ -154,7 +156,9 @@ const styles = StyleSheet.create({
     width: BLOB_SIZE,
     height: BLOB_SIZE,
     borderRadius: BLOB_SIZE / 2,
-    backgroundColor: colors.accent2Ramp[200],
+    get backgroundColor() {
+      return colors.accent2Ramp[200];
+    },
   },
   heading: {
     marginTop: space[2],
@@ -169,9 +173,13 @@ const styles = StyleSheet.create({
   notice: {
     padding: space[3],
     borderRadius: radius.md,
-    backgroundColor: colors.accentRamp[100],
+    get backgroundColor() {
+      return colors.accentRamp[100];
+    },
     borderWidth: 1,
-    borderColor: colors.accentRamp[300],
+    get borderColor() {
+      return colors.accentRamp[300];
+    },
     ...shadow.sm,
   },
   footer: {

@@ -33,7 +33,7 @@ import { CelebrationBanner } from '../celebrations/CelebrationBanner';
 import { preloadSounds } from '../lib/sounds';
 import { CelebrationsProvider } from '../celebrations/CelebrationsContext';
 import { TripsProvider } from '../trips/TripsContext';
-import { colors, TextSizeProvider, useAppFonts } from '../theme';
+import { colors, isDark, TextSizeProvider, useAppFonts, useThemeVersion } from '../theme';
 
 SplashScreen.preventAutoHideAsync().catch(() => {
   // Already hidden, or unsupported on this platform (web). Not fatal.
@@ -53,6 +53,8 @@ const queryClient = new QueryClient({
 
 export default function RootLayout() {
   const fontsReady = useAppFonts();
+  // The status bar and the app's ground follow a change of look (theme/live.ts).
+  useThemeVersion();
 
   // Load the sound effects now, so none is late the first time it plays.
   useEffect(() => preloadSounds(), []);
@@ -75,7 +77,7 @@ export default function RootLayout() {
                 <CelebrationsProvider>
                   <ArrivalsProvider>
                     <TextSizeProvider>
-                      <StatusBar style="dark" />
+                      <StatusBar style={isDark ? 'light' : 'dark'} />
                       <SessionGate />
                       {/* Over every screen: the nudge when you arrive at a park,
                           and notifications of what a trip earned. */}
@@ -110,6 +112,7 @@ export default function RootLayout() {
 function SessionGate() {
   const { status } = useAuth();
   const { ready: quizReady } = useQuiz();
+  useThemeVersion();
   const settled = status !== 'restoring' && quizReady;
   const [opened, setOpened] = useState(false);
   if (settled && !opened) setOpened(true);
@@ -124,7 +127,8 @@ function SessionGate() {
     <Stack
       screenOptions={{
         headerShown: false,
-        contentStyle: styles.ground,
+        // A fresh object, so a change of look reaches every screen's ground.
+        contentStyle: { flex: 1, backgroundColor: colors.bg },
         // The warm ground should be what shows through a transition,
         // not the default white.
         animation: 'fade',
@@ -151,6 +155,8 @@ const styles = StyleSheet.create({
   },
   ground: {
     flex: 1,
-    backgroundColor: colors.bg,
+    get backgroundColor() {
+      return colors.bg;
+    },
   },
 });

@@ -54,12 +54,16 @@ const styles = StyleSheet.create({
     flex: 1,
     height: 5,
     borderRadius: radius.pill,
-    backgroundColor: colors.neutral[300],
+    get backgroundColor() {
+      return colors.neutral[300];
+    },
     overflow: 'hidden',
   },
   fill: {
     height: '100%',
     borderRadius: radius.pill,
-    backgroundColor: colors.accent,
+    get backgroundColor() {
+      return colors.accent;
+    },
   },
 });

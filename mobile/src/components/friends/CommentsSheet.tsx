@@ -198,10 +198,10 @@ export function CommentsSheet({ trip, onClose }: { trip: CommentTarget; onClose:
               style={({ pressed }) => [styles.send, (!draft.trim() || post.isPending) && styles.sendOff, pressed && styles.sendPressed]}
             >
               {post.isPending ? (
-                <ActivityIndicator color={colors.neutral[100]} size="small" />
+                <ActivityIndicator color={colors.onColor} size="small" />
               ) : (
                 <Svg width={18} height={18} viewBox="0 0 24 24">
-                  <Path d="M4 12l16-8-6 16-2.5-6.5z" fill={colors.neutral[100]} />
+                  <Path d="M4 12l16-8-6 16-2.5-6.5z" fill={colors.onColor} />
                 </Svg>
               )}
             </Pressable>
@@ -224,7 +224,9 @@ const styles = StyleSheet.create({
     paddingTop: space[2],
     borderTopLeftRadius: radius.lg,
     borderTopRightRadius: radius.lg,
-    backgroundColor: colors.neutral[100],
+    get backgroundColor() {
+      return colors.neutral[100];
+    },
     ...shadow.lg,
   },
   handle: {
@@ -232,7 +234,9 @@ const styles = StyleSheet.create({
     width: 40,
     height: 4,
     borderRadius: 2,
-    backgroundColor: colors.neutral[300],
+    get backgroundColor() {
+      return colors.neutral[300];
+    },
     marginBottom: space[2],
   },
   head: {
@@ -247,7 +251,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: radius.pill,
-    backgroundColor: colors.neutral[200],
+    get backgroundColor() {
+      return colors.neutral[200];
+    },
   },
   grow: {
     flex: 1,
@@ -288,7 +294,9 @@ const styles = StyleSheet.create({
     gap: space[2],
     paddingTop: space[3],
     borderTopWidth: 1,
-    borderTopColor: colors.neutral[200],
+    get borderTopColor() {
+      return colors.neutral[200];
+    },
   },
   input: {
     flex: 1,
@@ -297,8 +305,12 @@ const styles = StyleSheet.create({
     paddingTop: 9,
     paddingBottom: 9,
     borderRadius: 20,
-    backgroundColor: colors.neutral[200],
-    color: colors.neutral[900],
+    get backgroundColor() {
+      return colors.neutral[200];
+    },
+    get color() {
+      return colors.neutral[900];
+    },
     fontFamily: fonts.body,
     fontSize: 14,
   },
@@ -308,12 +320,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: radius.pill,
-    backgroundColor: colors.accent,
+    get backgroundColor() {
+      return colors.accent;
+    },
   },
   sendOff: {
     opacity: 0.45,
   },
   sendPressed: {
-    backgroundColor: colors.accentRamp[600],
+    get backgroundColor() {
+      return colors.accentRamp[600];
+    },
   },
 });

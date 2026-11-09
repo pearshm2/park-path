@@ -23,7 +23,6 @@ Sizes: **S** = an hour or two · **M** = about a day · **L** = several days
 ## If the app were released
 
 - [ ] **Quests:** after a trip, a quest to visit 2–4 nearby unvisited sites; a reward seal in Passport. **M–L**
-- [ ] **Night-sky dark mode.** Touches most screens. **M**
 - [ ] **Local data on the phone:** screens open instantly and work without signal; photo caching after. **M**
 - [ ] **Badge colours by region.** **S**
 - [ ] **Curate the remaining 355 sites.** They return `score: null` today. **M**, mostly manual
@@ -47,6 +46,7 @@ Sizes: **S** = an hour or two · **M** = about a day · **L** = several days
 - Passport stamps, region map, 30 achievements and celebrations
 - Friends by username, email or QR code, with a feed, comments, Relive on friends' posts, Activity for comments on your trips, and notifications
 - Settings, and in-app arrival reminders
+- Dark mode: Light / Dark / Match phone, three dark looks (Night sky, Campfire, Pine) with a faint star field, a trail-map backdrop in light mode, switching instantly
 - New app icon and splash (the landscape map pin)
 - CI: lint, API tests against Postgres, and an OpenAPI contract check
 - Render deploy blueprint; installable APK (`docs/apk.md`); demo seed script (`api/seed_demo.py`)

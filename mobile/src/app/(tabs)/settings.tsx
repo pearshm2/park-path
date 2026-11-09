@@ -39,13 +39,26 @@ import { useAuth } from '../../auth/AuthContext';
 import { UsernameField } from '../../auth/UsernameField';
 import { normalizeUsername, usernameRuleProblem, useUsernameCheck } from '../../auth/useUsernameCheck';
 import { BodyText, Heading, TextField, useTabBarSpace } from '../../components';
+import { Backdrop } from '../../components/Backdrop';
 import { Avatar } from '../../components/Avatar';
 import { Dialog, type DialogAction } from '../../components/Dialog';
 import { isKnownZip, QUIZ_STEPS, type QuizAnswers } from '../../data/quizSpec';
 import { useSoundEffects } from '../../lib/sounds';
 import { useQuiz } from '../../quiz/QuizContext';
 import { useSnoozed } from '../../wishlist/useSnoozed';
-import { colors, radius, space, TEXT_SIZES, useTextSize } from '../../theme';
+import {
+  type AppearanceChoice,
+  colors,
+  DARK_PALETTES,
+  isDark,
+  radius,
+  setAppearance,
+  space,
+  TEXT_SIZES,
+  useAppearanceChoice,
+  useTextSize,
+  useThemeVersion,
+} from '../../theme';
 
 type Section = 'profile' | 'account' | 'privacy' | 'notifications' | 'display';
 
@@ -61,6 +74,7 @@ const SECTIONS: { key: Section; label: string; icon: string[] }[] = [
 type Note = { ok: boolean; text: string } | null;
 
 export default function SettingsScreen() {
+  const themeVersion = useThemeVersion();
   const insets = useSafeAreaInsets();
   const tabSpace = useTabBarSpace();
   const [section, setSection] = useState<Section>('profile');
@@ -69,7 +83,9 @@ export default function SettingsScreen() {
   const open = SECTIONS.find((s) => s.key === section) ?? SECTIONS[0];
 
   return (
-    <View style={[styles.screen, { paddingTop: insets.top + space[2] }]}>
+    // Drawn afresh in the new colours when the look changes (theme/live.ts).
+    <View key={themeVersion} style={[styles.screen, { paddingTop: insets.top + space[2] }]}>
+      <Backdrop />
       <Heading size={26} style={styles.title}>
         Settings
       </Heading>
@@ -275,7 +291,7 @@ function ProfileSection() {
             <Avatar person={user} size={60} />
             {photoBusy ? (
               <View style={styles.photoBusy}>
-                <ActivityIndicator color={colors.neutral[100]} />
+                <ActivityIndicator color={colors.onColor} />
               </View>
             ) : null}
           </Pressable>
@@ -804,17 +820,54 @@ function NotificationsSection() {
 
 // --- Display -------------------------------------------------------------------
 
+const APPEARANCE_MODES = [
+  { value: 'light', label: 'Light' },
+  { value: 'dark', label: 'Dark' },
+  { value: 'system', label: 'Match phone' },
+] as const;
+
+/** Appearance: light, dark (in one of three looks), or whatever the phone is set to. Applies at once. */
+function AppearanceRow() {
+  const choice = useAppearanceChoice();
+  const change = (next: AppearanceChoice) => {
+    if (next.mode !== choice.mode || next.dark !== choice.dark) setAppearance(next);
+  };
+  return (
+    <Row>
+      <RowText
+        title="Appearance"
+        description={
+          choice.mode === 'light'
+            ? 'Light, with a trail map behind. Or try dark, under the stars.'
+            : 'Pick a dark look. Match phone follows your phone between light and dark.'
+        }
+      />
+      <Segmented options={APPEARANCE_MODES} value={choice.mode} onChange={(mode) => change({ ...choice, mode })} />
+      {choice.mode !== 'light' ? (
+        <Segmented
+          options={DARK_PALETTES.map((p) => ({ value: p.id, label: p.label }))}
+          value={choice.dark}
+          onChange={(dark) => change({ ...choice, dark })}
+        />
+      ) : null}
+    </Row>
+  );
+}
+
 function DisplaySection() {
   const { size: textSize, setSize: setTextSize } = useTextSize();
   return (
-    <Row last>
-      <RowText title="Text size" description="Your phone's own text size setting applies on top of this." />
-      <Segmented options={TEXT_SIZES} value={textSize} onChange={setTextSize} />
-      {/* A sample at the chosen size, so the effect is visible right here. */}
-      <BodyText size={13.5} lineHeightRatio={1.5} color={colors.neutral[800]}>
-        Zion: a river cut a narrow corridor through sandstone.
-      </BodyText>
-    </Row>
+    <>
+      <AppearanceRow />
+      <Row last>
+        <RowText title="Text size" description="Your phone's own text size setting applies on top of this." />
+        <Segmented options={TEXT_SIZES} value={textSize} onChange={setTextSize} />
+        {/* A sample at the chosen size, so the effect is visible right here. */}
+        <BodyText size={13.5} lineHeightRatio={1.5} color={colors.neutral[800]}>
+          Zion: a river cut a narrow corridor through sandstone.
+        </BodyText>
+      </Row>
+    </>
   );
 }
 
@@ -977,7 +1030,9 @@ const RULE = 'rgba(32, 30, 29, 0.12)';
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: colors.bg,
+    get backgroundColor() {
+      return colors.bg;
+    },
   },
   title: {
     paddingHorizontal: space[4],
@@ -1006,7 +1061,9 @@ const styles = StyleSheet.create({
   },
   // No shadow: Android draws it as a grey box around the rounded square.
   navItemOn: {
-    backgroundColor: colors.accent,
+    get backgroundColor() {
+      return colors.accent;
+    },
   },
   navItemPressed: {
     backgroundColor: 'rgba(32, 30, 29, 0.06)',
@@ -1031,9 +1088,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: space[4],
     borderRadius: radius.lg,
     borderWidth: 1,
-    borderColor: colors.neutral[300],
+    get borderColor() {
+      return colors.neutral[300];
+    },
     // No shadow: Android draws it as a box while the card fades in.
-    backgroundColor: '#fffdfa',
+    // A touch brighter than cards elsewhere in light mode; the card colour in dark.
+    get backgroundColor() {
+      return isDark ? colors.neutral[100] : '#fffdfa';
+    },
   },
   row: {
     gap: space[3],
@@ -1070,14 +1132,18 @@ const styles = StyleSheet.create({
     paddingTop: space[2],
     borderTopLeftRadius: radius.lg,
     borderTopRightRadius: radius.lg,
-    backgroundColor: colors.neutral[100],
+    get backgroundColor() {
+      return colors.neutral[100];
+    },
   },
   sheetHandle: {
     alignSelf: 'center',
     width: 40,
     height: 4,
     borderRadius: 2,
-    backgroundColor: colors.neutral[300],
+    get backgroundColor() {
+      return colors.neutral[300];
+    },
     marginBottom: space[2],
   },
   sheetHead: {
@@ -1092,7 +1158,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: radius.pill,
-    backgroundColor: colors.neutral[200],
+    get backgroundColor() {
+      return colors.neutral[200];
+    },
   },
   sheetList: {
     flexGrow: 0,
@@ -1148,17 +1216,27 @@ const styles = StyleSheet.create({
   },
   smallPlain: {
     borderWidth: 1,
-    borderColor: colors.neutral[300],
-    backgroundColor: colors.neutral[100],
+    get borderColor() {
+      return colors.neutral[300];
+    },
+    get backgroundColor() {
+      return colors.neutral[100];
+    },
   },
   smallPlainPressed: {
-    backgroundColor: colors.neutral[200],
+    get backgroundColor() {
+      return colors.neutral[200];
+    },
   },
   smallPrimary: {
-    backgroundColor: colors.accent,
+    get backgroundColor() {
+      return colors.accent;
+    },
   },
   smallPrimaryPressed: {
-    backgroundColor: colors.accentRamp[600],
+    get backgroundColor() {
+      return colors.accentRamp[600];
+    },
   },
   smallDanger: {
     backgroundColor: DANGER,
@@ -1166,7 +1244,9 @@ const styles = StyleSheet.create({
   smallDangerPlain: {
     borderWidth: 1,
     borderColor: 'rgba(168, 36, 36, 0.45)',
-    backgroundColor: colors.neutral[100],
+    get backgroundColor() {
+      return colors.neutral[100];
+    },
   },
   dangerBox: {
     gap: space[3],
@@ -1192,7 +1272,9 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   segmentOn: {
-    backgroundColor: colors.neutral[100],
+    get backgroundColor() {
+      return colors.neutral[100];
+    },
     shadowColor: '#000',
     shadowOpacity: 0.08,
     shadowRadius: 2,

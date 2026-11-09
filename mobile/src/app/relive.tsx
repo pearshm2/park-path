@@ -68,7 +68,7 @@ import { PassportPage } from '../components/trips/PassportPage';
 import { PinIcon, StarIcon } from '../components/trips/NewEntrySheet';
 import type { Site } from '../data/parks';
 import { regionForState } from '../data/regions';
-import { colors, radius, space, useTextScale } from '../theme';
+import { colors, isDark, radius, space, useTextScale } from '../theme';
 import { cleanFeedback, feedbackLabel, isGood } from '../trips/feedback';
 import {
   dateLabel,
@@ -119,7 +119,7 @@ const STAMP_SIZE = 124;
 const PRESS_MS = 640;
 const HIT = 0.5;
 const MONTH_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-const ON_INK = colors.neutral[100];
+const ON_INK = colors.onColor;
 const ON_INK_SOFT = 'rgba(249, 244, 237, 0.78)';
 
 export default function ReliveScreen() {
@@ -149,7 +149,7 @@ export default function ReliveScreen() {
   useFocusEffect(
     useCallback(() => {
       setStatusBarStyle('light');
-      return () => setStatusBarStyle('dark');
+      return () => setStatusBarStyle(isDark ? 'light' : 'dark');
     }, []),
   );
   // Dived into: the dive plays out over Trips (see TitleSlide), and the
@@ -912,7 +912,7 @@ const STAMP_GAP_MS = 550;
 const STAMP_TILTS = [-6, 4, -3, 5];
 /** Ink: cream for the good side of a pair, orange for a complaint. */
 const GOOD_INK = '#F4EADB';
-const BAD_INK = colors.accentRamp[400];
+const BAD_INK = '#f6a06b';
 
 /**
  * How it was: the trip's stars and rating word fade up over the park's

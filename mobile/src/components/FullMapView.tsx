@@ -32,7 +32,7 @@ import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-cont
 
 import type { Site } from '../data/parks';
 import { regionForState, type RegionId } from '../data/regions';
-import { colors, radius, shadow, space } from '../theme';
+import { colors, glass, radius, shadow, space } from '../theme';
 import { Button } from './Button';
 import { ParkMap } from './ParkMap';
 import { BodyText, Heading } from './Typography';
@@ -255,7 +255,9 @@ function FullMapBody({
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: colors.bg,
+    get backgroundColor() {
+      return colors.bg;
+    },
   },
   fill: {
     flex: 1,
@@ -291,7 +293,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: space[3],
     borderRadius: radius.md,
     // Readable over the map without hiding it.
-    backgroundColor: 'rgba(249, 244, 237, 0.9)',
+    get backgroundColor() {
+      return glass(0.9);
+    },
   },
   // Bottom right and narrow, so the tapped park stays in view: that corner
   // is open ocean on the map.
@@ -308,7 +312,9 @@ const styles = StyleSheet.create({
     padding: space[3],
     paddingLeft: space[4],
     borderRadius: radius.lg,
-    backgroundColor: colors.neutral[100],
+    get backgroundColor() {
+      return colors.neutral[100];
+    },
     ...shadow.lg,
   },
   chipText: {
@@ -326,6 +332,8 @@ const styles = StyleSheet.create({
     height: 10,
     borderRadius: 3,
     borderWidth: 1,
-    borderColor: colors.neutral[400],
+    get borderColor() {
+      return colors.neutral[400];
+    },
   },
 });

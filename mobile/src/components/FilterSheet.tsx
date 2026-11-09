@@ -225,7 +225,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: space[4],
     borderTopLeftRadius: radius.lg,
     borderTopRightRadius: radius.lg,
-    backgroundColor: colors.bg,
+    get backgroundColor() {
+      return colors.bg;
+    },
     gap: space[2],
     ...shadow.lg,
   },
@@ -234,7 +236,9 @@ const styles = StyleSheet.create({
     width: 40,
     height: 4,
     borderRadius: radius.pill,
-    backgroundColor: colors.neutral[400],
+    get backgroundColor() {
+      return colors.neutral[400];
+    },
     marginBottom: space[2],
   },
   scroll: {
@@ -257,12 +261,18 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
   },
   chipOff: {
-    backgroundColor: colors.neutral[100],
+    get backgroundColor() {
+      return colors.neutral[100];
+    },
     borderColor: 'transparent',
   },
   chipOn: {
-    backgroundColor: colors.accent,
-    borderColor: colors.accent,
+    get backgroundColor() {
+      return colors.accent;
+    },
+    get borderColor() {
+      return colors.accent;
+    },
   },
   chipPressed: {
     opacity: 0.85,

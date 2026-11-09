@@ -68,17 +68,25 @@ const styles = StyleSheet.create({
     ...shadow.sm,
   },
   rowIdle: {
-    backgroundColor: colors.neutral[100],
+    get backgroundColor() {
+      return colors.neutral[100];
+    },
     borderColor: 'transparent',
   },
   rowSelected: {
-    backgroundColor: colors.accentRamp[100],
-    borderColor: colors.accent,
+    get backgroundColor() {
+      return colors.accentRamp[100];
+    },
+    get borderColor() {
+      return colors.accent;
+    },
   },
   rowPressed: {
     // No pressed colour is specified for these rows, so this uses the
     // system's generic tint rather than inventing a new one.
-    backgroundColor: colors.accentRamp[200],
+    get backgroundColor() {
+      return colors.accentRamp[200];
+    },
   },
   dot: {
     width: 22,
@@ -91,12 +99,18 @@ const styles = StyleSheet.create({
     borderWidth: 2.75,
   },
   dotIdle: {
-    borderColor: colors.neutral[400],
+    get borderColor() {
+      return colors.neutral[400];
+    },
     backgroundColor: 'transparent',
   },
   dotSelected: {
-    borderColor: colors.accent,
-    backgroundColor: colors.accent,
+    get borderColor() {
+      return colors.accent;
+    },
+    get backgroundColor() {
+      return colors.accent;
+    },
   },
   rank: {
     // Sits inside the 22px dot, so it doesn't scale with text size.
@@ -104,7 +118,9 @@ const styles = StyleSheet.create({
     fontSize: 11,
     lineHeight: 13,
     textAlign: 'center',
-    color: colors.neutral[100],
+    get color() {
+      return colors.onColor;
+    },
   },
   text: {
     flex: 1,
@@ -112,13 +128,17 @@ const styles = StyleSheet.create({
   label: {
     fontFamily: fonts.bodySemibold,
     fontSize: 15,
-    color: colors.text,
+    get color() {
+      return colors.text;
+    },
   },
   sub: {
     fontFamily: fonts.body,
     fontSize: 12.5,
     lineHeight: 12.5 * 1.35,
     marginTop: 2,
-    color: colors.neutral[600],
+    get color() {
+      return colors.neutral[600];
+    },
   },
 });

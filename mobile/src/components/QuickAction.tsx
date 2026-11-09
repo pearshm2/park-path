@@ -48,7 +48,6 @@ export function QuickAction({
   );
 }
 
-const ICON_INK = colors.neutral[800];
 
 /** A turn arrow in a diamond, the usual road-sign shorthand for directions. */
 export function DirectionsIcon() {
@@ -57,14 +56,14 @@ export function DirectionsIcon() {
       <Path
         d="M12 2.8l9.2 9.2-9.2 9.2L2.8 12z"
         fill="none"
-        stroke={ICON_INK}
+        stroke={colors.neutral[800]}
         strokeWidth={2}
         strokeLinejoin="round"
       />
       <Path
         d="M9 15v-3a1.5 1.5 0 0 1 1.5-1.5H15M13 8.5l2 2-2 2"
         fill="none"
-        stroke={ICON_INK}
+        stroke={colors.neutral[800]}
         strokeWidth={2}
         strokeLinecap="round"
         strokeLinejoin="round"
@@ -80,7 +79,7 @@ export function MapIcon() {
       <Path
         d="M3 6.5l6-2.5 6 2.5 6-2.5v13.5l-6 2.5-6-2.5-6 2.5zM9 4v13.5M15 6.5V20"
         fill="none"
-        stroke={ICON_INK}
+        stroke={colors.neutral[800]}
         strokeWidth={2}
         strokeLinejoin="round"
       />
@@ -95,12 +94,18 @@ const styles = StyleSheet.create({
     gap: 4,
     paddingVertical: space[2],
     borderRadius: radius.md,
-    backgroundColor: colors.neutral[200],
+    get backgroundColor() {
+      return colors.neutral[200];
+    },
   },
   actionOn: {
-    backgroundColor: colors.accent2Ramp[100],
+    get backgroundColor() {
+      return colors.accent2Ramp[100];
+    },
   },
   actionPressed: {
-    backgroundColor: colors.neutral[300],
+    get backgroundColor() {
+      return colors.neutral[300];
+    },
   },
 });

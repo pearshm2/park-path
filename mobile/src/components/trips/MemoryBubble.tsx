@@ -34,7 +34,7 @@ import Animated, {
 import Svg, { Circle, Defs, LinearGradient, Path, RadialGradient, Rect, Stop } from 'react-native-svg';
 
 import type { Site } from '../../data/parks';
-import { colors, HEADING_LINE_HEIGHT_RATIO, radius, shadow, space } from '../../theme';
+import { colors, glass, HEADING_LINE_HEIGHT_RATIO, radius, shadow, space } from '../../theme';
 import type { DiveRect } from './DiveIn';
 import { dateLabel, leadPhoto, type TripEntry } from '../../trips/TripsContext';
 import { PassportTag } from './PassportPage';
@@ -80,7 +80,7 @@ export function bubbleWordCentres(rect: DiveRect, title: string, textScale: numb
   };
 }
 
-const ON_PHOTO = colors.neutral[100];
+const ON_PHOTO = colors.onColor;
 
 export function MemoryBubble({
   entry,
@@ -220,7 +220,7 @@ export function MemoryBubble({
                 style={({ pressed }) => [styles.play, pressed && styles.playPressed]}
               >
                 <Svg width={20} height={20} viewBox="0 0 24 24">
-                  <Path d="M8 5.5v13l10.5-6.5z" fill={colors.neutral[100]} />
+                  <Path d="M8 5.5v13l10.5-6.5z" fill={colors.onColor} />
                 </Svg>
               </Pressable>
               {/* Beside the play button. */}
@@ -302,7 +302,9 @@ const styles = StyleSheet.create({
     ...shadow.md,
     borderRadius: radius.pill,
     // Android only draws a shadow under something with a background.
-    backgroundColor: colors.bg,
+    get backgroundColor() {
+      return colors.bg;
+    },
   },
   bubble: {
     flex: 1,
@@ -345,10 +347,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: radius.pill,
-    backgroundColor: 'rgba(249, 244, 237, 0.9)',
+    get backgroundColor() {
+      return glass(0.9);
+    },
   },
   optionsPressed: {
-    backgroundColor: colors.neutral[300],
+    get backgroundColor() {
+      return colors.neutral[300];
+    },
   },
   tagSlot: {
     flexDirection: 'row',
@@ -363,7 +369,9 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     paddingHorizontal: 10,
     borderRadius: radius.pill,
-    backgroundColor: 'rgba(249, 244, 237, 0.94)',
+    get backgroundColor() {
+      return glass(0.94);
+    },
     ...shadow.sm,
   },
   commentTagPressed: {
@@ -382,11 +390,17 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderRadius: radius.pill,
     borderWidth: 2.5,
-    borderColor: 'rgba(249, 244, 237, 0.85)',
-    backgroundColor: colors.accent,
+    get borderColor() {
+      return glass(0.85);
+    },
+    get backgroundColor() {
+      return colors.accent;
+    },
     ...shadow.sm,
   },
   playPressed: {
-    backgroundColor: colors.accentRamp[600],
+    get backgroundColor() {
+      return colors.accentRamp[600];
+    },
   },
 });
