@@ -80,7 +80,18 @@ const PASTELS: Region[] = [
  * rather than bright cut-outs inside dark borders. The "earned" shades
  * keep more of their colour: a completed region should still stand out.
  */
+const mixed = new Map<string, string>();
 function mix(hex: string, into: string, amount: number): string {
+  // Read on every draw of the map: worked out once per colour and palette.
+  const key = `${hex}${into}${amount}`;
+  const known = mixed.get(key);
+  if (known) return known;
+  const value = blend(hex, into, amount);
+  mixed.set(key, value);
+  return value;
+}
+
+function blend(hex: string, into: string, amount: number): string {
   const a = parseInt(hex.slice(1), 16);
   const b = parseInt(into.slice(1), 16);
   const channel = (shift: number) =>

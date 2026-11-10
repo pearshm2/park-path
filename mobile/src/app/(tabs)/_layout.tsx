@@ -16,6 +16,7 @@ import { Pressable, StyleSheet, Text, View, type ColorValue } from 'react-native
 import Svg, { Circle, Path } from 'react-native-svg';
 
 import { useAuth } from '../../auth/AuthContext';
+import { Backdrop } from '../../components/Backdrop';
 import { BAR_HEIGHT, RAISE, tabBarBottom } from '../../components/tabBar';
 import { useActivityBadge } from '../../friends/activity';
 import { useFriendsBadge } from '../../friends/useFriendsBadge';
@@ -23,6 +24,7 @@ import { useQuiz } from '../../quiz/QuizContext';
 import {
   colors,
   fonts,
+  glass,
   isDark,
   radius,
   scaleType,
@@ -31,6 +33,13 @@ import {
   useTextScale,
   useThemeVersion,
 } from '../../theme';
+
+/**
+ * How the bar is drawn, to compare while testing:
+ * - 'solid': the card colour, the same as light mode does it.
+ * - 'glass': see-through, tinted, with a faint highlight round the edge.
+ */
+const BAR_LOOK: 'solid' | 'glass' = 'solid';
 
 const ICON_SIZE = 23;
 const STROKE = 2.75;
@@ -138,6 +147,10 @@ export default function TabsLayout() {
   if (ready && !completed) return <Redirect href="/quiz" />;
 
   return (
+    // The page colour and its backdrop (stars, or a trail map), once for
+    // every tab: the tab screens are see-through over them.
+    <View style={groundFor(themeVersion)}>
+    <Backdrop key={themeVersion} />
     <Tabs
       // Explore is not first in the bar, so name it as the start tab and
       // send Android's back button there rather than to Passport.
@@ -146,8 +159,7 @@ export default function TabsLayout() {
       tabBar={(props) => <FloatingTabBar {...props} />}
       screenOptions={{
         headerShown: false,
-        // A fresh object, so a change of look reaches the scenes.
-        sceneStyle: { backgroundColor: colors.bg },
+        sceneStyle: styles.scene,
       }}
     >
       <Tabs.Screen
@@ -171,7 +183,18 @@ export default function TabsLayout() {
         options={{ title: 'Settings', tabBarIcon: ({ color }) => <SettingsIcon color={color} /> }}
       />
     </Tabs>
+    </View>
   );
+}
+
+/**
+ * The page colour under every tab. A fresh style for each look: this view
+ * stays mounted when the look changes, and Android skips a style object it
+ * has already been given, so a getter in one shared style never got read
+ * again (the page stayed light under a dark look).
+ */
+function groundFor(_themeVersion: number) {
+  return { flex: 1, backgroundColor: colors.bg };
 }
 
 type TabBarProps = Parameters<NonNullable<ComponentProps<typeof Tabs>['tabBar']>>[0];
@@ -207,14 +230,18 @@ function FloatingTabBar({ state, descriptors, navigation, insets }: TabBarProps)
   const friendsBadge = useFriendsBadge(friendsFocused) + useActivityBadge(friendsFocused);
 
   const scale = useTextScale();
+  // The bar stays mounted across a change of look, and Android skips a style
+  // it has already been given, so it would keep the old colours: redraw it.
+  const themeVersion = useThemeVersion();
   return (
     // Floats over the screen, see-through, so the Explore sheet shows around
     // it; touches on its empty margins pass through to what's underneath.
     <View
+      key={themeVersion}
       pointerEvents="box-none"
       style={[styles.barWrap, { paddingBottom: tabBarBottom(insets.bottom) }]}
     >
-      <View style={styles.bar}>
+      <View style={[styles.bar, BAR_LOOK === 'glass' && styles.barGlass]}>
         {state.routes.map((route, index) => {
           const { options } = descriptors[route.key];
           const focused = state.index === index;
@@ -306,6 +333,18 @@ const styles = StyleSheet.create({
     // shaded box behind the bar's rounded ends.
     boxShadow: '0 3px 10px rgba(46, 43, 37, 0.16)',
   },
+  barGlass: {
+    get backgroundColor() {
+      return glass(isDark ? 0.62 : 0.7);
+    },
+    borderWidth: 1,
+    get borderColor() {
+      return isDark ? 'rgba(255, 255, 255, 0.10)' : 'rgba(255, 255, 255, 0.75)';
+    },
+    get boxShadow() {
+      return isDark ? '0 4px 16px rgba(0, 0, 0, 0.45)' : '0 3px 12px rgba(46, 43, 37, 0.14)';
+    },
+  },
   tab: {
     flex: 1,
     alignItems: 'center',
@@ -391,8 +430,6 @@ const styles = StyleSheet.create({
     opacity: 0.85,
   },
   scene: {
-    get backgroundColor() {
-      return colors.bg;
-    },
+    backgroundColor: 'transparent',
   },
 });

@@ -476,7 +476,8 @@ function CheckIcon() {
 
 /** A bookmark: outlined when unsaved, filled in the wishlist pin's colour when saved. */
 export function BookmarkIcon({ filled, size = 14 }: { filled: boolean; size?: number }) {
-  const ink = filled ? STATUS_DOT.wishlist.stroke : colors.neutral[800];
+  // On the card, so in the card's own palette (the map's pin keeps its daytime green).
+  const ink = filled ? colors.accent2Ramp[700] : colors.neutral[800];
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24">
       <Path
@@ -582,8 +583,12 @@ const styles = StyleSheet.create({
     height: 9,
     borderRadius: radius.pill,
     borderWidth: 1.5,
-    borderColor: STATUS_DOT.wishlist.stroke,
-    backgroundColor: STATUS_DOT.wishlist.fill,
+    get borderColor() {
+      return STATUS_DOT.wishlist.stroke;
+    },
+    get backgroundColor() {
+      return STATUS_DOT.wishlist.fill;
+    },
   },
   visitedStamp: {
     flexDirection: 'row',

@@ -77,7 +77,6 @@ import {
   STATUS_DOT,
   type FeedFilters,
 } from '../../components';
-import { Backdrop } from '../../components/Backdrop';
 import type { Site, SiteStatus } from '../../data/parks';
 import { useTrips, type TripEntry } from '../../trips/TripsContext';
 import {
@@ -673,7 +672,6 @@ export default function ExploreScreen() {
   return (
     // Drawn afresh in the new colours when the look changes (theme/live.ts).
     <View key={themeVersion} style={[styles.screen, { paddingTop: insets.top + space[2] }]}>
-      <Backdrop />
       <View style={styles.header}>
         <View style={styles.headerText}>
           <Heading size={TITLE_SIZE}>Explore</Heading>
@@ -1561,11 +1559,10 @@ function MapKey({
 }
 
 const styles = StyleSheet.create({
+  // See-through: the backdrop and page colour are drawn behind every tab
+  // (_layout.tsx).
   screen: {
     flex: 1,
-    get backgroundColor() {
-      return colors.bg;
-    },
   },
   header: {
     flexDirection: 'row',

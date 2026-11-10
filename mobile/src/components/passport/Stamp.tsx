@@ -54,7 +54,15 @@ function tilt(id: string): number {
   return (h % 11) - 5;
 }
 
-export function Stamp({ site, visited, size, onPress, pressIn = false, onPressedIn }: Props) {
+export function Stamp(props: Props) {
+  // Only the stamp going down needs its animation; the rest of the grid
+  // (63 of them) is drawn still, with nothing running for it.
+  if (props.pressIn) return <PressingStamp {...props} />;
+  return <StillStamp {...props} />;
+}
+
+/** A stamp just earned, going down. */
+function PressingStamp({ site, visited, size, onPress, pressIn = false, onPressedIn }: Props) {
   const on = visited != null;
   const press = useSharedValue(pressIn ? 0 : 1);
   useEffect(() => {
@@ -106,6 +114,11 @@ export function Stamp({ site, visited, size, onPress, pressIn = false, onPressed
       </Pressable>
     );
   }
+  return <StillStamp site={site} visited={visited} size={size} onPress={onPress} />;
+}
+
+function StillStamp({ site, visited, size, onPress }: Props) {
+  const on = visited != null;
   const label = on
     ? `${site.name}, stamped ${visited}. Open the trip.`
     : `${site.name}, not stamped yet. See the park.`;

@@ -153,7 +153,9 @@ export function SectionDeck<T>({
       activePage.current = target.page;
       pager.current?.scrollToIndex({ index: target.page, animated: false });
     }
-    lists.current.get(section.key)?.scrollToOffset({ offset: target.index * interval, animated: true });
+    // Straight there, not scrolled: a scroll would pass over the cards in
+    // between, and the map would light up each one on the way.
+    lists.current.get(section.key)?.scrollToOffset({ offset: target.index * interval, animated: false });
     // Only after a new jump; the rest is read as it is then.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [jumpTo]);

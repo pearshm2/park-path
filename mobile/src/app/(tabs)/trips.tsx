@@ -36,7 +36,6 @@ import Svg, { Defs, LinearGradient, Path, Rect, Stop } from 'react-native-svg';
 
 import { listSites } from '../../api/parks';
 import { BodyText, Button, Dialog, FilterButton, Heading, Toast, useTabBarSpace } from '../../components';
-import { Backdrop } from '../../components/Backdrop';
 import { diveParam } from '../../components/trips/DiveIn';
 import { MemoryBubble } from '../../components/trips/MemoryBubble';
 import { CommentsSheet } from '../../components/friends/CommentsSheet';
@@ -191,7 +190,6 @@ export default function TripsScreen() {
         setScreenHeight((h) => (Math.abs(h - height) > 1 ? height : h));
       }}
     >
-      <Backdrop />
       {sorted.length > 0 ? (
         <View style={StyleSheet.absoluteFill}>
           {ready ? (
@@ -545,11 +543,10 @@ const styles = StyleSheet.create({
       return colors.accentRamp[100];
     },
   },
+  // See-through: the backdrop and page colour are drawn behind every tab
+  // (_layout.tsx).
   screen: {
     flex: 1,
-    get backgroundColor() {
-      return colors.bg;
-    },
   },
   gutter: {
     paddingHorizontal: space[4],

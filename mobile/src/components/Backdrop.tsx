@@ -4,6 +4,10 @@
  * contour lines (the rings of height on a hiking map) around a few
  * "summits". Both are still, faint and fixed, so they're the same on
  * every screen and never compete with what's on it.
+ *
+ * Drawn once, behind all the tabs (app/(tabs)/_layout.tsx), whose screens
+ * are see-through over it. On Android each <Svg> keeps a full-screen
+ * bitmap of its own, so one per tab (as it first was) cost five of them.
  */
 
 import { memo } from 'react';

@@ -7,6 +7,7 @@
  * with two accounts on one phone.
  */
 
+import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
@@ -47,6 +48,12 @@ export function AccountSwitcher({ onClose }: { onClose: () => void }) {
   const insets = useSafeAreaInsets();
   const keyboard = useKeyboardLift();
   const { user, switchAccount, signIn, signInWithGoogle } = useAuth();
+  const router = useRouter();
+  /** In the other account: through its quiz (its answers filled in), then on to Explore. */
+  function arrive() {
+    onClose();
+    router.push('/quiz');
+  }
   const [accounts, setAccounts] = useState<SavedAccount[]>([]);
   /** The account being switched to, while it's checked. */
   const [busyId, setBusyId] = useState<number | null>(null);
@@ -67,7 +74,7 @@ export function AccountSwitcher({ onClose }: { onClose: () => void }) {
     setBusyId(account.id);
     try {
       await switchAccount(account.id);
-      onClose();
+      arrive();
     } catch (error) {
       if (error instanceof AccountExpired) {
         // A day since it was used: sign in again, email filled in.
@@ -97,7 +104,7 @@ export function AccountSwitcher({ onClose }: { onClose: () => void }) {
     setProblem(null);
     try {
       await signIn({ email: email.trim(), password });
-      onClose();
+      arrive();
     } catch (error) {
       setProblem(error instanceof Error && error.message ? error.message : "Couldn't sign in. Try again.");
     } finally {
@@ -110,7 +117,7 @@ export function AccountSwitcher({ onClose }: { onClose: () => void }) {
     setProblem(null);
     try {
       await signInWithGoogle();
-      onClose();
+      arrive();
     } catch (error) {
       setProblem(error instanceof Error && error.message ? error.message : "Couldn't sign in with Google.");
     } finally {

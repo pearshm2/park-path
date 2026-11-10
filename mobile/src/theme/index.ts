@@ -2,6 +2,7 @@ export {
   BODY_LINE_HEIGHT_RATIO,
   bodySize,
   colors,
+  DAY,
   fonts,
   glass,
   isDark,
