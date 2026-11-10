@@ -85,10 +85,10 @@ import { scheduleOnRN } from 'react-native-worklets';
 import type { Site, SiteStatus } from '../data/parks';
 import { REGIONS, regionForState, STATE_REGION, type RegionId } from '../data/regions';
 import { US_STATES, type StateFeature } from '../data/usStates';
-import { colors, fonts, radius, shadow } from '../theme';
+import { colors, DAY, fonts, isDark, radius, shadow } from '../theme';
 import { ExpandIcon } from './ExpandIcon';
 import { featureForPark, FeatureGlyph, type Feature } from './FeatureGlyph';
-import { terrainTone } from './TerrainIcon';
+import { markerTone } from './TerrainIcon';
 import { BodyText } from './Typography';
 
 /**
@@ -103,35 +103,47 @@ const FIT_COLLECTION = {
   features: US_STATES.filter((state) => state.id !== '02'),
 };
 
-/** How each visit status draws as a small dot. Shared with the map key. */
-export const STATUS_DOT: Record<SiteStatus, { fill: string; stroke: string; label: string }> = {
-  visited: {
+/**
+ * How each visit status draws as a small dot. Shared with the map key.
+ *
+ * "Lanterns": at night the parks are small lit points, each with a soft
+ * glow, like campsites seen from above; by day they're flat dots of ink.
+ * Their colours are the daytime ones (DAY) in every palette, as the land
+ * is the same pastel in both, only dimmed at night.
+ */
+type DotLook = {
+  fill: string;
+  /** The ring round the dot; the fill again for none. */
+  stroke: string;
+  /** The dot's radius, without its ring. */
+  r: number;
+  /** The glow's colour and strength (0-1), or none. */
+  glow: { color: string; strength: number } | null;
+  label: string;
+};
+
+function lantern(day: string, night: string, nightR: number, strength: number, label: string): DotLook {
+  return {
     get fill() {
-      return colors.accentRamp[700];
+      return isDark ? night : day;
     },
     get stroke() {
-      return colors.neutral[100];
+      return isDark ? night : day;
     },
-    label: 'Visited',
-  },
-  wishlist: {
-    get fill() {
-      return colors.neutral[100];
+    get r() {
+      return isDark ? nightR : 3.4;
     },
-    get stroke() {
-      return colors.accent2Ramp[700];
+    get glow() {
+      return isDark ? { color: night, strength } : null;
     },
-    label: 'Wishlist',
-  },
-  new: {
-    get fill() {
-      return colors.neutral[600];
-    },
-    get stroke() {
-      return colors.neutral[100];
-    },
-    label: 'Not yet',
-  },
+    label,
+  };
+}
+
+export const STATUS_DOT: Record<SiteStatus, DotLook> = {
+  visited: lantern(DAY.accent, DAY.accentRamp[400], 2.8, 1, 'Visited'),
+  wishlist: lantern(DAY.accent2Ramp[600], DAY.accent2Ramp[300], 2.8, 0.9, 'Wishlist'),
+  new: lantern(DAY.neutral[600], DAY.neutral[100], 2.2, 0.5, 'Not yet'),
 };
 
 /** The numbered pin's fill. Shared with the map key. */
@@ -142,14 +154,7 @@ export const PICK = {
 };
 
 /** A park that matches the active filters. Shared with the map key. */
-export const MATCH_DOT = {
-  get fill() {
-    return colors.accent2Ramp[600];
-  },
-  get stroke() {
-    return colors.neutral[100];
-  },
-};
+export const MATCH_DOT = { fill: DAY.accent2Ramp[600], stroke: DAY.neutral[100] };
 
 /** Small dots are hard to hit with a finger, so taps reach this far from one. */
 const HIT_RADIUS = 11;
@@ -889,10 +894,11 @@ export function ParkMap({
               <DotLayer
                 key={status}
                 points={plainPoints(others, (dot) => dot.site.status === status)}
-                r={4}
+                r={STATUS_DOT[status].r}
                 fill={STATUS_DOT[status].fill}
                 stroke={STATUS_DOT[status].stroke}
-                strokeWidth={1.5}
+                strokeWidth={0}
+                glow={STATUS_DOT[status].glow}
                 opacity={othersFade}
               />
             ))}
@@ -989,6 +995,10 @@ const DOT_ORDER: SiteStatus[] = ['new', 'wishlist', 'visited'];
  * which is what keeps it fast: before, each of up to 474 dots was a pin
  * of its own that Android had to move on every frame.
  */
+/** The glow's two rings, across (screen points). */
+const GLOW_OUTER = 16;
+const GLOW_INNER = 9;
+
 const DotLayer = memo(
   function DotLayer({
     points,
@@ -996,6 +1006,7 @@ const DotLayer = memo(
     fill,
     stroke,
     strokeWidth,
+    glow = null,
     opacity,
   }: {
     /** [x0, y0, x1, y1, ...] in map coordinates. */
@@ -1004,6 +1015,8 @@ const DotLayer = memo(
     fill: string;
     stroke: string;
     strokeWidth: number;
+    /** A soft glow round each dot (see STATUS_DOT). */
+    glow?: DotLook['glow'];
     opacity: number;
   }) {
     if (points.length === 0) return null;
@@ -1018,6 +1031,30 @@ const DotLayer = memo(
     const inner = 2 * r - strokeWidth;
     return (
       <>
+        {glow ? (
+          // Two wide, faint rings of the dot's colour: a soft falloff,
+          // still one path each for every dot of the status.
+          <>
+            <Path
+              d={d}
+              fill="none"
+              stroke={glow.color}
+              strokeWidth={GLOW_OUTER}
+              strokeLinecap="round"
+              vectorEffect="non-scaling-stroke"
+              opacity={0.07 * glow.strength * opacity}
+            />
+            <Path
+              d={d}
+              fill="none"
+              stroke={glow.color}
+              strokeWidth={GLOW_INNER}
+              strokeLinecap="round"
+              vectorEffect="non-scaling-stroke"
+              opacity={0.14 * glow.strength * opacity}
+            />
+          </>
+        ) : null}
         <Path
           d={d}
           fill="none"
@@ -1045,6 +1082,8 @@ const DotLayer = memo(
     a.fill === b.fill &&
     a.stroke === b.stroke &&
     a.strokeWidth === b.strokeWidth &&
+    a.glow?.color === b.glow?.color &&
+    a.glow?.strength === b.glow?.strength &&
     a.opacity === b.opacity &&
     a.points.length === b.points.length &&
     a.points.every((value, i) => value === b.points[i]),
@@ -1124,7 +1163,7 @@ const ParkPin = memo(function ParkPin({
         : kind === 'match'
           ? MATCH_DOT.fill
           : site.status === 'new'
-            ? STATUS_DOT.new.stroke
+            ? DAY.neutral[100]
             : STATUS_RING[site.status];
     const r = selected ? BADGE_R + 2 : BADGE_R;
     // A pick's number rides on the badge's upper-right edge.
@@ -1198,14 +1237,23 @@ const ParkPin = memo(function ParkPin({
     );
   } else {
     const look = STATUS_DOT[site.status];
+    const glow = look.glow;
     body = (
-      <Circle
-        r={selected ? 7 : 4}
-        fill={look.fill}
-        stroke={selected ? colors.text : look.stroke}
-        strokeWidth={selected ? 2.5 : 1.5}
-        opacity={fade}
-      />
+      <>
+        {glow && !selected ? (
+          <>
+            <Circle r={GLOW_OUTER / 2} fill={glow.color} opacity={0.07 * glow.strength * fade} />
+            <Circle r={GLOW_INNER / 2} fill={glow.color} opacity={0.14 * glow.strength * fade} />
+          </>
+        ) : null}
+        <Circle
+          r={selected ? 6 : look.r}
+          fill={look.fill}
+          stroke={selected ? colors.text : look.stroke}
+          strokeWidth={selected ? 2.5 : 0}
+          opacity={fade}
+        />
+      </>
     );
   }
   return (
@@ -1261,12 +1309,8 @@ function frameBounds(
 
 /** The badge ring for parks you've been to or saved; a plain white edge otherwise. */
 const STATUS_RING: Record<Exclude<SiteStatus, 'new'>, string> = {
-  get visited() {
-    return colors.accentRamp[700];
-  },
-  get wishlist() {
-    return colors.accent2Ramp[700];
-  },
+  visited: DAY.accentRamp[700],
+  wishlist: DAY.accent2Ramp[700],
 };
 
 type Point = { x: number; y: number };
@@ -1363,7 +1407,9 @@ function FeatureBadge({
   /** Set on each shape, not a group (see where the pins fade). */
   opacity?: number;
 }) {
-  const tone = terrainTone(site.group);
+  const tone = markerTone(site.group);
+  // The thread to a nudged badge is drawn on the land: light on dark land.
+  const thread = isDark ? colors.onColor : tone.ink;
   const r = selected ? BADGE_R + 2 : BADGE_R;
   const bx = nudge?.x ?? 0;
   const by = nudge?.y ?? 0;
@@ -1374,11 +1420,11 @@ function FeatureBadge({
         <>
           <Path
             d={`M0 0L${bx} ${by}`}
-            stroke={tone.ink}
+            stroke={thread}
             strokeWidth={1.25}
             opacity={0.6 * opacity}
           />
-          <Circle r={2.25} fill={tone.ink} opacity={opacity} />
+          <Circle r={2.25} fill={thread} opacity={opacity} />
         </>
       ) : null}
       {selected ? (

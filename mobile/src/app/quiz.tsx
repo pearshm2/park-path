@@ -34,6 +34,15 @@ import { useQuiz } from '../quiz/QuizContext';
 import { colors, fonts, space } from '../theme';
 
 export default function QuizScreen() {
+  const { userId } = useAuth();
+  const { ready } = useQuiz();
+  // Opened straight after switching accounts (auth/AccountSwitcher.tsx):
+  // wait for that account's answers, then start from them.
+  if (!ready) return <View style={styles.screen} />;
+  return <QuizSteps key={userId ?? 'signed-out'} />;
+}
+
+function QuizSteps() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { status } = useAuth();

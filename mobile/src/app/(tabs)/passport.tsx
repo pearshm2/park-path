@@ -37,7 +37,6 @@ import { listSites } from '../../api/parks';
 import { useCelebrations } from '../../celebrations/CelebrationsContext';
 import { playSound } from '../../lib/sounds';
 import { BodyText, FilterButton, Heading, ParkMap, useTabBarSpace } from '../../components';
-import { Backdrop } from '../../components/Backdrop';
 import { AchievementRow } from '../../components/passport/AchievementRow';
 import { Stamp } from '../../components/passport/Stamp';
 import {
@@ -104,6 +103,8 @@ export default function PassportScreen() {
   const [achievementsFrom, setAchievementsFrom] = useState<number | null>(null);
   const scroller = useRef<ScrollView>(null);
   const gridY = useRef(0);
+  /** Where the Stamps section starts in the scroll (the grid's y is within it). */
+  const stampsY = useRef(0);
 
   const [focused, setFocused] = useState(false);
   useFocusEffect(
@@ -264,7 +265,7 @@ export default function PassportScreen() {
   useEffect(() => {
     if (!pressing) return;
     const timer = setTimeout(() => {
-      scroller.current?.scrollTo({ y: Math.max(0, gridY.current - 160), animated: true });
+      scroller.current?.scrollTo({ y: Math.max(0, stampsY.current + gridY.current - 160), animated: true });
     }, 250);
     return () => clearTimeout(timer);
   }, [pressing]);
@@ -317,6 +318,16 @@ export default function PassportScreen() {
   const achievementTotal =
     tiers.length + regionRows.length + siteTiers.length + friendTiers.length + togetherTiers.length;
 
+  // Both tabs stay drawn once opened, and switching only hides one: drawing
+  // the stamps afresh each time (63 seals and their pictures, and the map)
+  // was slow, and on some phones ran out of memory. Achievements is drawn
+  // the first time it's asked for.
+  const [achievementsOpened, setAchievementsOpened] = useState(false);
+  if (tab === 'achievements' && !achievementsOpened) setAchievementsOpened(true);
+  // A trip's achievements play out only while they're shown; the rows are
+  // drawn afresh to play (they play as they first draw), and again after.
+  const rowsFrom = tab === 'achievements' ? (achievementsFrom ?? held.achievementsFrom ?? null) : null;
+
   const stampSize = Math.floor((width - space[4] * 2 - GAP * 2) / 3);
 
   function openStamp(site: Site) {
@@ -328,7 +339,6 @@ export default function PassportScreen() {
   return (
     // Drawn afresh in the new colours when the look changes (theme/live.ts).
     <View key={themeVersion} style={styles.screen}>
-    <Backdrop />
     <ScrollView
       ref={scroller}
       style={styles.scroll}
@@ -420,159 +430,168 @@ export default function PassportScreen() {
             Loading your stamps…
           </BodyText>
         </View>
-      ) : tab === 'stamps' ? (
+      ) : (
         <>
-          <View style={styles.mapCard}>
-            <BodyText size={10.5} weight="semibold" color={colors.neutral[600]} style={styles.kicker}>
-              Progress map · tap a region to see its stamps
-            </BodyText>
-            <View style={styles.mapBox}>
-              <ParkMap
-                sites={parks}
-                focusRegion={region}
-                completedRegions={completed}
-                fillingRegion={filling}
-                onFilled={() => {
-                  playSound('chime');
-                  // Filled: drawn as any completed region; the next, if any, follows.
-                  setTimeout(() => setFilling(null), 600);
-                }}
-                onSelectRegion={(id) => {
-                  setRegion(id);
-                  setFilterOpen(false);
-                }}
-                onSelectSite={openStamp}
-                style={styles.mapFill}
-              />
-            </View>
-          </View>
-
-          <View style={styles.sectionHead}>
-            <BodyText size={10.5} weight="semibold" color={colors.neutral[600]} style={styles.kicker}>
-              The national parks
-            </BodyText>
-            <BodyText size={12} weight="bold" color={colors.accentRamp[700]}>
-              {`${regionStamped} of ${inRegion.length} stamped`}
-            </BodyText>
-          </View>
-
           <View
-            style={styles.filterBox}
+            style={tab !== 'stamps' && styles.hidden}
             onLayout={(event) => {
-              gridY.current = event.nativeEvent.layout.y;
+              stampsY.current = event.nativeEvent.layout.y;
             }}
           >
-            <CapTextScale max={1.1}>
-              <View style={styles.grid}>
-                {shown.map((site) => {
-                  const summary = visitSummary(site.id);
+            <View style={styles.mapCard}>
+              <BodyText size={10.5} weight="semibold" color={colors.neutral[600]} style={styles.kicker}>
+                Progress map · tap a region to see its stamps
+              </BodyText>
+              <View style={styles.mapBox}>
+                <ParkMap
+                  sites={parks}
+                  focusRegion={region}
+                  completedRegions={completed}
+                  fillingRegion={filling}
+                  onFilled={() => {
+                    playSound('chime');
+                    // Filled: drawn as any completed region; the next, if any, follows.
+                    setTimeout(() => setFilling(null), 600);
+                  }}
+                  onSelectRegion={(id) => {
+                    setRegion(id);
+                    setFilterOpen(false);
+                  }}
+                  onSelectSite={openStamp}
+                  style={styles.mapFill}
+                />
+              </View>
+            </View>
+
+            <View style={styles.sectionHead}>
+              <BodyText size={10.5} weight="semibold" color={colors.neutral[600]} style={styles.kicker}>
+                The national parks
+              </BodyText>
+              <BodyText size={12} weight="bold" color={colors.accentRamp[700]}>
+                {`${regionStamped} of ${inRegion.length} stamped`}
+              </BodyText>
+            </View>
+
+            <View
+              style={styles.filterBox}
+              onLayout={(event) => {
+                gridY.current = event.nativeEvent.layout.y;
+              }}
+            >
+              <CapTextScale max={1.1}>
+                <View style={styles.grid}>
+                  {shown.map((site) => {
+                    const summary = visitSummary(site.id);
+                    return (
+                      <Stamp
+                        key={site.id}
+                        site={site}
+                        visited={summary && (site.status === 'visited' || site.id === pressing) ? monthLabel(summary.last) : null}
+                        size={stampSize}
+                        onPress={() => openStamp(site)}
+                        pressIn={site.id === pressing}
+                        onPressedIn={() => {
+                          release({ stamp: site.id });
+                          // Down: drawn as any stamp from now on.
+                          setTimeout(() => setPressing(null), 500);
+                        }}
+                      />
+                    );
+                  })}
+                </View>
+              </CapTextScale>
+              {shown.length === 0 ? (
+                <BodyText size={13} color={colors.neutral[600]} style={styles.noneShown}>
+                  {show === 'stamped' ? 'No stamps here yet. Log a trip to earn one.' : 'Every park here is stamped.'}
+                </BodyText>
+              ) : null}
+
+            </View>
+
+            <BodyText size={11} weight="medium" color={colors.neutral[600]} style={styles.footnote}>
+              Tap a stamp to reopen its trip, or an empty one to see the park. Log a trip to stamp it.
+            </BodyText>
+          </View>
+
+          {achievementsOpened ? (
+            <View key={rowsFrom == null ? 'still' : `play-${rowsFrom}`} style={tab !== 'achievements' && styles.hidden}>
+              <View style={styles.sectionHead}>
+                <BodyText size={10.5} weight="semibold" color={colors.neutral[600]} style={styles.kicker}>
+                  Achievements
+                </BodyText>
+                <BodyText size={12} weight="bold" color={colors.accentRamp[700]}>
+                  {`${earnedTotal} of ${achievementTotal} earned`}
+                </BodyText>
+              </View>
+
+              <AchievementGroup
+                title="National parks"
+                meta={`${stamped.length} of ${parks.length} stamped`}
+              >
+                {tiers.map((tier) => {
+                  const date = earned.get(tier.id);
                   return (
-                    <Stamp
-                      key={site.id}
-                      site={site}
-                      visited={summary && (site.status === 'visited' || site.id === pressing) ? monthLabel(summary.last) : null}
-                      size={stampSize}
-                      onPress={() => openStamp(site)}
-                      pressIn={site.id === pressing}
-                      onPressedIn={() => {
-                        release({ stamp: site.id });
-                        // Down: drawn as any stamp from now on.
-                        setTimeout(() => setPressing(null), 500);
-                      }}
+                    <AchievementRow
+                      key={tier.id}
+                      tier={tier}
+                      count={stamped.length}
+                      earned={date ? monthLabel(date) : null}
+                      from={rowsFrom ?? undefined}
                     />
                   );
                 })}
-              </View>
-            </CapTextScale>
-            {shown.length === 0 ? (
-              <BodyText size={13} color={colors.neutral[600]} style={styles.noneShown}>
-                {show === 'stamped' ? 'No stamps here yet. Log a trip to earn one.' : 'Every park here is stamped.'}
-              </BodyText>
-            ) : null}
+              </AchievementGroup>
 
-          </View>
+              <AchievementGroup
+                title="Regions"
+                meta={`${regionRows.filter((r) => r.earned).length} of ${regionRows.length} complete`}
+              >
+                {regionRows.map(({ tier, count, earned: date }) => (
+                  <AchievementRow key={tier.id} tier={tier} count={count} earned={date ? monthLabel(date) : null} />
+                ))}
+              </AchievementGroup>
 
-          <BodyText size={11} weight="medium" color={colors.neutral[600]} style={styles.footnote}>
-            Tap a stamp to reopen its trip, or an empty one to see the park. Log a trip to stamp it.
-          </BodyText>
-        </>
-      ) : (
-        <>
-          <View style={styles.sectionHead}>
-            <BodyText size={10.5} weight="semibold" color={colors.neutral[600]} style={styles.kicker}>
-              Achievements
-            </BodyText>
-            <BodyText size={12} weight="bold" color={colors.accentRamp[700]}>
-              {`${earnedTotal} of ${achievementTotal} earned`}
-            </BodyText>
-          </View>
+              <AchievementGroup
+                title="All NPS sites"
+                meta={`${sitesVisited.length} of ${allSites.length} visited`}
+              >
+                {siteTiers.map((tier) => {
+                  const date = siteEarned.get(tier.id);
+                  return (
+                    <AchievementRow
+                      key={tier.id}
+                      tier={tier}
+                      count={sitesVisited.length}
+                      earned={date ? monthLabel(date) : null}
+                    />
+                  );
+                })}
+              </AchievementGroup>
 
-          <AchievementGroup
-            title="National parks"
-            meta={`${stamped.length} of ${parks.length} stamped`}
-          >
-            {tiers.map((tier) => {
-              const date = earned.get(tier.id);
-              return (
-                <AchievementRow
-                  key={tier.id}
-                  tier={tier}
-                  count={stamped.length}
-                  earned={date ? monthLabel(date) : null}
-                  from={achievementsFrom ?? held.achievementsFrom ?? undefined}
-                />
-              );
-            })}
-          </AchievementGroup>
-
-          <AchievementGroup
-            title="Regions"
-            meta={`${regionRows.filter((r) => r.earned).length} of ${regionRows.length} complete`}
-          >
-            {regionRows.map(({ tier, count, earned: date }) => (
-              <AchievementRow key={tier.id} tier={tier} count={count} earned={date ? monthLabel(date) : null} />
-            ))}
-          </AchievementGroup>
-
-          <AchievementGroup
-            title="All NPS sites"
-            meta={`${sitesVisited.length} of ${allSites.length} visited`}
-          >
-            {siteTiers.map((tier) => {
-              const date = siteEarned.get(tier.id);
-              return (
-                <AchievementRow
-                  key={tier.id}
-                  tier={tier}
-                  count={sitesVisited.length}
-                  earned={date ? monthLabel(date) : null}
-                />
-              );
-            })}
-          </AchievementGroup>
-
-          <AchievementGroup
-            title="Friends"
-            meta={`${friends.length} ${friends.length === 1 ? 'friend' : 'friends'} · ${togetherDates.length} together`}
-          >
-            {friendTiers.map((tier) => {
-              const date = friendEarned.get(tier.id);
-              return (
-                <AchievementRow key={tier.id} tier={tier} count={friends.length} earned={date ? monthLabel(date) : null} />
-              );
-            })}
-            {togetherTiers.map((tier) => {
-              const date = togetherEarned.get(tier.id);
-              return (
-                <AchievementRow
-                  key={tier.id}
-                  tier={tier}
-                  count={togetherDates.length}
-                  earned={date ? monthLabel(date) : null}
-                />
-              );
-            })}
-          </AchievementGroup>
+              <AchievementGroup
+                title="Friends"
+                meta={`${friends.length} ${friends.length === 1 ? 'friend' : 'friends'} · ${togetherDates.length} together`}
+              >
+                {friendTiers.map((tier) => {
+                  const date = friendEarned.get(tier.id);
+                  return (
+                    <AchievementRow key={tier.id} tier={tier} count={friends.length} earned={date ? monthLabel(date) : null} />
+                  );
+                })}
+                {togetherTiers.map((tier) => {
+                  const date = togetherEarned.get(tier.id);
+                  return (
+                    <AchievementRow
+                      key={tier.id}
+                      tier={tier}
+                      count={togetherDates.length}
+                      earned={date ? monthLabel(date) : null}
+                    />
+                  );
+                })}
+              </AchievementGroup>
+            </View>
+          ) : null}
         </>
       )}
     </ScrollView>
@@ -672,11 +691,10 @@ function MenuItem({ label, active, onPress }: { label: string; active: boolean; 
 }
 
 const styles = StyleSheet.create({
+  // See-through: the backdrop and page colour are drawn behind every tab
+  // (_layout.tsx).
   screen: {
     flex: 1,
-    get backgroundColor() {
-      return colors.bg;
-    },
   },
   scroll: {
     flex: 1,
@@ -692,6 +710,10 @@ const styles = StyleSheet.create({
   },
   gutter: {
     paddingHorizontal: space[4],
+  },
+  /** The tab not being looked at: kept, but not drawn or laid out. */
+  hidden: {
+    display: 'none',
   },
   header: {
     flexDirection: 'row',

@@ -50,7 +50,6 @@ import { FriendProfile } from '../../components/friends/FriendProfile';
 import { markAllRead, stripItems, useActivity, useRead } from '../../friends/activity';
 import type { TripActivity } from '../../api/trips';
 import { useFriends } from '../../friends/useFriends';
-import { Backdrop } from '../../components/Backdrop';
 import { useKeyboardLift } from '../../lib/useKeyboardLift';
 import { colors, radius, shadow, space, useThemeVersion } from '../../theme';
 
@@ -137,7 +136,6 @@ export default function FriendsScreen() {
   return (
     // Drawn afresh in the new colours when the look changes (theme/live.ts).
     <View key={themeVersion} style={styles.screen}>
-      <Backdrop />
       <ScrollView
         refreshControl={
           <RefreshControl refreshing={pulling} onRefresh={pullToRefresh} tintColor={colors.accent} colors={[colors.accent]} />
@@ -470,11 +468,10 @@ function InviteSheet({
 }
 
 const styles = StyleSheet.create({
+  // See-through: the backdrop and page colour are drawn behind every tab
+  // (_layout.tsx).
   screen: {
     flex: 1,
-    get backgroundColor() {
-      return colors.bg;
-    },
   },
   content: {
     paddingHorizontal: space[4],

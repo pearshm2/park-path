@@ -39,7 +39,6 @@ import { useAuth } from '../../auth/AuthContext';
 import { UsernameField } from '../../auth/UsernameField';
 import { normalizeUsername, usernameRuleProblem, useUsernameCheck } from '../../auth/useUsernameCheck';
 import { BodyText, Heading, TextField, useTabBarSpace } from '../../components';
-import { Backdrop } from '../../components/Backdrop';
 import { Avatar } from '../../components/Avatar';
 import { Dialog, type DialogAction } from '../../components/Dialog';
 import { isKnownZip, QUIZ_STEPS, type QuizAnswers } from '../../data/quizSpec';
@@ -85,7 +84,6 @@ export default function SettingsScreen() {
   return (
     // Drawn afresh in the new colours when the look changes (theme/live.ts).
     <View key={themeVersion} style={[styles.screen, { paddingTop: insets.top + space[2] }]}>
-      <Backdrop />
       <Heading size={26} style={styles.title}>
         Settings
       </Heading>
@@ -1028,11 +1026,10 @@ const NAV_FOLDED = 60;
 const RULE = 'rgba(32, 30, 29, 0.12)';
 
 const styles = StyleSheet.create({
+  // See-through: the backdrop and page colour are drawn behind every tab
+  // (_layout.tsx).
   screen: {
     flex: 1,
-    get backgroundColor() {
-      return colors.bg;
-    },
   },
   title: {
     paddingHorizontal: space[4],

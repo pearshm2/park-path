@@ -165,6 +165,13 @@ function dark(bg: string, surface: string, neutral: Ramp): Palette {
   };
 }
 
+/**
+ * The light palette, fixed: for what keeps its daytime colours in every
+ * palette, such as the park markers on the maps (they're read against the
+ * land, which is lit the same in both).
+ */
+export const DAY: Palette = LIGHT;
+
 const PALETTES: Record<'light' | DarkPalette, Palette> = {
   light: LIGHT,
   // Deep navy, cool ink: a sky after dark.

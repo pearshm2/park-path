@@ -15,7 +15,8 @@
 import Svg, { Path } from 'react-native-svg';
 
 import type { TerrainGroup } from '../data/parks';
-import { colors } from '../theme';
+import { colors, DAY } from '../theme';
+import type { Palette } from '../theme/tokens';
 
 /** Stroke weight the design system uses for every icon. */
 const STROKE = 2.75;
@@ -32,85 +33,41 @@ const PATHS: Record<TerrainGroup, string[]> = {
   badlands: ['M2 20l5-9 3 5 3-7 4 6 3-3v8z'],
 };
 
-/** Band fill behind the glyph, and the glyph's own colour. */
-const TONES: Record<TerrainGroup, { band: string; ink: string }> = {
-  mountain: {
-    get band() {
-      return colors.accent2Ramp[300];
-    },
-    get ink() {
-      return colors.accent2Ramp[800];
-    },
-  },
-  canyon: {
-    get band() {
-      return colors.accentRamp[300];
-    },
-    get ink() {
-      return colors.accentRamp[800];
-    },
-  },
-  desert: {
-    get band() {
-      return colors.accentRamp[200];
-    },
-    get ink() {
-      return colors.accentRamp[800];
-    },
-  },
-  forest: {
-    get band() {
-      return colors.accent2Ramp[400];
-    },
-    get ink() {
-      return colors.accent2Ramp[900];
-    },
-  },
-  coast: {
-    get band() {
-      return colors.accent2Ramp[200];
-    },
-    get ink() {
-      return colors.accent2Ramp[800];
-    },
-  },
-  water: {
-    get band() {
-      return colors.accent2Ramp[100];
-    },
-    get ink() {
-      return colors.accent2Ramp[700];
-    },
-  },
-  dunes: {
-    get band() {
-      return colors.accentRamp[100];
-    },
-    get ink() {
-      return colors.accentRamp[700];
-    },
-  },
-  caves: {
-    get band() {
-      return colors.neutral[300];
-    },
-    get ink() {
-      return colors.neutral[800];
-    },
-  },
-  badlands: {
-    get band() {
-      return colors.neutral[200];
-    },
-    get ink() {
-      return colors.neutral[700];
-    },
-  },
-};
+type Step = { ramp: 'accentRamp' | 'accent2Ramp' | 'neutral'; band: 100 | 200 | 300 | 400; ink: 700 | 800 | 900 };
 
+/** Band fill behind the glyph, and the glyph's own colour, as steps of a ramp. */
+const TONES: Record<TerrainGroup, Step> = {
+  mountain: { ramp: 'accent2Ramp', band: 300, ink: 800 },
+  canyon: { ramp: 'accentRamp', band: 300, ink: 800 },
+  desert: { ramp: 'accentRamp', band: 200, ink: 800 },
+  forest: { ramp: 'accent2Ramp', band: 400, ink: 900 },
+  coast: { ramp: 'accent2Ramp', band: 200, ink: 800 },
+  water: { ramp: 'accent2Ramp', band: 100, ink: 700 },
+  dunes: { ramp: 'accentRamp', band: 100, ink: 700 },
+  caves: { ramp: 'neutral', band: 300, ink: 800 },
+  badlands: { ramp: 'neutral', band: 200, ink: 700 },
+};
 /** A site with no curated terrain gets the neutral tone. */
+const PLAIN: Step = { ramp: 'neutral', band: 200, ink: 800 };
+
+function toneIn(palette: Palette, group: TerrainGroup | null) {
+  const step = (group && TONES[group]) ?? PLAIN;
+  const ramp = palette[step.ramp];
+  return { band: ramp[step.band], ink: ramp[step.ink] };
+}
+
+/** A terrain's colours in the palette in use. */
 export function terrainTone(group: TerrainGroup | null) {
-  return (group && TONES[group]) ?? { band: colors.neutral[200], ink: colors.neutral[800] };
+  return toneIn(colors, group);
+}
+
+/**
+ * A terrain's colours for a park marker on a map: always the daytime ones,
+ * so the markers stand out from the land in the dark palettes as they do
+ * in light mode.
+ */
+export function markerTone(group: TerrainGroup | null) {
+  return toneIn(DAY, group);
 }
 
 /** Human label for a terrain family, matching the quiz's wording. */
