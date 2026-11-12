@@ -1,7 +1,7 @@
 /**
  * A glyph for each national park's signature feature: Old Faithful's
  * geyser for Yellowstone, a stone arch for Arches, a giant conifer for
- * Redwood. The map draws these on the 62-park view once it is zoomed in
+ * Redwood. The map draws these on the 63-park view once it is zoomed in
  * far enough for them to read (see ParkMap).
  *
  * Drawn on the same 24-unit grid and stroke weight as TerrainIcon, so the
@@ -98,6 +98,7 @@ const FEATURE_BY_PARK: Record<string, Feature> = {
   cany: 'mesa',
   care: 'mesa',
   cave: 'cave',
+  chir: 'spires',
   chis: 'lighthouse',
   cong: 'wetland',
   crla: 'lake',

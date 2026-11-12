@@ -77,7 +77,7 @@ python -m app.park_map_sync                # park maps; takes several minutes
    anything you run there (including `pytest`, which creates test accounts)
    goes to the real database.
 
-Check: `https://<your-api>.onrender.com/sites?scope=parks` lists 62 parks.
+Check: `https://<your-api>.onrender.com/sites?scope=parks` lists 63 parks (64 national parks: Sequoia & Kings Canyon is one record).
 
 ### 6. Point the app at it
 

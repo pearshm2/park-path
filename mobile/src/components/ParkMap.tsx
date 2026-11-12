@@ -14,7 +14,7 @@
  * never a number. Every other park is a small dot styled by its visit
  * status, and fades back so the picks and matches read first.
  *
- * With `featureIcons` on (the 62-park view), focusing a region or zooming
+ * With `featureIcons` on (the 63-park view), focusing a region or zooming
  * in past ICON_ZOOM swaps each park's dot for a badge with its signature feature (see
  * FeatureGlyph). The badge's ring keeps the dot's meaning: status, match,
  * or pick, and picks keep their number in a corner bubble. At full-country

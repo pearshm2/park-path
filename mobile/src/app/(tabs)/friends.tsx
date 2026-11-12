@@ -39,7 +39,8 @@ import Svg, { Path } from 'react-native-svg';
 import { displayName, handle, targetFrom, type Friend, type Person } from '../../api/friends';
 import { listSites } from '../../api/parks';
 import { fetchFeed } from '../../api/trips';
-import { useAuth } from '../../auth/AuthContext';
+import { listAccounts } from '../../auth/accounts';
+import { AccountExpired, useAuth } from '../../auth/AuthContext';
 import { BodyText, Button, Heading, TextField, useTabBarSpace } from '../../components';
 import { Avatar } from '../../components/Avatar';
 import { ActivityPage, ActivityStrip } from '../../components/friends/ActivityStrip';
@@ -50,6 +51,7 @@ import { FriendProfile } from '../../components/friends/FriendProfile';
 import { markAllRead, stripItems, useActivity, useRead } from '../../friends/activity';
 import type { TripActivity } from '../../api/trips';
 import { useFriends } from '../../friends/useFriends';
+import { tap } from '../../lib/sounds';
 import { useKeyboardLift } from '../../lib/useKeyboardLift';
 import { colors, radius, shadow, space, useThemeVersion } from '../../theme';
 
@@ -63,7 +65,28 @@ export default function FriendsScreen() {
   const themeVersion = useThemeVersion();
   const insets = useSafeAreaInsets();
   const tabSpace = useTabBarSpace();
-  const { user, token, userId } = useAuth();
+  const { user, token, userId, switchAccount } = useAuth();
+
+  /**
+   * A hidden shortcut for demos: hold your picture to swap straight to the
+   * other account used last on this phone (with two signed in, it flips
+   * between them), staying here on Friends.
+   */
+  async function quickSwap() {
+    const other = (await listAccounts()).find((account) => account.id !== user?.id);
+    if (!other) return;
+    tap();
+    try {
+      await switchAccount(other.id);
+    } catch (error) {
+      Alert.alert(
+        error instanceof AccountExpired ? 'Sign in again' : "Couldn't switch",
+        error instanceof AccountExpired
+          ? `${other.username ? `@${other.username}` : other.email} needs signing in again: Settings, then tap your name.`
+          : 'Check your connection and try again.',
+      );
+    }
+  }
   const { friends, incoming, outgoing, loading, error, accept, dismiss, remove, send, refresh } = useFriends();
   const [inviteOpen, setInviteOpen] = useState(false);
   const [codeOpen, setCodeOpen] = useState(false);
@@ -170,7 +193,11 @@ export default function FriendsScreen() {
               <QrIcon />
             </Pressable>
           ) : null}
-          {user ? <Avatar person={user} size={40} /> : null}
+          {user ? (
+            <Pressable onLongPress={quickSwap} delayLongPress={450} accessible={false}>
+              <Avatar person={user} size={40} />
+            </Pressable>
+          ) : null}
         </View>
 
         {/* Your friends, a sideways row as in the prototype. */}

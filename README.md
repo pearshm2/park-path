@@ -6,7 +6,7 @@ ParkPath suggests your next national park from a short quiz: the scenery you lik
 
 ## What's in the app
 
-- **Explore:** a map of the 62 national parks (or all 474 NPS sites) with your top 10 picks, each with its match score and why. Filters, search, and "Not for now" to set a park aside for 30 days.
+- **Explore:** a map of the 64 national parks (63 on the map, as Sequoia & Kings Canyon is one) (or all 474 NPS sites) with your top 10 picks, each with its match score and why. Filters, search, and "Not for now" to set a park aside for 30 days.
 - **Trips:** a journal of your visits (stars, feedback tags, trails, who you went with, photos, videos, a passport-stamp photo), synced to the server, with Relive to play a trip back as a reel.
 - **Passport:** stamps, a region map, achievements and celebrations.
 - **Friends:** add by username, email or QR code; a feed of friends' trips with comments and Relive; Activity for comments on your trips, with notifications.

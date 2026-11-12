@@ -23,7 +23,7 @@ router = APIRouter()
 @router.get("", response_model=list[SiteOut])
 def list_sites(
     scope: Literal["parks", "all"] = Query(
-        "all", description="`parks` for the 63 national parks only, `all` for every NPS site"
+        "all", description="`parks` for the 64 national parks only, `all` for every NPS site"
     ),
     db: Session = Depends(get_db),
 ):

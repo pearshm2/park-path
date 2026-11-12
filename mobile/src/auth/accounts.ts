@@ -8,6 +8,7 @@
  * its password (or Google) again.
  */
 
+import { readText, removeText, writeText } from '../lib/fileStore';
 import { getItem, removeItem, setItem } from '../lib/storage';
 import type { User } from '../types/auth';
 
@@ -24,6 +25,7 @@ export type SavedAccount = {
 
 const LIST_KEY = 'parkpath.accounts';
 const tokenKey = (id: number) => `parkpath.accountToken.${id}`;
+const profileKey = (id: number) => `parkpath.accountProfile.${id}`;
 
 /** Stored data is untrusted: anything that isn't an account is dropped. */
 export async function listAccounts(): Promise<SavedAccount[]> {
@@ -53,13 +55,28 @@ export async function rememberAccount(user: User, token: string, google: boolean
   };
   await setItem(tokenKey(user.id), token);
   await setItem(LIST_KEY, JSON.stringify([account, ...others]));
+  // The whole profile as last seen, so switching to the account (or opening
+  // the app) needn't wait on the server; it's checked behind. A file, not
+  // secure storage, which dislikes large values; it holds nothing secret.
+  writeText(profileKey(user.id), JSON.stringify(user));
 }
 
 /** Take an account off this phone: its token and its place in the list. */
 export async function forgetAccount(id: number): Promise<void> {
   await removeItem(tokenKey(id));
+  removeText(profileKey(id));
   const rest = (await listAccounts()).filter((a) => a.id !== id);
   await setItem(LIST_KEY, JSON.stringify(rest));
+}
+
+/** An account's profile as last seen on this phone, if it's kept. */
+export async function savedProfile(id: number): Promise<User | null> {
+  try {
+    const profile = JSON.parse((await readText(profileKey(id))) ?? 'null') as User | null;
+    return profile && typeof profile === 'object' && profile.id === id ? profile : null;
+  } catch {
+    return null;
+  }
 }
 
 export function savedToken(id: number): Promise<string | null> {

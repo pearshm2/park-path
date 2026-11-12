@@ -117,7 +117,7 @@ class Site(Base):
     last_synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     # --- Curated by us (used by the recommendation engine) ---
-    # One of the 63 national parks. NPS's designation can't say this on its
+    # One of the 64 national parks. NPS's designation can't say this on its
     # own: Denali is a "National Park & Preserve", Redwood is "National and
     # State Parks", American Samoa has none, and Sequoia & Kings Canyon is
     # one NPS unit ("seki") covering two parks.

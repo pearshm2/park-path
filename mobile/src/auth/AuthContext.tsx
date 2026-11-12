@@ -19,6 +19,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from 'react';
@@ -35,10 +36,10 @@ import {
 } from '../api/auth';
 import { ApiError } from '../api/client';
 import { clearToken, loadToken, saveToken } from '../api/tokenStorage';
-import { forgetAccount, rememberAccount, savedToken } from './accounts';
+import { forgetAccount, rememberAccount, savedProfile, savedToken } from './accounts';
 import { signInWithGoogle } from './googleSignIn';
 import { removeText } from '../lib/fileStore';
-import { readTokenSubject } from '../lib/jwt';
+import { readTokenSubject, tokenExpired } from '../lib/jwt';
 import { removeItem } from '../lib/storage';
 import type { Credentials, ProfileChanges, SignUpDetails, User } from '../types/auth';
 
@@ -100,6 +101,44 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [token, setToken] = useState<string | null>(null);
   const [welcomeGoogleAccount, setWelcomeGoogleAccount] = useState(false);
   const queryClient = useQueryClient();
+  /** The token in use, for checks that finish after a switch. */
+  const current = useRef<string | null>(null);
+
+  /**
+   * Checks an account entered from what the phone knew of it, behind the
+   * scenes: brings its profile up to date, or, if the server no longer
+   * takes its token (run out, or the account deleted), asks for a sign-in.
+   * A connection problem changes nothing: the app carries on as it was.
+   */
+  const confirm = useCallback((stored: string) => {
+    fetchCurrentUser(stored)
+      .then((me) => {
+        if (current.current !== stored) return;
+        setUser(me);
+        void rememberAccount(me, stored, false);
+      })
+      .catch(async (error: unknown) => {
+        if (current.current !== stored) return;
+        if (!(error instanceof ApiError && error.status === 401)) return;
+        current.current = null;
+        await clearToken();
+        setToken(null);
+        setUser(null);
+        setStatus('signedOut');
+      });
+  }, []);
+
+  /** An account the phone knows, entered at once (and checked behind, above). */
+  const enterKnown = useCallback(
+    (stored: string, profile: User) => {
+      current.current = stored;
+      setToken(stored);
+      setUser(profile);
+      setStatus('signedIn');
+      confirm(stored);
+    },
+    [confirm],
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -113,9 +152,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return;
       }
 
+      // Known to this phone and not run out: straight in, without waiting
+      // on the server (a minute, when it's been asleep).
+      const known = tokenExpired(stored) ? null : await savedProfile(Number(readTokenSubject(stored)));
+      if (cancelled) return;
+      if (known) {
+        enterKnown(stored, known);
+        return;
+      }
+
       try {
         const me = await fetchCurrentUser(stored);
         if (cancelled) return;
+        current.current = stored;
         setToken(stored);
         setUser(me);
         setStatus('signedIn');
@@ -135,7 +184,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [enterKnown]);
 
   /**
    * Signup and login differ only in which endpoint issues the token, so
@@ -146,6 +195,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // nothing of the last one's lingers.
     queryClient.clear();
     await saveToken(accessToken);
+    current.current = accessToken;
     setToken(accessToken);
 
     try {
@@ -190,6 +240,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Signing out takes the account off this phone's switcher too.
     const id = readTokenSubject(token) ?? (user ? String(user.id) : null);
     if (id) await forgetAccount(Number(id));
+    current.current = null;
     await clearToken();
     setToken(null);
     setUser(null);
@@ -200,7 +251,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const switchAccount = useCallback(
     async (id: number) => {
       const stored = await savedToken(id);
-      if (!stored) throw new AccountExpired();
+      if (!stored || tokenExpired(stored)) throw new AccountExpired();
+      // Nothing of the last account's lingers on screen: everything is
+      // fetched again for this one (per-account data on the phone is
+      // already kept by account).
+      const known = await savedProfile(id);
+      if (known) {
+        // Straight across, without waiting on the server.
+        queryClient.clear();
+        await saveToken(stored);
+        setWelcomeGoogleAccount(false);
+        enterKnown(stored, known);
+        return;
+      }
       let me: User;
       try {
         me = await fetchCurrentUser(stored);
@@ -209,17 +272,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (error instanceof ApiError && error.status === 401) throw new AccountExpired();
         throw error;
       }
-      // Nothing of the last account's lingers on screen: everything is
-      // fetched again for this one (per-account data on the phone is
-      // already kept by account).
       queryClient.clear();
       await saveToken(stored);
+      current.current = stored;
       setToken(stored);
       setUser(me);
       setWelcomeGoogleAccount(false);
       setStatus('signedIn');
+      void rememberAccount(me, stored, false);
     },
-    [queryClient],
+    [queryClient, enterKnown],
   );
 
   const updateProfile = useCallback(
@@ -262,6 +324,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         await removeItem(`parkpath.quizPending.${id}`);
         await removeItem(`parkpath.snoozed.${id}`);
       }
+      current.current = null;
       await clearToken();
       setToken(null);
       setUser(null);

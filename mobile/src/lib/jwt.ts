@@ -16,6 +16,21 @@
  * truncated, or hand-edited, and none of that should throw.
  */
 export function readTokenSubject(token: string | null): string | null {
+  const sub = readClaims(token)?.sub;
+  return typeof sub === 'string' && sub ? sub : null;
+}
+
+/**
+ * Whether the token's `exp` has passed (with a minute's margin), so the
+ * app can skip a server round trip it knows would fail. A token without a
+ * readable expiry isn't called expired: the server still decides.
+ */
+export function tokenExpired(token: string | null, now = Date.now()): boolean {
+  const exp = readClaims(token)?.exp;
+  return typeof exp === 'number' && exp * 1000 <= now + 60_000;
+}
+
+function readClaims(token: string | null): { sub?: unknown; exp?: unknown } | null {
   if (!token) return null;
 
   try {
@@ -30,8 +45,8 @@ export function readTokenSubject(token: string | null): string | null {
     // anyway so an unexpected runtime degrades instead of crashing.
     if (typeof atob !== 'function') return null;
 
-    const claims = JSON.parse(atob(padded)) as { sub?: unknown };
-    return typeof claims.sub === 'string' && claims.sub ? claims.sub : null;
+    const claims = JSON.parse(atob(padded)) as unknown;
+    return claims && typeof claims === 'object' ? (claims as { sub?: unknown; exp?: unknown }) : null;
   } catch {
     return null;
   }

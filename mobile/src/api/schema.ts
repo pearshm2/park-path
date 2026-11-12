@@ -1847,7 +1847,7 @@ export interface operations {
     list_sites_sites_get: {
         parameters: {
             query?: {
-                /** @description `parks` for the 63 national parks only, `all` for every NPS site */
+                /** @description `parks` for the 64 national parks only, `all` for every NPS site */
                 scope?: "parks" | "all";
             };
             header?: never;

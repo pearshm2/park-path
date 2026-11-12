@@ -104,7 +104,7 @@ function fetchAllSites(): Promise<Site[]> {
   return allSites;
 }
 
-/** All sites, or just the 63 national parks. */
+/** All sites, or just the 64 national parks. */
 export async function listSites(scope: SiteScope = 'parks'): Promise<Site[]> {
   const sites = await fetchAllSites();
   return scope === 'parks' ? sites.filter((site) => site.isNamedPark) : sites;

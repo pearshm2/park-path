@@ -150,3 +150,12 @@ def test_a_thin_live_fetch_saves_nothing(monkeypatch):
     monkeypatch.setattr("sys.argv", ["nps_sync"])
     with pytest.raises(SystemExit, match="Only 1 usable parks"):
         nps_sync.main()
+
+
+def test_transform_renames_redesignated_parks():
+    # NPS's API may still call Chiricahua a monument after the 2026 act.
+    row = transform_park(
+        {"parkCode": "chir", "fullName": "Chiricahua National Monument", "designation": "National Monument"}
+    )
+    assert row["name"] == "Chiricahua National Park"
+    assert row["designation"] == "National Park"

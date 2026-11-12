@@ -560,7 +560,7 @@ function TitleSlide({
   const textScale = useTextScale();
   const { entry, site } = slide;
   const name = site?.name ?? entry.siteId;
-  // Only the 63 national parks have a stamp in Passport, so only they get
+  // Only the 64 national parks have a stamp in Passport, so only they get
   // a seal here; a battlefield or monument trip shows none.
   const hasStamp = site?.isNamedPark ?? false;
   const fallback = terrainTone(site?.group ?? null).band;

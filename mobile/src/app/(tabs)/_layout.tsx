@@ -160,6 +160,10 @@ export default function TabsLayout() {
       screenOptions={{
         headerShown: false,
         sceneStyle: styles.scene,
+        // A tab out of sight doesn't redraw: saving a trip, or switching
+        // accounts, used to redraw all five (Passport's 63 stamps, Explore's
+        // map and picks). Each catches up when it's opened.
+        freezeOnBlur: true,
       }}
     >
       <Tabs.Screen

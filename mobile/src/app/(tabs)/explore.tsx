@@ -5,12 +5,12 @@
  * the deck into view, folds the key away and moves the map up so both
  * fit, and dragging it down tucks the cards away again.
  *
- * The scope menu under Filter picks what the map shows: the 63 national
+ * The scope menu under Filter picks what the map shows: the 64 national
  * parks, every site, just the wishlist, or just the sites you've visited.
  * The deck holds the same parks as the map: every park or site with the
  * top 10 dealt first and the rest grouped by region, or the wishlist, or
  * your visits, latest first. The
- * top 10 are always ranked from the 63 parks, and are drawn as numbered
+ * top 10 are always ranked from the 64 parks, and are drawn as numbered
  * pins that match the card numbers. Scrolling through the cards keeps the
  * whole map in view and just highlights each card's pin.
  *

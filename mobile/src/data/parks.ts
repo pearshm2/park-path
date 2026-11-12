@@ -28,7 +28,7 @@ export type Site = {
   state: string;
   lat: number;
   lon: number;
-  /** One of the 63 national parks, whatever NPS calls it. */
+  /** One of the 64 national parks, whatever NPS calls it. */
   isNamedPark: boolean;
   /** Recent annual recreation visits, in millions. */
   vis: number | null;

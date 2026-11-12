@@ -6,7 +6,7 @@ Run from the api/ folder, after the NPS sync has created the rows:
     python -m app.curate_sites
 
 The data lives in data/curated_sites.json: terrain, effort, seasons, trip
-length, permits, visitation, and whether the site is one of the 63
+length, permits, visitation, and whether the site is one of the 64
 national parks. NPS doesn't provide any of it. It started as the mobile
 app's bundled fixtures (120 sites), so the other ~350 NPS sites have no
 curated data yet. Add them to the JSON file and rerun.

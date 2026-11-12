@@ -1,7 +1,7 @@
 """
 The passport, computed from trip entries (nothing about it is stored).
 
-A stamp is earned for each of the 63 national parks by logging a visit;
+A stamp is earned for each of the 64 national parks by logging a visit;
 visits to other NPS sites are journaled but don't stamp. Stamps group into
 the ten regions in app/regions.py.
 

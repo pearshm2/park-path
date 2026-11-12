@@ -70,6 +70,12 @@ jobs:
         if: steps.secrets.outputs.ready == 'true'
         run: python -m app.nps_sync --save-snapshot
 
+      # Our own data on top (terrain, seasons, which sites are national
+      # parks): the same file every time, so it only changes what's new.
+      - name: Apply curated data
+        if: steps.secrets.outputs.ready == 'true'
+        run: python -m app.curate_sites
+
       - name: Keep the fresh snapshot
         if: steps.secrets.outputs.ready == 'true'
         uses: actions/upload-artifact@v4

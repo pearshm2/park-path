@@ -18,8 +18,8 @@ back to its high-resolution JPEG (/proxyhires), without labels.
 Which maps: titles starting "Park Map" first, then other whole-park or
 area maps (Acadia's "Mount Desert Island Map", Olympic's "Park and Area
 Maps"), at most MAX_PER_PARK, so parks in separate units (Saguaro East and
-West, Theodore Roosevelt North and South) get each one. 58 of the 62
-national park records have a "Park Map".
+West, Theodore Roosevelt North and South) get each one. 58 of the first 62
+national park records had a "Park Map".
 
 Re-running is cheap: a map already stored under the same NPGallery asset
 id isn't downloaded again (unless it was stored before labels were read).
