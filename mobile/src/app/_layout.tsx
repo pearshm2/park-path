@@ -132,6 +132,9 @@ function SessionGate() {
         // The warm ground should be what shows through a transition,
         // not the default white.
         animation: 'fade',
+        // Likewise a screen under another (the tabs under the quiz, a park
+        // page or Relive) waits until it's back on top to redraw.
+        freezeOnBlur: true,
       }}
     >
       {/* Relive opens over the screen beneath with no transition of its own:

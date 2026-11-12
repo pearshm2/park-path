@@ -469,11 +469,11 @@
                 "all"
               ],
               "type": "string",
-              "description": "`parks` for the 63 national parks only, `all` for every NPS site",
+              "description": "`parks` for the 64 national parks only, `all` for every NPS site",
               "default": "all",
               "title": "Scope"
             },
-            "description": "`parks` for the 63 national parks only, `all` for every NPS site"
+            "description": "`parks` for the 64 national parks only, `all` for every NPS site"
           }
         ],
         "responses": {

@@ -81,7 +81,7 @@ export function SearchPanel({
   visible: boolean;
   /** What can be searched: the parks the map is showing. */
   sites: Site[];
-  /** Those parks in words, e.g. "62 national parks". */
+  /** Those parks in words, e.g. "63 national parks". */
   scopeLabel: string;
   onPick: (site: Site) => void;
   onClose: () => void;

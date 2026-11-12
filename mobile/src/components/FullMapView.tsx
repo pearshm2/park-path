@@ -45,7 +45,7 @@ const FADE_MS = 180;
 
 type FullMapViewProps = {
   visible: boolean;
-  /** What the map is showing, e.g. "62 national parks". */
+  /** What the map is showing, e.g. "63 national parks". */
   title: string;
   sites: Site[];
   rankById?: ReadonlyMap<string, number>;

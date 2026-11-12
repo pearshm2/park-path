@@ -95,6 +95,14 @@ def _to_float(value) -> float | None:
         return None
 
 
+# Parks Congress has renamed that NPS's API may not have caught up with yet.
+# Harmless once it has: the values are the same.
+REDESIGNATED = {
+    # Chiricahua National Park Act, signed Oct 20, 2026 (was a monument).
+    "chir": {"name": "Chiricahua National Park", "designation": "National Park"},
+}
+
+
 def transform_park(raw: dict) -> dict | None:
     """Return a dict of NPS_COLUMNS, or None if the record is unusable."""
     park_code = (raw.get("parkCode") or "").strip().lower()
@@ -103,7 +111,7 @@ def transform_park(raw: dict) -> dict | None:
         return None
 
     images = raw.get("images") or []
-    return {
+    row = {
         "park_code": park_code,
         "name": name,
         "designation": (raw.get("designation") or "").strip() or None,
@@ -114,6 +122,8 @@ def transform_park(raw: dict) -> dict | None:
         "nps_url": raw.get("url") or None,
         "image_url": images[0].get("url") if images else None,
     }
+    row.update(REDESIGNATED.get(park_code, {}))
+    return row
 
 
 def transform_all(raw_parks: list[dict]) -> list[dict]:

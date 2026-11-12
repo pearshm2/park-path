@@ -335,7 +335,7 @@
   },
   {
     "park_code": "chir",
-    "is_named_park": false,
+    "is_named_park": true,
     "terrain_group": "canyon",
     "feature": "Rock pinnacles",
     "effort": 2,

@@ -132,8 +132,8 @@ def test_curated_file_is_well_formed():
     rows = json.loads(CURATED_PATH.read_text(encoding="utf-8"))
     codes = [row["park_code"] for row in rows]
     assert len(codes) == len(set(codes)), "duplicate park codes"
-    # 63 national parks, but Sequoia & Kings Canyon is one NPS unit.
-    assert sum(row["is_named_park"] for row in rows) == 62
+    # 64 national parks, but Sequoia & Kings Canyon is one NPS unit.
+    assert sum(row["is_named_park"] for row in rows) == 63
     # Every code must be a real NPS site, or the job silently skips it.
     snapshot = json.loads((CURATED_PATH.parent / "nps_snapshot.json").read_text(encoding="utf-8"))
     assert set(codes) <= {site["park_code"] for site in snapshot}

@@ -42,6 +42,8 @@ jobs:
     steps:
       - name: Check the secrets are set
         id: secrets
+        # Before the checkout, so api/ (the default above) isn't there yet.
+        working-directory: ${{ github.workspace }}
         run: |
           if [ -z "$DATABASE_URL" ] || [ -z "$NPS_API_KEY" ]; then
             echo "::warning::PROD_DATABASE_URL or NPS_API_KEY isn't set in the repository's secrets, so nothing was synced. See the top of .github/workflows/nps-sync.yml."
@@ -69,6 +71,12 @@ jobs:
       - name: Sync parks from NPS
         if: steps.secrets.outputs.ready == 'true'
         run: python -m app.nps_sync --save-snapshot
+
+      # Our own data on top (terrain, seasons, which sites are national
+      # parks): the same file every time, so it only changes what's new.
+      - name: Apply curated data
+        if: steps.secrets.outputs.ready == 'true'
+        run: python -m app.curate_sites
 
       - name: Keep the fresh snapshot
         if: steps.secrets.outputs.ready == 'true'

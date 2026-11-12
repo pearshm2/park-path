@@ -302,12 +302,13 @@ function isWeb(uri: string): boolean {
 }
 
 /** Copy a picked photo or video into the app's documents folder; returns its new URI. */
-function keepFile(uri: string, i: number): string {
+async function keepFile(uri: string, i: number): Promise<string> {
   const folder = new Directory(Paths.document, 'trip-photos');
   folder.create({ idempotent: true, intermediates: true });
   const extension = uri.split('?')[0].split('.').pop()?.toLowerCase() || 'jpg';
   const target = new File(folder, `${Date.now()}-${i}.${extension}`);
-  new File(uri).copySync(target);
+  // Copied off the JS thread: a video took the app with it while it copied.
+  await new File(uri).copy(target);
   return target.uri;
 }
 
@@ -315,9 +316,11 @@ function keepFile(uri: string, i: number): string {
  * The media to save: ones already the entry's (or on the web) stay where
  * they are; newly picked ones are copied in.
  */
-function keepMedia(media: TripMedia[], already: TripMedia[] = []): TripMedia[] {
+function keepMedia(media: TripMedia[], already: TripMedia[] = []): Promise<TripMedia[]> {
   const owned = new Set(already.map((m) => m.uri));
-  return media.map((m, i) => (owned.has(m.uri) || isWeb(m.uri) ? m : { ...m, uri: keepFile(m.uri, i) }));
+  return Promise.all(
+    media.map(async (m, i) => (owned.has(m.uri) || isWeb(m.uri) ? m : { ...m, uri: await keepFile(m.uri, i) })),
+  );
 }
 
 function deleteFile(uri: string) {
@@ -808,8 +811,8 @@ export function TripsProvider({ children }: { children: ReactNode }) {
         const entry: TripEntry = {
           ...draft,
           id: `trip-${Date.now()}`,
-          media: keepMedia(draft.media),
-          passportStamp: draft.passportStamp ? keepFile(draft.passportStamp, 99) : null,
+          media: await keepMedia(draft.media),
+          passportStamp: draft.passportStamp ? await keepFile(draft.passportStamp, 99) : null,
           createdAt: new Date().toISOString(),
           unsent: true,
         };
@@ -844,7 +847,7 @@ export function TripsProvider({ children }: { children: ReactNode }) {
         // Media already in the entry stay as they are (their captions may have
         // changed); newly picked ones are copied in, and ones taken out of the
         // entry are deleted.
-        const media = keepMedia(draft.media, old.media);
+        const media = await keepMedia(draft.media, old.media);
         const stillThere = new Set(draft.media.map((m) => m.uri));
         deleteMedia(old.media.filter((m) => !stillThere.has(m.uri)));
         // The passport stamp: kept, replaced, or taken off.
@@ -852,7 +855,7 @@ export function TripsProvider({ children }: { children: ReactNode }) {
         let stamp = { stampKey: old.stampKey, stampLocalOnly: old.stampLocalOnly };
         if (passportStamp !== old.passportStamp) {
           if (old.passportStamp) deleteFile(old.passportStamp);
-          if (passportStamp) passportStamp = keepFile(passportStamp, 99);
+          if (passportStamp) passportStamp = await keepFile(passportStamp, 99);
           // A new photo goes up on the next sync; the server then drops the old one.
           stamp = { stampKey: undefined, stampLocalOnly: undefined };
         }
