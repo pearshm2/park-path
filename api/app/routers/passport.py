@@ -18,7 +18,7 @@ from app.database import get_db
 from app.dependencies import get_current_user
 from app.models import Site, TripEntry, User
 from app.passport import build_achievements, build_regions, build_stamps
-from app.schemas import PassportOut, UserOut
+from app.schemas import PassportOut, PublicUserOut
 from app.visibility import Visibility, can_view, friend_ids
 
 router = APIRouter()
@@ -37,7 +37,7 @@ def _passport(db: Session, owner: User, viewer: User) -> PassportOut:
     stamps = build_stamps(parks, [e for e in entries if e.site_id in park_ids])
     regions = build_regions(stamps)
     return PassportOut(
-        owner=UserOut.model_validate(owner),
+        owner=PublicUserOut.model_validate(owner),
         parks_visited=sum(s.earned for s in stamps),
         parks_total=len(stamps),
         stamps=stamps,

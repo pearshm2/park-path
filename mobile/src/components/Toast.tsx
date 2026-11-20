@@ -7,9 +7,24 @@
  */
 
 import { useEffect, useState } from 'react';
-import { Animated, StyleSheet, Text } from 'react-native';
+import { Animated, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { colors, fonts, radius, scaleType, shadow, space, useTextScale } from '../theme';
+
+/**
+ * A Toast floating over a whole screen, centred a little below the status
+ * bar (where Trips shows its own), for screens whose content scrolls or
+ * fills the screen. Touches pass straight through it.
+ */
+export function ToastOverlay({ message }: { message: string | null }) {
+  const insets = useSafeAreaInsets();
+  return (
+    <View style={[styles.overlay, { top: insets.top + 64 }]} pointerEvents="none">
+      <Toast message={message} />
+    </View>
+  );
+}
 
 export function Toast({ message }: { message: string | null }) {
   // Created once via a lazy initialiser; reading a ref during render
@@ -41,6 +56,13 @@ export function Toast({ message }: { message: string | null }) {
 }
 
 const styles = StyleSheet.create({
+  overlay: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    zIndex: 10,
+  },
   container: {
     alignSelf: 'center',
     maxWidth: '92%',

@@ -22,7 +22,7 @@ import binascii
 import secrets
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -35,6 +35,7 @@ from app.google_auth import (
     verify_google_id_token,
 )
 from app.models import TripEntry, TripPhoto, User
+from app.rate_limit import client_ip, login_failures_by_email, login_failures_by_ip
 from app.schemas import (
     AccountDelete,
     AvatarUpload,
@@ -104,8 +105,34 @@ def signup(payload: UserCreate, db: Session = Depends(get_db)):
     return Token(access_token=token)
 
 
-@router.post("/login", response_model=Token)
-def login(payload: UserLogin, db: Session = Depends(get_db)):
+@router.post(
+    "/login",
+    response_model=Token,
+    responses={429: {"description": "Too many failed sign-ins; see Retry-After"}},
+)
+def login(payload: UserLogin, request: Request, db: Session = Depends(get_db)):
+    # Too many recent failures for this account, or from this address:
+    # refuse before checking the password at all (see app/rate_limit.py).
+    email_key = payload.email.lower()
+    ip_key = client_ip(request)
+    waits = [
+        wait
+        for wait in (
+            login_failures_by_email.retry_after(email_key),
+            login_failures_by_ip.retry_after(ip_key),
+        )
+        if wait is not None
+    ]
+    if waits:
+        wait = max(waits)
+        minutes = max(1, round(wait / 60))
+        unit = "minute" if minutes == 1 else "minutes"
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"Too many sign-in attempts. Try again in {minutes} {unit}.",
+            headers={"Retry-After": str(wait)},
+        )
+
     user = db.query(User).filter(User.email == payload.email).first()
 
     # Deliberately the same error for "no such user" and "wrong password" —
@@ -115,11 +142,13 @@ def login(payload: UserLogin, db: Session = Depends(get_db)):
         detail="Incorrect email or password",
     )
 
-    if user is None:
-        raise invalid_credentials
-    if not verify_password(payload.password, user.hashed_password):
+    if user is None or not verify_password(payload.password, user.hashed_password):
+        login_failures_by_email.record_failure(email_key)
+        login_failures_by_ip.record_failure(ip_key)
         raise invalid_credentials
 
+    # Right in the end: earlier typos on this account no longer count.
+    login_failures_by_email.reset(email_key)
     token = create_access_token(subject=str(user.id))
     return Token(access_token=token)
 

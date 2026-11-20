@@ -32,6 +32,15 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     access_token_expire_minutes: int = 60 * 24  # 24h — fine for a skeleton; tighten later
 
+    # --- Sign-in attempt limits (app/rate_limit.py) ---
+    # Failed sign-ins allowed within the window before POST /auth/login
+    # answers 429. Per email, so one account can't be guessed at; per
+    # network address (higher, since a household or campus shares one), so
+    # one machine can't try many accounts.
+    login_max_failures_per_email: int = 5
+    login_max_failures_per_ip: int = 50
+    login_failure_window_seconds: int = 15 * 60
+
     # --- NPS sync job ---
     # Free key from https://www.nps.gov/subjects/developer/get-started.htm
     # Put it in api/.env as NPS_API_KEY=... (never commit it). Empty by

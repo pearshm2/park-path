@@ -10,13 +10,15 @@ import { request } from './client';
 import type { components } from './schema';
 
 /**
- * Someone, as the API describes them. The names are optional only because
- * trips saved on the phone before accounts had names hold just an id and
- * an email; the helpers below fall back to the email for those.
+ * Someone, as the API describes them: name, @username and picture. The API
+ * never sends another person's email (api/app/schemas.py PublicUserOut).
+ * `email` survives only on trips saved on the phone by older versions of
+ * the app, and the names are optional for those too; the helpers below
+ * fall back to the @username, then that old email, for them.
  */
 export type Person = {
   id: number;
-  email: string;
+  email?: string;
   username?: string;
   first_name?: string;
   last_name?: string;
@@ -108,7 +110,9 @@ export async function removeFriend(token: string, userId: number): Promise<void>
 /** "Jordan Reyes": their first and last name. */
 export function displayName(person: Person): string {
   const name = `${person.first_name ?? ''} ${person.last_name ?? ''}`.trim();
-  return name || nameFromEmail(person.email);
+  if (name) return name;
+  if (person.username) return `@${person.username}`;
+  return person.email ? nameFromEmail(person.email) : 'A friend';
 }
 
 /** "Jordan": just their first name, for tight spots. */

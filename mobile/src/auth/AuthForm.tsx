@@ -27,9 +27,11 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ApiError, NetworkError } from '../api/client';
 import { Button, BodyText, Heading, Kicker, TextField } from '../components';
 import { GoogleButton, OrDivider } from '../components/GoogleButton';
+import { QUIZ_STEPS } from '../data/quizSpec';
 import { colors, radius, shadow, space } from '../theme';
 import { useAuth } from './AuthContext';
 import { GoogleSignInCancelled, GoogleSignInUnavailableError } from './googleSignIn';
+import { MIN_PASSWORD_LENGTH, newPasswordProblem } from './passwordRules';
 import { UsernameField } from './UsernameField';
 import { normalizeUsername, usernameRuleProblem, useUsernameCheck } from './useUsernameCheck';
 
@@ -40,14 +42,6 @@ export type AuthMode = 'sign-in' | 'sign-up';
  * server. This only catches obvious typos before spending a round trip.
  */
 const EMAIL_SHAPE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-/**
- * Applied on sign-up only. The API does not enforce a minimum
- * (api/app/schemas.py has a bare `password: str`), so this is a
- * client-side floor — and it must not apply when signing in, or anyone
- * with a shorter existing password would be locked out of their account.
- */
-const MIN_PASSWORD_LENGTH = 8;
 
 /**
  * The API has no /auth/password-reset route yet, so the "Forgot password?"
@@ -64,6 +58,10 @@ type FieldErrors = {
   confirm?: string;
 };
 
+/** "four": the quiz's step count, in words for the sign-up line below. */
+const NUMBER_WORDS = ['no', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten'];
+const QUESTION_COUNT = NUMBER_WORDS[QUIZ_STEPS.length] ?? String(QUIZ_STEPS.length);
+
 const COPY: Record<AuthMode, { heading: string; sub: string; cta: string; switchTo: string }> = {
   'sign-in': {
     heading: 'Welcome back',
@@ -73,7 +71,8 @@ const COPY: Record<AuthMode, { heading: string; sub: string; cta: string; switch
   },
   'sign-up': {
     heading: 'Start your passport',
-    sub: 'Answer five questions and we will point you at the park that actually fits your next trip.',
+    // Counted from the quiz itself, so it stays right if steps change.
+    sub: `Answer ${QUESTION_COUNT} questions and we will point you at the park that actually fits your next trip.`,
     cta: 'Create account',
     switchTo: 'I already have an account',
   },
@@ -124,9 +123,12 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
     if (!trimmedEmail) errors.email = 'Enter your email address.';
     else if (!EMAIL_SHAPE.test(trimmedEmail)) errors.email = 'That does not look like an email address.';
 
+    // The length rules are for new passwords only (see passwordRules.ts):
+    // signing in must accept whatever password an account already has.
     if (!password) errors.password = 'Enter your password.';
-    else if (isSignUp && password.length < MIN_PASSWORD_LENGTH) {
-      errors.password = `Use at least ${MIN_PASSWORD_LENGTH} characters.`;
+    else if (isSignUp) {
+      const problem = newPasswordProblem(password);
+      if (problem) errors.password = problem;
     }
 
     if (isSignUp && confirm !== password) errors.confirm = 'Those passwords do not match.';

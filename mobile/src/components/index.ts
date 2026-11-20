@@ -22,5 +22,5 @@ export { Tag } from './Tag';
 export { useTabBarSpace } from './tabBar';
 export { TERRAIN_LABEL, TerrainIcon, terrainTone } from './TerrainIcon';
 export { TextField } from './TextField';
-export { Toast } from './Toast';
+export { Toast, ToastOverlay } from './Toast';
 export { BodyText, Heading, Kicker } from './Typography';

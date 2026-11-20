@@ -96,7 +96,8 @@ def test_friends_comment_and_see_comments(people, code):
     body = resp.json()
     assert body["body"] == "Looks amazing!"
     assert body["author"]["id"] == bob.id
-    assert "email" in body["author"]
+    # Other people are shown by name and @username, never their email.
+    assert "email" not in body["author"]
     ann.comment(trip, "It was!")
 
     comments = client.get(f"/trips/{trip}/comments", headers=ann.headers).json()

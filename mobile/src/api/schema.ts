@@ -751,7 +751,7 @@ export interface components {
         FriendOut: {
             /** Friendship Id */
             friendship_id: number;
-            user: components["schemas"]["UserOut"];
+            user: components["schemas"]["PublicUserOut"];
             /** Since */
             since: string | null;
         };
@@ -801,8 +801,8 @@ export interface components {
             created_at: string;
             /** Accepted At */
             accepted_at: string | null;
-            requester: components["schemas"]["UserOut"];
-            addressee: components["schemas"]["UserOut"];
+            requester: components["schemas"]["PublicUserOut"];
+            addressee: components["schemas"]["PublicUserOut"];
         };
         /**
          * GoogleSignIn
@@ -891,7 +891,7 @@ export interface components {
         };
         /** PassportOut */
         PassportOut: {
-            owner: components["schemas"]["UserOut"];
+            owner: components["schemas"]["PublicUserOut"];
             /** Parks Visited */
             parks_visited: number;
             /** Parks Total */
@@ -981,6 +981,27 @@ export interface components {
             kind: "visitor_center";
             /** Point */
             point: number[];
+        };
+        /**
+         * PublicUserOut
+         * @description Someone else, as other people see them: name, @username and picture.
+         *
+         *     Deliberately no email or sign-in details. Friends find each other by
+         *     username (or by typing an email they already know), so nothing shown
+         *     about another person needs their contact details. Every response that
+         *     describes someone other than the caller uses this, never UserOut.
+         */
+        PublicUserOut: {
+            /** Id */
+            id: number;
+            /** Username */
+            username: string;
+            /** First Name */
+            first_name: string;
+            /** Last Name */
+            last_name: string;
+            /** Avatar Url */
+            avatar_url?: string | null;
         };
         /**
          * QuizAnswers
@@ -1189,7 +1210,7 @@ export interface components {
             park_name: string;
             /** Trip Title */
             trip_title: string;
-            author: components["schemas"]["UserOut"];
+            author: components["schemas"]["PublicUserOut"];
             /** Body */
             body: string;
             /**
@@ -1207,7 +1228,7 @@ export interface components {
         TripCommentOut: {
             /** Id */
             id: number;
-            author: components["schemas"]["UserOut"];
+            author: components["schemas"]["PublicUserOut"];
             /** Body */
             body: string;
             /**
@@ -1258,7 +1279,7 @@ export interface components {
         TripOut: {
             /** Id */
             id: number;
-            owner: components["schemas"]["UserOut"];
+            owner: components["schemas"]["PublicUserOut"];
             /** Park Code */
             park_code: string;
             /** Park Name */
@@ -1288,7 +1309,7 @@ export interface components {
             photos: components["schemas"]["TripPhotoOut"][];
             stamp_photo?: components["schemas"]["StampPhotoOut"] | null;
             /** Companions */
-            companions: components["schemas"]["UserOut"][];
+            companions: components["schemas"]["PublicUserOut"][];
             /**
              * Comment Count
              * @default 0
@@ -1398,15 +1419,13 @@ export interface components {
             /** Password */
             password: string;
         };
-        /** UserOut */
+        /**
+         * UserOut
+         * @description The signed-in user's own account (GET/PATCH /auth/me): adds what only they may see.
+         */
         UserOut: {
             /** Id */
             id: number;
-            /**
-             * Email
-             * Format: email
-             */
-            email: string;
             /** Username */
             username: string;
             /** First Name */
@@ -1415,6 +1434,11 @@ export interface components {
             last_name: string;
             /** Avatar Url */
             avatar_url?: string | null;
+            /**
+             * Email
+             * Format: email
+             */
+            email: string;
             /**
              * Signs In With Google
              * @default false
@@ -1609,6 +1633,13 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
+            };
+            /** @description Too many failed sign-ins; see Retry-After */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -2152,7 +2183,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["UserOut"];
+                    "application/json": components["schemas"]["PublicUserOut"];
                 };
             };
             /** @description Validation Error */

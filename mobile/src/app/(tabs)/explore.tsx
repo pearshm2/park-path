@@ -76,6 +76,7 @@ import {
   MATCH_DOT,
   PICK,
   STATUS_DOT,
+  ToastOverlay,
   type FeedFilters,
 } from '../../components';
 import type { Site, SiteStatus } from '../../data/parks';
@@ -304,7 +305,7 @@ export default function ExploreScreen() {
   // The site list is shared and carries no per-person status, so your
   // wishlist is applied here, once, and everything below (map pins, cards,
   // the wishlist view) reads it from site.status. Visited outranks it.
-  const { ids: wishlistIds, toggle: toggleWishlist } = useWishlist();
+  const { ids: wishlistIds, toggle: toggleWishlist, notice: wishlistNotice } = useWishlist();
   // Visited comes from your trip journal: a park with an entry is visited.
   const withStatus = useCallback(
     (site: Site): Site => {
@@ -1066,6 +1067,9 @@ export default function ExploreScreen() {
           </Pressable>
         </View>
       ) : null}
+
+      {/* A save that didn't go through (offline, server asleep): say so. */}
+      <ToastOverlay message={wishlistNotice} />
     </View>
   );
 }

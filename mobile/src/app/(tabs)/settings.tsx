@@ -36,6 +36,7 @@ import { listSites } from '../../api/parks';
 import { useArrivals } from '../../arrivals/ArrivalsContext';
 import { AccountSwitcher } from '../../auth/AccountSwitcher';
 import { useAuth } from '../../auth/AuthContext';
+import { newPasswordProblem } from '../../auth/passwordRules';
 import { UsernameField } from '../../auth/UsernameField';
 import { normalizeUsername, usernameRuleProblem, useUsernameCheck } from '../../auth/useUsernameCheck';
 import { BodyText, Heading, TextField, useTabBarSpace } from '../../components';
@@ -444,8 +445,10 @@ function AccountSection() {
   }
 
   async function savePassword() {
-    if (next.length < 8) {
-      setPasswordNote({ ok: false, text: 'Use at least 8 characters.' });
+    // The same rules as sign-up and the API (auth/passwordRules.ts).
+    const problem = newPasswordProblem(next);
+    if (problem) {
+      setPasswordNote({ ok: false, text: problem });
       return;
     }
     if (next !== confirm) {
