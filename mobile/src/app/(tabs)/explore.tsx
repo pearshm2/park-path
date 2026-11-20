@@ -37,6 +37,7 @@ import {
   StyleSheet,
   View,
   useWindowDimensions,
+  type ViewInstance,
 } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
@@ -1209,7 +1210,7 @@ function ScopeMenu({
   visitedCount: number;
   onChange: (next: MapScope) => void;
 }) {
-  const anchor = useRef<View>(null);
+  const anchor = useRef<ViewInstance>(null);
   const { width: windowWidth } = useWindowDimensions();
   const [menu, setMenu] = useState<{ top: number; right: number } | null>(null);
 

@@ -24,6 +24,7 @@ import {
   StyleSheet,
   View,
   useWindowDimensions,
+  type ScrollViewInstance,
 } from 'react-native';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -59,7 +60,7 @@ export default function ParkMapScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
-  const scrollRef = useRef<ScrollView>(null);
+  const scrollRef = useRef<ScrollViewInstance>(null);
   // On Android the page can scroll itself as it opens. Until the person
   // touches the page, any scroll is one of those and is undone.
   const touched = useRef(false);

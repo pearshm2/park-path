@@ -4,7 +4,7 @@
  */
 
 import { forwardRef } from 'react';
-import { StyleSheet, View, type TextInput, type TextInputProps } from 'react-native';
+import { StyleSheet, View, type TextInputInstance, type TextInputProps } from 'react-native';
 
 import { BodyText, TextField } from '../components';
 import { colors } from '../theme';
@@ -18,7 +18,7 @@ type Props = Omit<TextInputProps, 'value' | 'onChangeText'> & {
   error?: string;
 };
 
-export const UsernameField = forwardRef<TextInput, Props>(function UsernameField(
+export const UsernameField = forwardRef<TextInputInstance, Props>(function UsernameField(
   { value, onChangeText, status, error, ...inputProps },
   ref,
 ) {

@@ -29,7 +29,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Pressable, ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, View, useWindowDimensions, type ScrollViewInstance } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -101,7 +101,7 @@ export default function PassportScreen() {
   const [stampFlow, setStampFlow] = useState(false);
   /** The count achievements play up from, once they're being shown. */
   const [achievementsFrom, setAchievementsFrom] = useState<number | null>(null);
-  const scroller = useRef<ScrollView>(null);
+  const scroller = useRef<ScrollViewInstance>(null);
   const gridY = useRef(0);
   /** Where the Stamps section starts in the scroll (the grid's y is within it). */
   const stampsY = useRef(0);
