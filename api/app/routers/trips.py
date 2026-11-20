@@ -47,6 +47,7 @@ from app.models import Site, TripComment, TripCompanion, TripEntry, TripPhoto, U
 from app.schemas import (
     PhotoUploadOut,
     PhotoUploadRequest,
+    PublicUserOut,
     StampPhotoOut,
     TripActivityOut,
     TripCommentCreate,
@@ -56,7 +57,6 @@ from app.schemas import (
     TripPhotoIn,
     TripPhotoOut,
     TripUpdate,
-    UserOut,
 )
 from app.storage import (
     Storage,
@@ -79,7 +79,7 @@ router = APIRouter()
 def _out(entry: TripEntry, storage: Storage | None) -> TripOut:
     return TripOut(
         id=entry.id,
-        owner=UserOut.model_validate(entry.user),
+        owner=PublicUserOut.model_validate(entry.user),
         park_code=entry.site.park_code,
         park_name=entry.site.name,
         visited_on=entry.visited_on,
@@ -108,7 +108,7 @@ def _out(entry: TripEntry, storage: Storage | None) -> TripOut:
             if entry.stamp_photo_key
             else None
         ),
-        companions=[UserOut.model_validate(c.user) for c in entry.companions],
+        companions=[PublicUserOut.model_validate(c.user) for c in entry.companions],
         comment_count=entry.comment_count or 0,
         created_at=entry.created_at,
         updated_at=entry.updated_at,
@@ -330,7 +330,7 @@ def my_activity(
             park_code=entry.site.park_code,
             park_name=entry.site.name,
             trip_title=entry.title,
-            author=UserOut.model_validate(comment.user),
+            author=PublicUserOut.model_validate(comment.user),
             body=comment.body,
             created_at=comment.created_at,
         )

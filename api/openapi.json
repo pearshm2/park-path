@@ -134,6 +134,9 @@
               }
             }
           },
+          "429": {
+            "description": "Too many failed sign-ins; see Retry-After"
+          },
           "422": {
             "description": "Validation Error",
             "content": {
@@ -913,7 +916,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/UserOut"
+                  "$ref": "#/components/schemas/PublicUserOut"
                 }
               }
             }
@@ -2187,7 +2190,7 @@
             "title": "Friendship Id"
           },
           "user": {
-            "$ref": "#/components/schemas/UserOut"
+            "$ref": "#/components/schemas/PublicUserOut"
           },
           "since": {
             "anyOf": [
@@ -2302,10 +2305,10 @@
             "title": "Accepted At"
           },
           "requester": {
-            "$ref": "#/components/schemas/UserOut"
+            "$ref": "#/components/schemas/PublicUserOut"
           },
           "addressee": {
-            "$ref": "#/components/schemas/UserOut"
+            "$ref": "#/components/schemas/PublicUserOut"
           }
         },
         "type": "object",
@@ -2538,7 +2541,7 @@
       "PassportOut": {
         "properties": {
           "owner": {
-            "$ref": "#/components/schemas/UserOut"
+            "$ref": "#/components/schemas/PublicUserOut"
           },
           "parks_visited": {
             "type": "integer",
@@ -2680,8 +2683,6 @@
           },
           "new_password": {
             "type": "string",
-            "maxLength": 200,
-            "minLength": 8,
             "title": "New Password"
           }
         },
@@ -2787,6 +2788,46 @@
           "point"
         ],
         "title": "PlaceOut"
+      },
+      "PublicUserOut": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "username": {
+            "type": "string",
+            "title": "Username"
+          },
+          "first_name": {
+            "type": "string",
+            "title": "First Name"
+          },
+          "last_name": {
+            "type": "string",
+            "title": "Last Name"
+          },
+          "avatar_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avatar Url"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "username",
+          "first_name",
+          "last_name"
+        ],
+        "title": "PublicUserOut",
+        "description": "Someone else, as other people see them: name, @username and picture.\n\nDeliberately no email or sign-in details. Friends find each other by\nusername (or by typing an email they already know), so nothing shown\nabout another person needs their contact details. Every response that\ndescribes someone other than the caller uses this, never UserOut."
       },
       "QuizAnswers": {
         "properties": {
@@ -3498,7 +3539,7 @@
             "title": "Trip Title"
           },
           "author": {
-            "$ref": "#/components/schemas/UserOut"
+            "$ref": "#/components/schemas/PublicUserOut"
           },
           "body": {
             "type": "string",
@@ -3546,7 +3587,7 @@
             "title": "Id"
           },
           "author": {
-            "$ref": "#/components/schemas/UserOut"
+            "$ref": "#/components/schemas/PublicUserOut"
           },
           "body": {
             "type": "string",
@@ -3710,7 +3751,7 @@
             "title": "Id"
           },
           "owner": {
-            "$ref": "#/components/schemas/UserOut"
+            "$ref": "#/components/schemas/PublicUserOut"
           },
           "park_code": {
             "type": "string",
@@ -3802,7 +3843,7 @@
           },
           "companions": {
             "items": {
-              "$ref": "#/components/schemas/UserOut"
+              "$ref": "#/components/schemas/PublicUserOut"
             },
             "type": "array",
             "title": "Companions"
@@ -4165,11 +4206,6 @@
             "type": "integer",
             "title": "Id"
           },
-          "email": {
-            "type": "string",
-            "format": "email",
-            "title": "Email"
-          },
           "username": {
             "type": "string",
             "title": "Username"
@@ -4193,6 +4229,11 @@
             ],
             "title": "Avatar Url"
           },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "title": "Email"
+          },
           "signs_in_with_google": {
             "type": "boolean",
             "title": "Signs In With Google",
@@ -4202,12 +4243,13 @@
         "type": "object",
         "required": [
           "id",
-          "email",
           "username",
           "first_name",
-          "last_name"
+          "last_name",
+          "email"
         ],
-        "title": "UserOut"
+        "title": "UserOut",
+        "description": "The signed-in user's own account (GET/PATCH /auth/me): adds what only they may see."
       },
       "UserUpdate": {
         "properties": {

@@ -16,7 +16,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { listSites } from '../../api/parks';
 import { useRecommendations, type Recommendation, type SignalScores } from '../../api/recommendations';
-import { BodyText, Button, Heading, Kicker } from '../../components';
+import { BodyText, Button, Heading, Kicker, ToastOverlay } from '../../components';
 import { BookmarkIcon, matchPercent } from '../../components/ParkCard';
 import { DirectionsIcon, MapIcon, QuickAction } from '../../components/QuickAction';
 import { Tag } from '../../components/Tag';
@@ -29,7 +29,7 @@ export default function SiteScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { ids: wishlistIds, toggle: toggleWishlist } = useWishlist();
+  const { ids: wishlistIds, toggle: toggleWishlist, notice: wishlistNotice } = useWishlist();
 
   // Same query key as Explore, so this is already cached.
   const { data: sites, isPending, isError, isRefetching, refetch } = useQuery({
@@ -45,6 +45,7 @@ export default function SiteScreen() {
   const match = matches?.find((candidate) => candidate.site.id === id);
 
   return (
+    <View style={styles.fill}>
     <ScrollView
       style={styles.screen}
       contentContainerStyle={[
@@ -169,6 +170,9 @@ export default function SiteScreen() {
         </BodyText>
       )}
     </ScrollView>
+    {/* A save that didn't go through (offline, server asleep): say so. */}
+    <ToastOverlay message={wishlistNotice} />
+    </View>
   );
 }
 
@@ -247,6 +251,8 @@ function MatchCard({ match, pending }: { match: Recommendation | undefined; pend
 }
 
 const styles = StyleSheet.create({
+  // Holds the page and the toast floating over it.
+  fill: { flex: 1 },
   screen: {
     flex: 1,
     get backgroundColor() {

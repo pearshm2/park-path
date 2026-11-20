@@ -28,7 +28,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.dependencies import get_current_user
 from app.models import Friendship, User
-from app.schemas import FriendOut, FriendRequestCreate, FriendshipOut, UserOut
+from app.schemas import FriendOut, FriendRequestCreate, FriendshipOut, PublicUserOut
 from app.usernames import normalize_username
 from app.visibility import Visibility, can_view
 
@@ -179,7 +179,7 @@ def list_friends(
     ]
 
 
-@router.get("/{user_id}", response_model=UserOut)
+@router.get("/{user_id}", response_model=PublicUserOut)
 def read_friend(
     user_id: int,
     db: Session = Depends(get_db),

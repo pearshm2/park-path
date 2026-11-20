@@ -25,6 +25,26 @@ def _clean_name(value: str) -> str:
     return value
 
 
+# bcrypt only reads a password's first 72 bytes and ignores the rest, so a
+# longer one would be silently cut short: two long passwords sharing their
+# first 72 bytes would both work. Refuse them instead. Bytes, not
+# characters: an emoji or accented letter takes several (mobile/src/auth/
+# passwordRules.ts applies the same limits before sending).
+MIN_PASSWORD_LENGTH = 8
+MAX_PASSWORD_BYTES = 72
+
+
+def _check_new_password(value: str) -> str:
+    if len(value) < MIN_PASSWORD_LENGTH:
+        raise ValueError(f"Use at least {MIN_PASSWORD_LENGTH} characters")
+    if len(value.encode("utf-8")) > MAX_PASSWORD_BYTES:
+        raise ValueError(
+            f"Use at most {MAX_PASSWORD_BYTES} characters "
+            "(emoji and accented letters count as more than one)"
+        )
+    return value
+
+
 class UserCreate(BaseModel):
     email: EmailStr
     password: str
@@ -35,6 +55,7 @@ class UserCreate(BaseModel):
     last_name: Name
 
     _names = field_validator("first_name", "last_name")(_clean_name)
+    _password = field_validator("password")(_check_new_password)
 
 
 class UserUpdate(BaseModel):
@@ -78,7 +99,9 @@ class AccountDelete(BaseModel):
 
 class PasswordChange(BaseModel):
     current_password: str
-    new_password: str = Field(min_length=8, max_length=200)
+    new_password: str
+
+    _new_password = field_validator("new_password")(_check_new_password)
 
 
 class AvatarUpload(BaseModel):
@@ -101,16 +124,30 @@ class UserLogin(BaseModel):
     password: str
 
 
-class UserOut(BaseModel):
+class PublicUserOut(BaseModel):
+    """
+    Someone else, as other people see them: name, @username and picture.
+
+    Deliberately no email or sign-in details. Friends find each other by
+    username (or by typing an email they already know), so nothing shown
+    about another person needs their contact details. Every response that
+    describes someone other than the caller uses this, never UserOut.
+    """
+
     model_config = ConfigDict(from_attributes=True)
 
     id: int
-    email: EmailStr
     username: str
     first_name: str
     last_name: str
     # GET this (with your token) for their profile picture; null without one.
     avatar_url: str | None = None
+
+
+class UserOut(PublicUserOut):
+    """The signed-in user's own account (GET/PATCH /auth/me): adds what only they may see."""
+
+    email: EmailStr
     # Signs in with Google: deleting the account then asks for no password.
     signs_in_with_google: bool = False
 
@@ -170,15 +207,15 @@ class FriendshipOut(BaseModel):
     status: Literal["pending", "accepted"]
     created_at: datetime
     accepted_at: datetime | None
-    requester: UserOut
-    addressee: UserOut
+    requester: PublicUserOut
+    addressee: PublicUserOut
 
 
 class FriendOut(BaseModel):
     """One entry in the signed-in user's friends list: the *other* person."""
 
     friendship_id: int
-    user: UserOut
+    user: PublicUserOut
     since: datetime | None
 
 
@@ -533,7 +570,7 @@ class TripUpdate(BaseModel):
 
 class TripOut(BaseModel):
     id: int
-    owner: UserOut
+    owner: PublicUserOut
     park_code: str
     park_name: str
     visited_on: date
@@ -549,7 +586,7 @@ class TripOut(BaseModel):
     photos: list[TripPhotoOut]
     # The passport-stamp photo; null without one.
     stamp_photo: StampPhotoOut | None = None
-    companions: list[UserOut]
+    companions: list[PublicUserOut]
     comment_count: int = 0
     created_at: datetime
     updated_at: datetime
@@ -571,7 +608,7 @@ class TripCommentOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
-    author: UserOut = Field(validation_alias="user")
+    author: PublicUserOut = Field(validation_alias="user")
     body: str
     created_at: datetime
 
@@ -584,7 +621,7 @@ class TripActivityOut(BaseModel):
     park_code: str
     park_name: str
     trip_title: str
-    author: UserOut
+    author: PublicUserOut
     body: str
     created_at: datetime
 
@@ -625,7 +662,7 @@ class AchievementOut(BaseModel):
 
 
 class PassportOut(BaseModel):
-    owner: UserOut
+    owner: PublicUserOut
     parks_visited: int
     parks_total: int
     stamps: list[PassportStampOut]  # every national park, by name

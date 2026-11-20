@@ -283,7 +283,9 @@ def test_friend_profile_visible_only_to_friends(people):
     ann, bob, eve = people(), people(), people()
     ann.befriend(bob)
 
-    assert client.get(f"/friends/{ann.id}", headers=bob.headers).json()["email"] == ann.email
+    profile = client.get(f"/friends/{ann.id}", headers=bob.headers).json()
+    assert profile["id"] == ann.id and profile["username"] == ann.username
+    assert "email" not in profile
     assert client.get(f"/friends/{bob.id}", headers=ann.headers).status_code == 200
     # Stranger: 404, indistinguishable from a user that doesn't exist.
     assert client.get(f"/friends/{ann.id}", headers=eve.headers).status_code == 404
