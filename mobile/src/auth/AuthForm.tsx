@@ -19,8 +19,8 @@ import {
   Platform,
   ScrollView,
   StyleSheet,
-  TextInput,
   View,
+  type TextInputInstance,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -95,11 +95,11 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  const lastNameRef = useRef<TextInput>(null);
-  const usernameRef = useRef<TextInput>(null);
-  const emailRef = useRef<TextInput>(null);
-  const passwordRef = useRef<TextInput>(null);
-  const confirmRef = useRef<TextInput>(null);
+  const lastNameRef = useRef<TextInputInstance>(null);
+  const usernameRef = useRef<TextInputInstance>(null);
+  const emailRef = useRef<TextInputInstance>(null);
+  const passwordRef = useRef<TextInputInstance>(null);
+  const confirmRef = useRef<TextInputInstance>(null);
 
   const copy = COPY[mode];
   const isSignUp = mode === 'sign-up';

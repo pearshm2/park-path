@@ -129,6 +129,11 @@ function SettingsIcon({ color }: { color: ColorValue }) {
   );
 }
 
+// Explore is not first in the bar, so name it as the start tab (and, with
+// backBehavior below, send Android's back button there rather than to
+// Passport). Expo Router reads this from the layout file itself.
+export const unstable_settings = { anchor: 'explore' };
+
 export default function TabsLayout() {
   const { status } = useAuth();
   const { completed, ready } = useQuiz();
@@ -152,9 +157,7 @@ export default function TabsLayout() {
     <View style={groundFor(themeVersion)}>
     <Backdrop key={themeVersion} />
     <Tabs
-      // Explore is not first in the bar, so name it as the start tab and
-      // send Android's back button there rather than to Passport.
-      initialRouteName="explore"
+      // Back goes to the start tab (Explore: see unstable_settings above).
       backBehavior="initialRoute"
       tabBar={(props) => <FloatingTabBar {...props} />}
       screenOptions={{
@@ -218,12 +221,12 @@ const LABEL_LINE = 13;
  * the bar so all of it stays tappable: Android ignores touches on the part
  * of a child that hangs outside its parent.
  */
-function FloatingTabBar({ state, descriptors, navigation, insets }: TabBarProps) {
+function FloatingTabBar({ state, descriptors, emitter, navigateToTab, insets }: TabBarProps) {
   function go(index: number) {
     const route = state.routes[index];
-    const event = navigation.emit({ type: 'tabPress', target: route.key, canPreventDefault: true });
+    const event = emitter.emit({ type: 'tabPress', target: route.key, canPreventDefault: true });
     if (state.index !== index && !event.defaultPrevented) {
-      navigation.navigate(route.name, route.params);
+      navigateToTab(route.key);
     }
   }
 
@@ -259,7 +262,7 @@ function FloatingTabBar({ state, descriptors, navigation, insets }: TabBarProps)
             <Pressable
               key={route.key}
               onPress={() => go(index)}
-              onLongPress={() => navigation.emit({ type: 'tabLongPress', target: route.key })}
+              onLongPress={() => emitter.emit({ type: 'tabLongPress', target: route.key })}
               accessibilityRole="tab"
               accessibilityState={{ selected: focused }}
               accessibilityLabel={badge > 0 ? `${title}, ${badge} new` : title}

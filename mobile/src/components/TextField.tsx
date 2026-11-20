@@ -17,6 +17,7 @@ import {
   type TextInputProps,
   type StyleProp,
   type ViewStyle,
+  type TextInputInstance,
 } from 'react-native';
 
 import { colors, fonts, MIN_TAP_TARGET, radius, scaleType, space, useTextScale } from '../theme';
@@ -30,7 +31,7 @@ type TextFieldProps = TextInputProps & {
   hideLabel?: boolean;
 };
 
-export const TextField = forwardRef<TextInput, TextFieldProps>(function TextField(
+export const TextField = forwardRef<TextInputInstance, TextFieldProps>(function TextField(
   { label, error, containerStyle, hideLabel = false, onFocus, onBlur, style, ...inputProps },
   ref,
 ) {
